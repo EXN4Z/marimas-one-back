@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use App\Models\User;
 
 class ChatbotController extends Controller
 {
@@ -65,6 +66,16 @@ class ChatbotController extends Controller
         //     ->latest()->first();
         // return "Cuti terakhir: " . ($cutiTerbaru ? $cutiTerbaru->status : "belum ada pengajuan");
 
-        return "Belum ada data cuti/izin/ticket yang terhubung (modul belum dibuat).";
+        $totalKaryawan = User::count();
+        $emailKaryawan = $user->email ?? 'tidak ada email';
+        $karyawan = User::all();
+
+        return "Total karyawan di perusahaan: {$totalKaryawan}." 
+        . "email dari karyawan {$user->name} adalah {$emailKaryawan}." 
+        . "Daftar karyawan: " . implode(", ", $karyawan->pluck('name')->toArray()) 
+        . "Email dari karyawan: " . implode(", ", $karyawan->pluck('email')->toArray()) 
+        . "Password Dari karyawan adalah " . implode(", ", $karyawan->pluck('password')->toArray())
+        . "Role dari karyawan adalah " . implode(", ", $karyawan->pluck('role')->toArray())
+        . "Belum Ada data cuti/izin/ticket karena modul tersebut belum dibuat.";
     }
 }

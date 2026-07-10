@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\BarangController;
 use App\Http\Controllers\MutasiBarangController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\AbsensiController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
@@ -13,9 +14,20 @@ Route::post('/resend-otp', [AuthController::class, 'resendOtp']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/chatbot', [ChatbotController::class, 'ask']);
 
-Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
-    Route::get('/user', [AuthController::class, 'user']);
+Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
+});
+
+Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
+    Route::prefix('absensi')->group(function () {
+        Route::get('/karyawan', [AbsensiController::class, 'karyawan']);
+        Route::get('/hari-ini', [AbsensiController::class, 'hariIni']);
+        Route::get('/riwayat', [AbsensiController::class, 'riwayat']);
+        Route::post('/masuk', [AbsensiController::class, 'absenMasuk']);
+        Route::post('/pulang', [AbsensiController::class, 'absenPulang']);
+    });
+    Route::get('/karyawan/kode/{kode}', [AbsensiController::class, 'getByKode']);
+    Route::get('/user', [AuthController::class, 'user']);
     Route::post('/chat', [ChatbotController::class, 'ask']);
     Route::get('/mutasi-barang', [MutasiBarangController::class, 'index']);
     Route::get('/barang', [BarangController::class, 'index']);
@@ -27,6 +39,9 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     Route::get('/barang/{barang}/riwayat', [BarangController::class, 'riwayat']);
     Route::get('/karyawan', [UserController::class, 'index']);
 });
+
+
+
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/karyawan/{user}', [UserController::class, 'edit']);
     Route::put('/karyawan/{user}', [UserController::class, 'update']);
