@@ -21,7 +21,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/barang/kode/{kode_barang}', [BarangController::class, 'findByKode']);
     Route::get('/barang/{id}', [BarangController::class, 'show']);
     Route::post('/barang', [BarangController::class, 'store']);
-    Route::post('/barang/{id}/masuk', [BarangController::class, 'scanMasuk']);
-    Route::post('/barang/{id}/keluar', [BarangController::class, 'scanKeluar']);
-    Route::get('/barang/{id}/riwayat', [BarangController::class, 'riwayat']);
+    Route::post('/barang/{barang}/masuk', [BarangController::class, 'scanMasuk']);
+    Route::post('/barang/{barang}/keluar', [BarangController::class, 'scanKeluar']);
+    Route::get('/barang/{barang}/riwayat', [BarangController::class, 'riwayat']);
 });
