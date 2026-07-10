@@ -57,6 +57,21 @@ class BarangController extends Controller
     }
 
     /**
+     * Cari barang berdasarkan kode_barang hasil scan QR code.
+     * Dipanggil dari frontend setelah kamera berhasil membaca QR.
+     */
+    public function findByKode(string $kode_barang)
+    {
+        $barang = Barang::where('kode_barang', $kode_barang)->first();
+
+        if (!$barang) {
+            return response()->json(['message' => 'Barang dengan kode tersebut tidak ditemukan'], 404);
+        }
+
+        return response()->json($barang);
+    }
+
+    /**
      * Show the form for editing the specified resource.
      */
     public function scanMasuk(Barang $barang, Request $request)

@@ -10,9 +10,16 @@ class MutasiBarangController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        //
+        $limit = (int) $request->query('limit', 10);
+
+        $mutasi = MutasiBarang::with(['barang:id,nama,satuan', 'user:id,name'])
+            ->latest()
+            ->limit($limit)
+            ->get();
+
+        return response()->json($mutasi);
     }
 
     /**
