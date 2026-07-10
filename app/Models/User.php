@@ -24,7 +24,21 @@ class User extends Authenticatable
         'password',
         'remember_token',
     ];
+    
+    protected static array $roleLevels = [
+        'guest' => 0,
+        'karyawan' => 1,
+        'manajer' => 2,
+        'hr' => 3,
+        'admin' => 4,
+    ];
+    public function hasRoleAtLeast(string $role): bool
+    {
+        $userLevel = self::$roleLevels[$this->role] ?? 0;
+        $requiredLevel = self::$roleLevels[$role] ?? 0;
 
+        return $userLevel >= $requiredLevel;
+    }
     protected function casts(): array
     {
         return [
