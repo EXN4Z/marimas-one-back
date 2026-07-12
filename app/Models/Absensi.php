@@ -11,10 +11,11 @@ class Absensi extends Model
         'tanggal',
         'jam_masuk',
         'jam_pulang',
+        'status',
     ];
 
-    public function karyawan()
+    public function pekerja()
     {
-        return $this->belongsTo(User::class, 'karyawan_id');
+        return $this->belongsTo(Pekerja::class, 'karyawan_id');
     }
 }

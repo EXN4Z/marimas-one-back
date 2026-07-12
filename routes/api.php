@@ -7,6 +7,9 @@ use App\Http\Controllers\BarangController;
 use App\Http\Controllers\MutasiBarangController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AbsensiController;
+use App\Http\Controllers\KategoriBarangController;
+use App\Http\Controllers\DivisiController;
+use App\Http\Controllers\JabatanController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
@@ -40,11 +43,15 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     Route::get('/karyawan', [UserController::class, 'index']);
 });
 
-
-
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/karyawan/{user}', [UserController::class, 'edit']);
     Route::put('/karyawan/{user}', [UserController::class, 'update']);
     Route::delete('/karyawan/{user}', [UserController::class, 'destroy']);
     Route::post('/karyawan', [UserController::class, 'store']);
+});
+
+Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
+    Route::apiResource('kategori-barang', KategoriBarangController::class)->except(['show']);
+    Route::apiResource('divisi', DivisiController::class)->except(['show']);
+    Route::apiResource('jabatan', JabatanController::class)->except(['show']);
 });

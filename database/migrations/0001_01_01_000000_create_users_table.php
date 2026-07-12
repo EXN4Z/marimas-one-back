@@ -18,6 +18,14 @@ return new class extends Migration
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->rememberToken();
+
+            $table->enum('role', ['guest', 'karyawan', 'manajer', 'hr', 'admin'])->default('karyawan');
+            $table->string('phone')->nullable()->unique();
+            $table->string('otp_code')->nullable();
+            $table->timestamp('otp_expires_at')->nullable();
+            $table->timestamp('phone_verified_at')->nullable();
+            $table->enum('status', ['aktif', 'nonaktif'])->default('aktif');
+
             $table->timestamps();
         });
 

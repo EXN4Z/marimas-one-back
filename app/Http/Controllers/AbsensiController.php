@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
+use App\Models\Pekerja;
 use App\Models\Absensi;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -12,12 +12,7 @@ class AbsensiController extends Controller
     // GET /api/absensi/karyawan
     public function karyawan(Request $request)
     {
-        $query = User::query();
-
-        if ($request->status) {
-            $query->where('status', $request->status);
-        }
-
+        $query = Pekerja::with('user', 'divisi', 'jabatan');
         return response()->json($query->get());
     }
 
@@ -25,7 +20,7 @@ class AbsensiController extends Controller
     public function hariIni()
     {
         return response()->json(
-            Absensi::with('karyawan')
+            Absensi::with('pekerja.user')
                 ->whereDate('tanggal', Carbon::today())
                 ->get()
         );
@@ -37,7 +32,7 @@ class AbsensiController extends Controller
         $limit = $request->get('limit', 10);
 
         return response()->json(
-            Absensi::with('karyawan')
+            Absensi::with('pekerja.user')
                 ->latest()
                 ->limit($limit)
                 ->get()
@@ -48,12 +43,12 @@ class AbsensiController extends Controller
     public function absenMasuk(Request $request)
     {
         $request->validate([
-            'karyawan_id' => 'required|exists:users,id',
+            'pekerja_id' => 'required|exists:pekerja,id',
         ]);
 
         $absensi = Absensi::firstOrCreate(
             [
-                'karyawan_id' => $request->karyawan_id,
+                'karyawan_id' => $request->pekerja_id,
                 'tanggal' => Carbon::today(),
             ],
             [
@@ -63,7 +58,7 @@ class AbsensiController extends Controller
         );
 
         return response()->json([
-            'karyawan' => $absensi->karyawan,
+            'pekerja' => $absensi->pekerja,
             'absensi' => $absensi,
         ]);
     }
@@ -72,10 +67,10 @@ class AbsensiController extends Controller
     public function absenPulang(Request $request)
     {
         $request->validate([
-            'karyawan_id' => 'required|exists:users,id',
+            'pekerja_id' => 'required|exists:pekerja,id',
         ]);
 
-        $absensi = Absensi::where('karyawan_id', $request->karyawan_id)
+        $absensi = Absensi::where('karyawan_id', $request->pekerja_id)
             ->whereDate('tanggal', Carbon::today())
             ->firstOrFail();
 
@@ -84,20 +79,23 @@ class AbsensiController extends Controller
         ]);
 
         return response()->json([
-            'karyawan' => $absensi->karyawan,
+            'pekerja' => $absensi->pekerja,
             'absensi' => $absensi,
         ]);
     }
-    public function getByKode(String $kode)
-    {
-        $karyawan = User::where('kode_karyawan', $kode)->first();
 
-        if (!$karyawan) {
+    public function getByKode(string $kode)
+    {
+        $pekerja = Pekerja::with('user', 'divisi', 'jabatan')
+            ->where('qr_code', $kode)
+            ->first();
+
+        if (!$pekerja) {
             return response()->json([
                 'message' => 'Karyawan tidak ditemukan.'
             ], 404);
         }
 
-        return response()->json($karyawan);
+        return response()->json($pekerja);
     }
 }

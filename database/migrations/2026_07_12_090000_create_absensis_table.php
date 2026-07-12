@@ -6,24 +6,19 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('absensis', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('karyawan_id')->constrained('users')->onDelete('cascade');
+            $table->foreignId('karyawan_id')->constrained('pekerja')->onDelete('cascade');
             $table->date('tanggal');
             $table->time('jam_masuk')->nullable();
             $table->time('jam_pulang')->nullable();
+            $table->string('status')->default('tepat_waktu');
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('absensis');

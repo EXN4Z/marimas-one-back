@@ -6,7 +6,7 @@ use App\Models\Barang;
 use App\Models\MutasiBarang;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use	Illuminate\Validation\ValidationException;
+use Illuminate\Validation\ValidationException;
 
 class BarangController extends Controller
 {
@@ -15,7 +15,9 @@ class BarangController extends Controller
      */
     public function index()
     {
-        return response()->json(Barang::orderBy('nama')->get());
+        return response()->json(
+            Barang::with('kategoriBarang:id,nama')->orderBy('nama')->get()
+        );
     }
 
     /**
@@ -30,19 +32,18 @@ class BarangController extends Controller
      */
     public function store(Request $request)
     {
-        dd($request->all());
-        $request->validate([
-            'kode_barang' => 'required|string|unique:barang,kode_barang',
+        $validated = $request->validate([
             'nama' => 'required|string',
-            'kategori' => 'nullable|string',
+            'kategori_id' => 'nullable|exists:kategori_barang,id',
             'satuan' => 'nullable|string',
             'stok' => 'nullable|integer|min:0',
             'stok_minimum' => 'nullable|integer|min:0',
         ]);
 
-        $barang = Barang::create($request->all());
+        // kode_barang sengaja gak dikirim, biar trigger DB yang generate
+        $barang = Barang::create($validated);
 
-        return response()->json($barang, 201);
+        return response()->json($barang->load('kategoriBarang:id,nama'), 201);
     }
 
     /**
@@ -54,12 +55,11 @@ class BarangController extends Controller
             return response()->json(['message' => 'Barang tidak ditemukan'], 404);
         }
 
-        return response()->json($barang);
+        return response()->json($barang->load('kategoriBarang:id,nama'));
     }
 
     /**
      * Cari barang berdasarkan kode_barang hasil scan QR code.
-     * Dipanggil dari frontend setelah kamera berhasil membaca QR.
      */
     public function findByKode(string $kode_barang)
     {
@@ -69,21 +69,16 @@ class BarangController extends Controller
             return response()->json(['message' => 'Barang dengan kode tersebut tidak ditemukan'], 404);
         }
 
-        return response()->json($barang);
+        return response()->json($barang->load('kategoriBarang:id,nama'));
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
     public function scanMasuk(Barang $barang, Request $request)
     {
         $request->validate([
             'jumlah' => 'required|integer|min:1',
             'catatan' => 'nullable|string',
         ]);
-        if (!$barang) {
-            return response()->json(['message' => 'Barang tidak ditemukan'], 404);
-        }
+
         return DB::transaction(function () use ($request, $barang) {
             $stokSebelum = $barang->stok;
             $barang->stok += $request->jumlah;
@@ -106,20 +101,20 @@ class BarangController extends Controller
             ]);
         });
     }
-    public function scanKeluar (Barang $barang, Request $request)
+
+    public function scanKeluar(Barang $barang, Request $request)
     {
         $request->validate([
             'jumlah' => 'required|integer|min:1',
             'catatan' => 'nullable|string',
         ]);
-        if (!$barang) {
-            return response()->json(['message' => 'Barang tidak ditemukan'], 404);
-        }
+
         if ($barang->stok < $request->jumlah) {
             throw ValidationException::withMessages([
                 'jumlah' => ['Stok barang tidak mencukupi. Stok saat ini: ' . $barang->stok],
             ]);
         }
+
         return DB::transaction(function () use ($request, $barang) {
             $stokSebelum = $barang->stok;
             $barang->stok -= $request->jumlah;
@@ -143,16 +138,31 @@ class BarangController extends Controller
         });
     }
 
-    public function riwayat($id) {
-        $mutasi	=	MutasiBarang::where('barang_id',$id)
+    public function riwayat($id)
+    {
+        $mutasi = MutasiBarang::where('barang_id', $id)
             ->with('user:id,name')
             ->latest()
             ->get();
+
         return response()->json($mutasi);
     }
+
+    /**
+     * Update the specified resource in storage.
+     */
     public function update(Request $request, Barang $barang)
     {
-        //
+        $validated = $request->validate([
+            'nama' => 'sometimes|required|string',
+            'kategori_id' => 'nullable|exists:kategori_barang,id',
+            'satuan' => 'sometimes|required|string',
+            'stok_minimum' => 'nullable|integer|min:0',
+        ]);
+
+        $barang->update($validated);
+
+        return response()->json($barang->load('kategoriBarang:id,nama'));
     }
 
     /**
@@ -160,6 +170,8 @@ class BarangController extends Controller
      */
     public function destroy(Barang $barang)
     {
-        //
+        $barang->delete();
+
+        return response()->json(['message' => "Barang {$barang->nama} berhasil dihapus."]);
     }
 }

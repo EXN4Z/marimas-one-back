@@ -11,13 +11,19 @@ class Barang extends Model
     protected $fillable = [
         'kode_barang',
         'nama',
-        'kategori',
+        'kategori_id',
         'satuan',
         'stok',
         'stok_minimum',
     ];
 
-    public function mutasi() {
+    public function mutasi()
+    {
         return $this->hasMany(MutasiBarang::class);
+    }
+
+    public function kategoriBarang()
+    {
+        return $this->belongsTo(KategoriBarang::class, 'kategori_id');
     }
 }
