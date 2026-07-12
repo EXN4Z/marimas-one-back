@@ -55,3 +55,11 @@ Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
     Route::apiResource('divisi', DivisiController::class)->except(['show']);
     Route::apiResource('jabatan', JabatanController::class)->except(['show']);
 });
+
+Route::prefix('absensi')->group(function () {
+    Route::get('/karyawan', [AbsensiController::class, 'karyawan']);
+    Route::get('/hari-ini', [AbsensiController::class, 'hariIni']);
+    Route::get('/riwayat', [AbsensiController::class, 'riwayat']);
+    Route::post('/scan', [AbsensiController::class, 'scan']);
+});
+Route::get('/karyawan/kode/{kode}', [AbsensiController::class, 'getByKode']);
