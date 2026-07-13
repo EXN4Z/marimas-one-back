@@ -16,14 +16,24 @@ class ChatbotController extends Controller
 
         $user = $request->user();
 
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
         // Ambil data relevan si user (masih placeholder, nanti diisi query beneran
         // setelah tabel cuti/izin/ticket dibuat)
         $context = $this->buildContext($user);
 
         $prompt = <<<PROMPT
         Kamu adalah AI Assistant untuk sistem MARIMAS ONE, sebuah ERP internal perusahaan.
-        Jawab pertanyaan user HANYA berdasarkan data berikut. Kalau datanya tidak cukup untuk menjawab, katakan dengan jujur bahwa kamu tidak punya informasi itu.
-        Jawab dengan singkat, jelas, dan sopan dalam Bahasa Indonesia.
+
+        ATURAN KETAT (wajib dipatuhi):
+        1. Kamu HANYA boleh menjawab pertanyaan seputar sistem Marimas ONE dan DATA di bawah ini (karyawan, absensi, inventaris, dsb).
+        2. JANGAN PERNAH menjawab pertanyaan di luar topik itu menggunakan pengetahuan umum kamu sendiri — meskipun kamu tahu jawabannya (contoh: pertanyaan umum, berita, sejarah, hiburan, pertanyaan pribadi di luar konteks kerja, coding, resep masakan, dll).
+        3. Kalau pertanyaan user di luar topik perusahaan, TOLAK dengan sopan dan singkat, contoh: "Maaf, saya hanya bisa membantu hal-hal seputar Marimas ONE (absensi, data karyawan, inventaris, dll). Untuk pertanyaan di luar itu, silakan gunakan sumber lain ya." Jangan tetap mencoba menjawabnya.
+        4. Untuk pertanyaan seputar perusahaan (misalnya "siapa direktur/dirut/pemilik perusahaan", "alamat kantor", "sejarah perusahaan", dsb): jawab HANYA jika informasinya ADA secara eksplisit di blok DATA di bawah. Kalau tidak ada, katakan datanya belum tersedia di sistem. JANGAN PERNAH mengisi jawaban ini pakai pengetahuan umum/pelatihan kamu tentang perusahaan mana pun di dunia nyata, walaupun namanya sama atau mirip dengan "Marimas" — anggap semua nama di sini murni data internal sistem ini, bukan referensi ke entitas dunia nyata.
+        5. Jangan mengarang (hallucinate) nama orang, jabatan, angka, atau fakta apa pun yang tidak ada di blok DATA.
+        6. Jawab dengan singkat, jelas, dan sopan dalam Bahasa Indonesia.
 
         DATA USER:
         Nama: {$user->name}
@@ -34,8 +44,10 @@ class ChatbotController extends Controller
         {$request->message}
         PROMPT;
 
-        $response = Http::post(
-            'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' . env('GEMINI_API_KEY'),
+        $model = config('services.gemini.model', 'gemini-2.5-flash');
+
+        $response = Http::timeout(20)->post(
+            "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key=" . config('services.gemini.key'),
             [
                 'contents' => [
                     [
@@ -43,6 +55,9 @@ class ChatbotController extends Controller
                             ['text' => $prompt],
                         ],
                     ],
+                ],
+                'generationConfig' => [
+                    'temperature' => 0.2,
                 ],
             ]
         );
@@ -59,6 +74,12 @@ class ChatbotController extends Controller
 
     private function buildContext($user): string
     {
+        // PENTING: hanya kirim data milik user yang sedang login ke prompt AI.
+        // JANGAN pernah menyertakan data karyawan lain (apalagi password/hash)
+        // di sini — prompt ini dikirim ke Gemini (pihak ketiga) dan hasilnya
+        // bisa langsung dibaca oleh user yang bertanya.
+        $totalKaryawan = User::count();
+
         // Versi awal: masih placeholder, karena tabel cuti/izin/ticket
         // belum dibuat. Nanti diisi query beneran setelah modul itu jadi, contoh:
         //
@@ -66,16 +87,7 @@ class ChatbotController extends Controller
         //     ->latest()->first();
         // return "Cuti terakhir: " . ($cutiTerbaru ? $cutiTerbaru->status : "belum ada pengajuan");
 
-        $totalKaryawan = User::count();
-        $emailKaryawan = $user->email ?? 'tidak ada email';
-        $karyawan = User::all();
-
-        return "Total karyawan di perusahaan: {$totalKaryawan}." 
-        . "email dari karyawan {$user->name} adalah {$emailKaryawan}." 
-        . "Daftar karyawan: " . implode(", ", $karyawan->pluck('name')->toArray()) 
-        . "Email dari karyawan: " . implode(", ", $karyawan->pluck('email')->toArray()) 
-        . "Password Dari karyawan adalah " . implode(", ", $karyawan->pluck('password')->toArray())
-        . "Role dari karyawan adalah " . implode(", ", $karyawan->pluck('role')->toArray())
-        . "Belum Ada data cuti/izin/ticket karena modul tersebut belum dibuat.";
+        return "Total karyawan di perusahaan: {$totalKaryawan}. "
+        . "Belum ada data cuti/izin/ticket karena modul tersebut belum dibuat.";
     }
 }
