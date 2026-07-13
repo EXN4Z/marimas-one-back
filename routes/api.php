@@ -10,6 +10,8 @@ use App\Http\Controllers\AbsensiController;
 use App\Http\Controllers\KategoriBarangController;
 use App\Http\Controllers\DivisiController;
 use App\Http\Controllers\JabatanController;
+use App\Http\Controllers\CutiController;
+use Illuminate\Http\Request;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
@@ -21,6 +23,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 });
 
+
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
     Route::prefix('absensi')->group(function () {
         Route::get('/karyawan', [AbsensiController::class, 'karyawan']);
@@ -29,12 +32,13 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
         Route::post('/masuk', [AbsensiController::class, 'absenMasuk']);
         Route::post('/pulang', [AbsensiController::class, 'absenPulang']);
         });
+    Route::post('/cuti/create', [CutiController::class, 'create']);
 
     Route::prefix('cuti')->group(function () {
-        Route::get('/', [AbsensiController::class, 'riwayatCuti']);
-        Route::post('/create', [AbsensiController::class, 'ajukanCuti']);
-        Route::patch('/{id}/status', [AbsensiController::class, 'updateStatusCuti']); // baru
-        Route::delete('/{id}', [AbsensiController::class, 'batalkanCuti']);            // baru
+        Route::get('/', [CutiController::class, 'riwayatCuti']);
+
+        Route::patch('/{id}/status', [CutiController::class, 'updateStatusCuti']); // baru
+        Route::delete('/{id}', [CutiController::class, 'batalkanCuti']);            // baru
     });
 
     Route::get('/karyawan/kode/{kode}', [AbsensiController::class, 'getByKode']);
