@@ -10,6 +10,7 @@ use App\Http\Controllers\AbsensiController;
 use App\Http\Controllers\KategoriBarangController;
 use App\Http\Controllers\DepartemenController;
 use App\Http\Controllers\JabatanController;
+use App\Http\Controllers\AuditLogController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
@@ -52,4 +53,9 @@ Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
     Route::apiResource('kategori-barang', KategoriBarangController::class)->except(['show']);
     Route::apiResource('departemen', DepartemenController::class)->except(['show']);
     Route::apiResource('jabatan', JabatanController::class)->except(['show']);
+});
+
+Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
+    Route::get('/audit-log', [AuditLogController::class, 'index']);
+    Route::get('/audit-log/trash', [AuditLogController::class, 'trash']);
 });

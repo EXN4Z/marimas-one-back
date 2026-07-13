@@ -15,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureUserIsMember::class,
         ]);
+
+        $middleware->api(append: [
+            \App\Http\Middleware\LogActivity::class,
+        ]);
     })
     // bootstrap/app.php
     ->withExceptions(function (Exceptions $exceptions) {
