@@ -13,7 +13,7 @@ class AbsensiController extends Controller
     public function karyawan(Request $request)
     {
         return response()->json(
-            Pekerja::with('user', 'divisi', 'jabatan')->get()
+            Pekerja::with('user', 'departemen', 'jabatan')->get()
         );
     }
 
