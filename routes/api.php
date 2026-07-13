@@ -13,6 +13,7 @@ use App\Http\Controllers\JabatanController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\CutiController;
+use App\Http\Controllers\DashboardController;
 use Illuminate\Http\Request;
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -67,6 +68,10 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
 
 Route::middleware(['auth:sanctum', 'role:manajer,hr,admin'])->group(function () {
     Route::put('/ticketing/{ticket}/status', [TicketController::class, 'updateStatus']);
+    Route::prefix('dashboard-analytics')->group(function () {
+        Route::get('/analisis-cuti', [DashboardController::class, 'analisisCuti']);
+        Route::get('/top-karyawan', [DashboardController::class, 'topKaryawan']);
+    });
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
