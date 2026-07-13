@@ -5,6 +5,12 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use App\Models\User;
+use App\Models\Departemen;
+use App\Models\Jabatan;
+use App\Models\Absensi;
+use App\Models\PengajuanCuti;
+use App\Models\Ticket;
+use App\Models\Barang;
 
 class ChatbotController extends Controller
 {
@@ -74,37 +80,43 @@ class ChatbotController extends Controller
 
     private function buildContext($user): string
     {
-        // PENTING: hanya kirim data milik user yang sedang login ke prompt AI.
-        // JANGAN pernah menyertakan data karyawan lain (apalagi password/hash)
-        // di sini — prompt ini dikirim ke Gemini (pihak ketiga) dan hasilnya
-        // bisa langsung dibaca oleh user yang bertanya.
-        $totalKaryawan = User::count();
+        // PENTING: hanya kirim data AGREGAT (jumlah/rekap) ke prompt AI, bukan
+        // data mentah tiap karyawan (nama/email/password semua orang). Prompt
+        // ini dikirim ke Gemini (pihak ketiga) dan hasilnya bisa langsung
+        // dibaca oleh user yang bertanya, jadi data sensitif tidak boleh ikut.
 
-        // Versi awal: masih placeholder, karena tabel cuti/izin/ticket
-        // belum dibuat. Nanti diisi query beneran setelah modul itu jadi, contoh:
-        //
-        // $cutiTerbaru = Cuti::where('karyawan_id', $user->karyawan->id ?? null)
-        //     ->latest()->first();
-        // return "Cuti terakhir: " . ($cutiTerbaru ? $cutiTerbaru->status : "belum ada pengajuan");
+        $totalKaryawan = User::where('role', 'karyawan')->count();
+        $totalAdmin = User::where('role', 'admin')->count();
 
-        return "Total karyawan di perusahaan: {$totalKaryawan}. "
-        . "Belum ada data cuti/izin/ticket karena modul tersebut belum dibuat.";
-        $totalKaryawan = User::count();
-        $emailKaryawan = $user->email ?? 'tidak ada email';
-        $karyawan = User::all();
+        $perDepartemen = Departemen::withCount('pekerja')->get()
+            ->map(fn ($d) => "{$d->nama}: {$d->pekerja_count} orang")
+            ->implode(', ') ?: 'belum ada data departemen';
 
-        $context = "Total karyawan di perusahaan: {$totalKaryawan}.";
-        $context .= "email dari karyawan {$user->name} adalah {$emailKaryawan}.";
-        $context .= "Daftar karyawan: " . implode(", ", $karyawan->pluck('name')->toArray()) . ".";
-        $context .= "Email dari karyawan: " . implode(", ", $karyawan->pluck('email')->toArray()) . ".";
-        $context .= "Password Dari karyawan adalah " . implode(", ", $karyawan->pluck('password')->toArray()) . ".";
-        $context .= "Role dari karyawan adalah " . implode(", ", $karyawan->pluck('role')->toArray()) . ".";
-        $context .= "Belum Ada data cuti/izin/ticket karena modul tersebut belum dibuat.";
+        $perJabatan = Jabatan::withCount('pekerja')->get()
+            ->map(fn ($j) => "{$j->nama}: {$j->pekerja_count} orang")
+            ->implode(', ') ?: 'belum ada data jabatan';
+
+        $today = now()->format('Y-m-d');
+        $absensiHariIni = Absensi::where('tanggal', $today)->count();
+
+        $cutiPending = PengajuanCuti::where('status', 'pending')->count();
+
+        $ticketAktif = Ticket::whereIn('status', Ticket::STATUS_AKTIF)->count();
+
+        $stokRendah = Barang::whereColumn('stok', '<=', 'stok_minimum')->count();
+
+        $context = "Total karyawan (role karyawan): {$totalKaryawan}. Total admin: {$totalAdmin}.\n";
+        $context .= "Rekap jumlah karyawan per departemen: {$perDepartemen}.\n";
+        $context .= "Rekap jumlah karyawan per jabatan: {$perJabatan}.\n";
+        $context .= "Jumlah data absensi tercatat hari ini ({$today}): {$absensiHariIni}.\n";
+        $context .= "Jumlah pengajuan cuti yang masih berstatus pending: {$cutiPending}.\n";
+        $context .= "Jumlah tiket yang masih aktif (pending/diproses): {$ticketAktif}.\n";
+        $context .= "Jumlah jenis barang dengan stok di bawah/sama dengan stok minimum: {$stokRendah}.\n";
 
         if ($user->role === 'karyawan') {
-            $context .= "anda tidak bisa mendaftarkan karyawan karena anda bukan admin.";
+            $context .= "Catatan: user yang bertanya adalah karyawan biasa (bukan admin), jadi jangan berikan data pribadi karyawan lain (nama/email/gaji orang lain), cukup jawab dalam bentuk jumlah/rekap seperti di atas. Anda tidak bisa mendaftarkan karyawan baru karena bukan admin.\n";
         } elseif ($user->role === 'admin') {
-            $context .= "untuk mendaftarkan karyawan, anda perlu menuju ke data karyawan lalu anda dapat menambahkan karyawan.";
+            $context .= "Catatan: user yang bertanya adalah admin. Untuk mendaftarkan karyawan baru, arahkan ke menu Data Karyawan lalu tombol tambah karyawan.\n";
         }
 
         return $context;
