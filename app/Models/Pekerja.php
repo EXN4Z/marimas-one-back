@@ -11,7 +11,7 @@ class Pekerja extends Model
     protected $fillable = [
         'user_id',
         'nip',
-        'divisi_id',
+        'departemen_id',
         'jabatan_id',
         'qr_code',
         'tanggal_masuk',
@@ -23,9 +23,9 @@ class Pekerja extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function divisi()
+    public function departemen()
     {
-        return $this->belongsTo(Divisi::class, 'divisi_id');
+        return $this->belongsTo(Departemen::class, 'departemen_id');
     }
 
     public function jabatan()

@@ -8,7 +8,7 @@ use App\Http\Controllers\MutasiBarangController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AbsensiController;
 use App\Http\Controllers\KategoriBarangController;
-use App\Http\Controllers\DivisiController;
+use App\Http\Controllers\DepartemenController;
 use App\Http\Controllers\JabatanController;
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -26,8 +26,7 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
         Route::get('/karyawan', [AbsensiController::class, 'karyawan']);
         Route::get('/hari-ini', [AbsensiController::class, 'hariIni']);
         Route::get('/riwayat', [AbsensiController::class, 'riwayat']);
-        Route::post('/masuk', [AbsensiController::class, 'absenMasuk']);
-        Route::post('/pulang', [AbsensiController::class, 'absenPulang']);
+        Route::post('/scan', [AbsensiController::class, 'scan']);
     });
     Route::get('/karyawan/kode/{kode}', [AbsensiController::class, 'getByKode']);
     Route::get('/user', [AuthController::class, 'user']);
@@ -52,14 +51,6 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 
 Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
     Route::apiResource('kategori-barang', KategoriBarangController::class)->except(['show']);
-    Route::apiResource('divisi', DivisiController::class)->except(['show']);
+    Route::apiResource('departemen', DepartemenController::class)->except(['show']);
     Route::apiResource('jabatan', JabatanController::class)->except(['show']);
 });
-
-Route::prefix('absensi')->group(function () {
-    Route::get('/karyawan', [AbsensiController::class, 'karyawan']);
-    Route::get('/hari-ini', [AbsensiController::class, 'hariIni']);
-    Route::get('/riwayat', [AbsensiController::class, 'riwayat']);
-    Route::post('/scan', [AbsensiController::class, 'scan']);
-});
-Route::get('/karyawan/kode/{kode}', [AbsensiController::class, 'getByKode']);

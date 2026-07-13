@@ -13,7 +13,7 @@ class UserController extends Controller
 {
     public function index(Request $request)
     {
-        $query = User::with('pekerja.divisi', 'pekerja.jabatan');
+        $query = User::with('pekerja.departemen', 'pekerja.jabatan');
 
         if ($request->filled('role') && $request->role !== 'all') {
             $query->where('role', $request->role);
@@ -35,7 +35,7 @@ class UserController extends Controller
 
     public function edit(User $user)
     {
-        return response()->json($user->load('pekerja.divisi', 'pekerja.jabatan'));
+        return response()->json($user->load('pekerja.departemen', 'pekerja.jabatan'));
     }
 
     public function store(Request $request)
@@ -46,7 +46,7 @@ class UserController extends Controller
             'phone' => 'nullable|string|unique:users,phone',
             'role' => 'required|string|in:guest,karyawan,manajer,hr,admin',
             'nip' => 'required|string|unique:pekerja,nip',
-            'divisi_id' => 'nullable|exists:divisi,id',
+            'departemen_id' => 'nullable|exists:departemen,id',
             'jabatan_id' => 'nullable|exists:jabatan,id',
             'tanggal_masuk' => 'nullable|date',
         ]);
@@ -65,7 +65,7 @@ class UserController extends Controller
             $pekerja = Pekerja::create([
                 'user_id' => $user->id,
                 'nip' => $validated['nip'],
-                'divisi_id' => $validated['divisi_id'] ?? null,
+                'departemen_id' => $validated['departemen_id'] ?? null,
                 'jabatan_id' => $validated['jabatan_id'] ?? null,
                 'qr_code' => Str::uuid()->toString(),
                 'tanggal_masuk' => $validated['tanggal_masuk'] ?? null,
@@ -77,7 +77,7 @@ class UserController extends Controller
         return response()->json([
             'message' => 'Karyawan berhasil dibuat.',
             'user' => $user,
-            'pekerja' => $pekerja->load('divisi', 'jabatan'),
+            'pekerja' => $pekerja->load('departemen', 'jabatan'),
             'password' => $plainPassword,
         ], 201);
     }
@@ -90,7 +90,7 @@ class UserController extends Controller
             'phone' => 'nullable|string|unique:users,phone,' . $user->id,
             'role' => 'required|string|in:guest,karyawan,manajer,hr,admin',
             'nip' => 'sometimes|required|string|unique:pekerja,nip,' . optional($user->pekerja)->id,
-            'divisi_id' => 'nullable|exists:divisi,id',
+            'departemen_id' => 'nullable|exists:departemen,id',
             'jabatan_id' => 'nullable|exists:jabatan,id',
             'tanggal_masuk' => 'nullable|date',
         ]);
@@ -99,11 +99,11 @@ class UserController extends Controller
 
         if ($user->pekerja) {
             $user->pekerja->update(
-                collect($validated)->only(['nip', 'divisi_id', 'jabatan_id', 'tanggal_masuk'])->toArray()
+                collect($validated)->only(['nip', 'departemen_id', 'jabatan_id', 'tanggal_masuk'])->toArray()
             );
         }
 
-        return response()->json($user->load('pekerja.divisi', 'pekerja.jabatan'));
+        return response()->json($user->load('pekerja.departemen', 'pekerja.jabatan'));
     }
 
     public function destroy(User $user)
