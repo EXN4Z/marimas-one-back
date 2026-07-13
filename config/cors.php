@@ -19,7 +19,9 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [],
+    'allowed_origins' => [
+        'https://marimas-one-front.vercel.app',
+    ],
     
     'allowed_origins_patterns' => [
         '#^https://marimas-one-front-.*\.vercel\.app$#',
