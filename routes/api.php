@@ -13,7 +13,11 @@ use App\Http\Controllers\JabatanController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\CutiController;
+<<<<<<< HEAD
+use App\Http\Controllers\IzinController;
+=======
 use App\Http\Controllers\DashboardController;
+>>>>>>> 5f8428950d6fe77d3cc3edaea5afbc6419171991
 use Illuminate\Http\Request;
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -48,6 +52,16 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
         Route::delete('/{id}', [CutiController::class, 'batalkanCuti']);            // baru
     });
 
+    Route::prefix('izin')->group(function () {
+        Route::get('/', [IzinController::class, 'index']);
+        Route::get('/dashboard', [IzinController::class, 'dashboard']);
+        Route::get('/statistik', [IzinController::class, 'statistik']);
+        Route::get('/{id}', [IzinController::class, 'show']);
+        Route::post('/', [IzinController::class, 'store']);
+        Route::put('/{id}', [IzinController::class, 'update']);
+        Route::delete('/{id}', [IzinController::class, 'destroy']);
+    });
+
     Route::get('/karyawan/kode/{kode}', [AbsensiController::class, 'getByKode']);
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/chat', [ChatbotController::class, 'ask']);
@@ -71,10 +85,14 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
 
 Route::middleware(['auth:sanctum', 'role:manajer,hr,admin'])->group(function () {
     Route::put('/ticketing/{ticket}/status', [TicketController::class, 'updateStatus']);
+<<<<<<< HEAD
+    Route::patch('/izin/{id}/status', [IzinController::class, 'updateStatus']);
+=======
     Route::prefix('dashboard-analytics')->group(function () {
         Route::get('/analisis-cuti', [DashboardController::class, 'analisisCuti']);
         Route::get('/top-karyawan', [DashboardController::class, 'topKaryawan']);
     });
+>>>>>>> 5f8428950d6fe77d3cc3edaea5afbc6419171991
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
