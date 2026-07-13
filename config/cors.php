@@ -22,9 +22,12 @@ return [
     'allowed_origins' => [
         'http://localhost:5173',
         'http://localhost:5174',
-        'https://marimas-one-front-d6sycbxwu-exn4zs-projects.vercel.app',
     ],
     
+    'allowed_origins_patterns' => [
+        '#^https://marimas-one-front-.*-exn4zs-projects\.vercel\.app$#',
+    ],
+
     'allowed_origins_patterns' => [],
 
     'allowed_headers' => ['*'],
