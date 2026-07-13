@@ -136,4 +136,38 @@ class AbsensiController extends Controller
             'message' => 'Karyawan ini sudah absen masuk & pulang hari ini.',
         ]);
     }
+    public function riwayatCuti(Request $request)
+    {
+        $limit = $request->get('limit', 10);
+
+        return response()->json(
+            Absensi::with('pekerja.user')
+                ->whereNotNull('tanggal_mulai')
+                ->latest()
+                ->limit($limit)
+                ->get()
+        );
+    }
+    public function ajukanCuti(Request $request)
+    {
+        $request->validate([
+            'karyawan_id' => 'required|exists:pekerja,id',
+            'tanggal_mulai' => 'required|date',
+            'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
+            'alasan' => 'required|string|max:255',
+        ]);
+
+        $absensi = Absensi::create([
+            'karyawan_id' => $request->karyawan_id,
+            'tanggal_mulai' => $request->tanggal_mulai,
+            'tanggal_selesai' => $request->tanggal_selesai,
+            'status' => 'pending',
+            'alasan' => $request->alasan,
+        ]);
+
+        return response()->json([
+            'message' => 'Pengajuan cuti berhasil.',
+            'absensi' => $absensi,
+        ]);
+    }
 }

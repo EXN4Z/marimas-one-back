@@ -18,7 +18,7 @@ class DummySeeder extends Seeder
         'email' => 'test@example.com',
         'password' => bcrypt('dummyPassword'),
         'phone' => '0819853467',
-        'role' => 'guest',
+        'role' => 'admin',
         ]);
     }
 }

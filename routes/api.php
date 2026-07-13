@@ -28,7 +28,15 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
         Route::get('/riwayat', [AbsensiController::class, 'riwayat']);
         Route::post('/masuk', [AbsensiController::class, 'absenMasuk']);
         Route::post('/pulang', [AbsensiController::class, 'absenPulang']);
+        });
+
+    Route::prefix('cuti')->group(function () {
+        Route::get('/', [AbsensiController::class, 'riwayatCuti']);
+        Route::post('/create', [AbsensiController::class, 'ajukanCuti']);
+        Route::patch('/{id}/status', [AbsensiController::class, 'updateStatusCuti']); // baru
+        Route::delete('/{id}', [AbsensiController::class, 'batalkanCuti']);            // baru
     });
+
     Route::get('/karyawan/kode/{kode}', [AbsensiController::class, 'getByKode']);
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/chat', [ChatbotController::class, 'ask']);
