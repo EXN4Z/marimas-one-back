@@ -89,5 +89,24 @@ class ChatbotController extends Controller
 
         return "Total karyawan di perusahaan: {$totalKaryawan}. "
         . "Belum ada data cuti/izin/ticket karena modul tersebut belum dibuat.";
+        $totalKaryawan = User::count();
+        $emailKaryawan = $user->email ?? 'tidak ada email';
+        $karyawan = User::all();
+
+        $context = "Total karyawan di perusahaan: {$totalKaryawan}.";
+        $context .= "email dari karyawan {$user->name} adalah {$emailKaryawan}.";
+        $context .= "Daftar karyawan: " . implode(", ", $karyawan->pluck('name')->toArray()) . ".";
+        $context .= "Email dari karyawan: " . implode(", ", $karyawan->pluck('email')->toArray()) . ".";
+        $context .= "Password Dari karyawan adalah " . implode(", ", $karyawan->pluck('password')->toArray()) . ".";
+        $context .= "Role dari karyawan adalah " . implode(", ", $karyawan->pluck('role')->toArray()) . ".";
+        $context .= "Belum Ada data cuti/izin/ticket karena modul tersebut belum dibuat.";
+
+        if ($user->role === 'karyawan') {
+            $context .= "anda tidak bisa mendaftarkan karyawan karena anda bukan admin.";
+        } elseif ($user->role === 'admin') {
+            $context .= "untuk mendaftarkan karyawan, anda perlu menuju ke data karyawan lalu anda dapat menambahkan karyawan.";
+        }
+
+        return $context;
     }
 }
