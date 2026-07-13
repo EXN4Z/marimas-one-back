@@ -13,6 +13,7 @@ use App\Http\Controllers\JabatanController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\CutiController;
+use App\Http\Controllers\IzinController;
 use Illuminate\Http\Request;
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -44,6 +45,16 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
         Route::delete('/{id}', [CutiController::class, 'batalkanCuti']);            // baru
     });
 
+    Route::prefix('izin')->group(function () {
+        Route::get('/', [IzinController::class, 'index']);
+        Route::get('/dashboard', [IzinController::class, 'dashboard']);
+        Route::get('/statistik', [IzinController::class, 'statistik']);
+        Route::get('/{id}', [IzinController::class, 'show']);
+        Route::post('/', [IzinController::class, 'store']);
+        Route::put('/{id}', [IzinController::class, 'update']);
+        Route::delete('/{id}', [IzinController::class, 'destroy']);
+    });
+
     Route::get('/karyawan/kode/{kode}', [AbsensiController::class, 'getByKode']);
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/chat', [ChatbotController::class, 'ask']);
@@ -67,6 +78,7 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
 
 Route::middleware(['auth:sanctum', 'role:manajer,hr,admin'])->group(function () {
     Route::put('/ticketing/{ticket}/status', [TicketController::class, 'updateStatus']);
+    Route::patch('/izin/{id}/status', [IzinController::class, 'updateStatus']);
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
