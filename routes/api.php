@@ -10,6 +10,8 @@ use App\Http\Controllers\AbsensiController;
 use App\Http\Controllers\KategoriBarangController;
 use App\Http\Controllers\DepartemenController;
 use App\Http\Controllers\JabatanController;
+use App\Http\Controllers\TicketController;
+use App\Http\Controllers\AuditLogController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
