@@ -49,4 +49,36 @@ class CutiController extends Controller
             ], 500);
         }
     }
+    public function updateStatusCuti(Request $request, $id)
+    {
+        $request->validate([
+            'status' => 'required|in:disetujui,ditolak'
+        ]);
+
+        $cuti = PengajuanCuti::findOrFail($id);
+
+        $cuti->status = $request->status;
+        $cuti->save();
+
+        return response()->json([
+            'message' => 'Status berhasil diupdate',
+            'data' => $cuti
+        ]);
+    }
+    public function batalkanCuti($id)
+    {
+        $cuti = PengajuanCuti::findOrFail($id);
+
+        if ($cuti->status !== 'pending') {
+            return response()->json([
+                'message' => 'Hanya pengajuan cuti dengan status pending yang dapat dibatalkan.'
+            ], 400);
+        }
+
+        $cuti->delete();
+
+        return response()->json([
+            'message' => 'Pengajuan cuti berhasil dibatalkan.'
+        ]);
+    }
 }

@@ -38,8 +38,7 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
 
     Route::prefix('cuti')->group(function () {
         Route::get('/', [CutiController::class, 'riwayatCuti']);
-
-        Route::patch('/{id}/status', [CutiController::class, 'updateStatusCuti']); // baru
+        Route::patch('/{id}', [CutiController::class, 'updateStatusCuti']); // baru
         Route::delete('/{id}', [CutiController::class, 'batalkanCuti']);            // baru
     });
 
