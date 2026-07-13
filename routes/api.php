@@ -37,6 +37,9 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
         Route::post('/masuk', [AbsensiController::class, 'absenMasuk']);
         Route::post('/pulang', [AbsensiController::class, 'absenPulang']);
         });
+    Route::prefix('dashboard')->group(function () {
+        Route::get('/kpd', [DashboardController::class, 'KaryawanPerDepart']);
+    });
     Route::post('/cuti/create', [CutiController::class, 'create']);
 
     Route::prefix('cuti')->group(function () {

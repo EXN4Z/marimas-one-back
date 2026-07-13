@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\PengajuanCuti;
 use Illuminate\Support\Facades\DB;
+use App\Models\Pekerja;
 
 class DashboardController extends Controller
 {
@@ -29,5 +30,17 @@ class DashboardController extends Controller
             ->get();
 
         return response()->json($topKaryawan);
+    }
+    public function KaryawanPerDepart()
+    {
+        $karyawan = Pekerja::join('departemen', 'pekerja.departemen_id', '=', 'departemen.id')
+            ->select(
+                'departemen.nama as departemen',
+                DB::raw('COUNT(pekerja.id) as jumlah')
+            )
+            ->groupBy('departemen.nama')
+            ->get();
+
+        return response()->json($karyawan);
     }
 }
