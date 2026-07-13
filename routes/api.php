@@ -10,7 +10,6 @@ use App\Http\Controllers\AbsensiController;
 use App\Http\Controllers\KategoriBarangController;
 use App\Http\Controllers\DepartemenController;
 use App\Http\Controllers\JabatanController;
-use App\Http\Controllers\AuditLogController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
@@ -40,6 +39,17 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     Route::post('/barang/{barang}/keluar', [BarangController::class, 'scanKeluar']);
     Route::get('/barang/{barang}/riwayat', [BarangController::class, 'riwayat']);
     Route::get('/karyawan', [UserController::class, 'index']);
+
+    Route::prefix('ticketing')->group(function () {
+        Route::get('/', [TicketController::class, 'index']);
+        Route::get('/history', [TicketController::class, 'history']);
+        Route::post('/', [TicketController::class, 'store']);
+        Route::get('/{ticket}', [TicketController::class, 'show']);
+    });
+});
+
+Route::middleware(['auth:sanctum', 'role:manajer,hr,admin'])->group(function () {
+    Route::put('/ticketing/{ticket}/status', [TicketController::class, 'updateStatus']);
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
