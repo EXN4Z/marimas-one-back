@@ -42,10 +42,10 @@ class CutiController extends Controller
             ], 201);
 
         } catch (\Throwable $e) {
+            report($e);
+
             return response()->json([
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
+                'message' => 'Gagal membuat pengajuan cuti. Silakan coba lagi.',
             ], 500);
         }
     }

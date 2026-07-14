@@ -43,7 +43,7 @@ class AbsensiController extends Controller
     // GET /api/karyawan/kode/{kode} — preview data sebelum konfirmasi
     public function getByKode(string $kode)
     {
-        $pekerja = Pekerja::with('user', 'divisi', 'jabatan')
+        $pekerja = Pekerja::with('user', 'departemen', 'jabatan')
             ->where('qr_code', $kode)
             ->first();
 
