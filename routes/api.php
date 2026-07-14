@@ -87,6 +87,7 @@ Route::middleware(['auth:sanctum', 'role:manajer,hr,admin'])->group(function () 
     Route::prefix('dashboard-analytics')->group(function () {
         Route::get('/analisis-cuti', [DashboardController::class, 'analisisCuti']);
         Route::get('/top-karyawan', [DashboardController::class, 'topKaryawan']);
+        Route::get('/mutasi-barang', [DashboardController::class, 'mutasiBarang']);
     });
 });
 

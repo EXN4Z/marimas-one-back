@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use App\Models\PengajuanCuti;
 use Illuminate\Support\Facades\DB;
 use App\Models\Pekerja;
+use App\Models\MutasiBarang;
+use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
@@ -42,5 +44,26 @@ class DashboardController extends Controller
             ->get();
 
         return response()->json($karyawan);
+    }
+    public function mutasiBarang() {
+        Carbon::setLocale('id');
+
+        $now = Carbon::now();
+
+        $masuk = MutasiBarang::where('tipe', 'masuk')
+                ->whereMonth('created_at', $now->month)
+                ->whereYear('created_at', $now->year)
+                ->sum('jumlah');
+
+        $keluar = MutasiBarang::where('tipe', 'keluar')
+                ->whereMonth('created_at', $now->month)
+                ->whereYear('created_at', $now->year)
+                ->sum('jumlah');
+
+        return response()->json([
+            'bulan' => Carbon::now()->translatedFormat('M'),
+            'jumlah_masuk' => $masuk,
+            'jumlah_keluar' => $keluar,
+        ]);
     }
 }

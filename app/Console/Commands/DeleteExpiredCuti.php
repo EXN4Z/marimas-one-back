@@ -17,7 +17,7 @@ class DeleteExpiredCuti extends Command
      */
     public function handle()
     {
-        PengajuanCuti::where('tanggal_selesai', '<', Carbon::now())->delete();
+        PengajuanCuti::whereDate('tanggal_selesai', '<', Carbon::today())->delete();
 
 
         $this->info('Expired cuti records deleted successfully.');
