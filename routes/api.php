@@ -22,7 +22,7 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
 Route::post('/resend-otp', [AuthController::class, 'resendOtp']);
 Route::post('/login', [AuthController::class, 'login']);
-
+Route::get('/debug-keuangan', [DashboardController::class, 'debugKeuangan']);
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::put('/profile', [AuthController::class, 'updateProfile']);
@@ -91,7 +91,6 @@ Route::middleware(['auth:sanctum', 'role:manajer,hr,admin'])->group(function () 
         Route::get('/grafik-pengajuan', [DashboardController::class, 'grafikPengajuan']);
         Route::get('/total-keuangan', [DashboardController::class, 'totalKeuangan']);
         Route::get('/keuangan-per-bulan', [DashboardController::class, 'keuanganPerBulan']);
-        Route::get('/debug-keuangan', [DashboardController::class, 'debugKeuangan']);
     });
 });
 
