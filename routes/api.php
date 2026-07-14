@@ -35,8 +35,6 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
         Route::get('/hari-ini', [AbsensiController::class, 'hariIni']);
         Route::get('/riwayat', [AbsensiController::class, 'riwayat']);
         Route::post('/scan', [AbsensiController::class, 'scan']);
-        Route::post('/masuk', [AbsensiController::class, 'absenMasuk']);
-        Route::post('/pulang', [AbsensiController::class, 'absenPulang']);
         });
     Route::prefix('dashboard')->group(function () {
         Route::get('/kpd', [DashboardController::class, 'KaryawanPerDepart']);
@@ -65,7 +63,6 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     Route::get('/barang', [BarangController::class, 'index']);
     Route::get('/barang/kode/{kode_barang}', [BarangController::class, 'findByKode']);
     Route::get('/barang/{id}', [BarangController::class, 'show']);
-    Route::post('/barang', [BarangController::class, 'store']);
     Route::post('/barang/{barang}/masuk', [BarangController::class, 'scanMasuk']);
     Route::post('/barang/{barang}/keluar', [BarangController::class, 'scanKeluar']);
     Route::get('/barang/{barang}/riwayat', [BarangController::class, 'riwayat']);
@@ -88,6 +85,9 @@ Route::middleware(['auth:sanctum', 'role:manajer,hr,admin'])->group(function () 
         Route::get('/analisis-cuti', [DashboardController::class, 'analisisCuti']);
         Route::get('/top-karyawan', [DashboardController::class, 'topKaryawan']);
         Route::get('/mutasi-barang', [DashboardController::class, 'mutasiBarang']);
+        Route::get('/total-barang', [DashboardController::class, 'totalBarang']);
+        Route::get('/top-kehadiran', [DashboardController::class, 'topKehadiran']);
+        Route::get('/grafik-pengajuan', [DashboardController::class, 'grafikPengajuan']);
     });
 });
 
@@ -96,6 +96,10 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::put('/karyawan/{user}', [UserController::class, 'update']);
     Route::delete('/karyawan/{user}', [UserController::class, 'destroy']);
     Route::post('/karyawan', [UserController::class, 'store']);
+
+    Route::post('/barang', [BarangController::class, 'store']);
+    Route::put('/barang/{barang}', [BarangController::class, 'update']);
+    Route::delete('/barang/{barang}', [BarangController::class, 'destroy']);
 });
 
 Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {

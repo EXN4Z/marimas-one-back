@@ -19,9 +19,17 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['http://localhost:5173', 'http://localhost:5174'],
-
-    'allowed_origins_patterns' => [],
+    'allowed_origins' => [
+        'https://marimas-one-front.vercel.app',
+        'http://localhost:5173/',
+        'http://marimas-one.test',
+    ],
+    
+    'allowed_origins_patterns' => [
+        '#^https://marimas-one-front-.*\.vercel\.app$#',
+        '#^http://localhost:5173$#',
+        '#^http://marimas-one\.test$#',
+    ],
 
     'allowed_headers' => ['*'],
 

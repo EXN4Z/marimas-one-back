@@ -109,7 +109,7 @@ class AuthController extends Controller
     private function sendOtpWhatsapp(string $phone, int $otp): void
     {
         Http::withHeaders([
-            'Authorization' => env('FONNTE_TOKEN'),
+            'Authorization' => config('services.fonnte.token'),
         ])->post('https://api.fonnte.com/send', [
             'target' => $phone,
             'message' => "Kode verifikasi MARIMAS ONE kamu: {$otp}\n\nBerlaku 5 menit. Jangan berikan kode ini ke siapa pun.",

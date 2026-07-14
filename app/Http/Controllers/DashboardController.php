@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\Pekerja;
 use App\Models\MutasiBarang;
 use Carbon\Carbon;
-
+use App\Models\Absensi;
 class DashboardController extends Controller
 {
     public function analisisCuti() {
@@ -65,5 +65,52 @@ class DashboardController extends Controller
             'jumlah_masuk' => $masuk,
             'jumlah_keluar' => $keluar,
         ]);
+    }
+    public function totalBarang() {
+        $update_masuk = MutasiBarang::where('tipe', 'masuk')->max('updated_at');
+        $update_keluar = MutasiBarang::where('tipe', 'keluar')->max('updated_at');
+        $masuk = MutasiBarang::where('tipe', 'masuk')->sum('jumlah');
+        $keluar = MutasiBarang::where('tipe', 'keluar')->sum('jumlah');
+        return response()->json([
+            'jumlah_masuk' => $masuk,
+            'jumlah_keluar' => $keluar,
+            'update_masuk' => $update_masuk,
+            'update_keluar' => $update_keluar,
+        ]);
+    }
+    public function topKehadiran()
+    {
+        $topKehadiran = Absensi::select(
+                'users.name as nama',
+                DB::raw('COUNT(absensis.id) as jumlah')
+            )
+            ->join('pekerja', 'absensis.karyawan_id', '=', 'pekerja.id')
+            ->join('users', 'pekerja.user_id', '=', 'users.id')
+            ->where('absensis.status', 'tepat_waktu')
+            ->groupBy('users.id', 'users.name')
+            ->orderByDesc('jumlah')
+            ->limit(5)
+            ->get();
+
+        return response()->json($topKehadiran);
+    }
+    public function grafikPengajuan() {
+        Carbon::setLocale('id');
+        $hasil = [];
+
+        for ($i = 5; $i >= 0; $i--) {
+            $bulan = Carbon::now()->subMonths($i);
+
+            $jumlah = PengajuanCuti::whereMonth('tanggal_mulai', $bulan->month)
+                        ->whereYear('tanggal_mulai', $bulan->year)
+                        ->count();
+
+            $hasil[] = [
+                'bulan' => $bulan->translatedFormat('M'),
+                'pengajuan' => $jumlah,
+            ];
+        }
+
+        return response()->json($hasil);
     }
 }

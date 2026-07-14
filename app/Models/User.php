@@ -35,9 +35,14 @@ class User extends Authenticatable
     public function hasRoleAtLeast(string $role): bool
     {
         $userLevel = self::$roleLevels[$this->role] ?? 0;
-        $requiredLevel = self::$roleLevels[$role] ?? 0;
+        $requiredLevel = self::roleLevel($role);
 
         return $userLevel >= $requiredLevel;
+    }
+
+    public static function roleLevel(string $role): int
+    {
+        return self::$roleLevels[$role] ?? 0;
     }
     protected function casts(): array
     {
