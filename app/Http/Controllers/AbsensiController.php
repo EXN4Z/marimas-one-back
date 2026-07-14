@@ -22,7 +22,7 @@ class AbsensiController extends Controller
     {
         return response()->json(
             Absensi::with('pekerja.user')
-                ->whereDate('tanggal', Carbon::today())
+                ->where('tanggal', Carbon::today()->toDateString())
                 ->get()
         );
     }
@@ -54,7 +54,7 @@ class AbsensiController extends Controller
         }
 
         $absensiHariIni = Absensi::where('karyawan_id', $pekerja->id)
-            ->whereDate('tanggal', Carbon::today())
+            ->where('tanggal', Carbon::today()->toDateString()) // UBAH: whereDate() -> where(), kolom tanggal udah tipe date, ga perlu unwrap DATE() lagi jadi index kepake
             ->first();
 
         return response()->json([
@@ -77,7 +77,7 @@ class AbsensiController extends Controller
         }
 
         $absensi = Absensi::where('karyawan_id', $pekerja->id)
-            ->whereDate('tanggal', Carbon::today())
+            ->where('tanggal', Carbon::today()->toDateString()) // UBAH: whereDate() -> where(), sama alasan di atas
             ->first();
 
         // Kasus 1: belum ada record hari ini -> absen masuk
