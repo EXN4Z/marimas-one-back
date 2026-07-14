@@ -20,6 +20,7 @@ class AbsensiController extends Controller
     // GET /api/absensi/hari-ini
     public function hariIni()
     {
+        Carbon::setLocale('id');
         return response()->json(
             Absensi::with('pekerja.user')
                 ->whereDate('tanggal', Carbon::today())
@@ -43,7 +44,8 @@ class AbsensiController extends Controller
     // GET /api/karyawan/kode/{kode} — preview data sebelum konfirmasi
     public function getByKode(string $kode)
     {
-        $pekerja = Pekerja::with('user', 'divisi', 'jabatan')
+        Carbon::setLocale('id');
+        $pekerja = Pekerja::with('user', 'departemen', 'jabatan')
             ->where('qr_code', $kode)
             ->first();
 
@@ -66,6 +68,7 @@ class AbsensiController extends Controller
     // POST /api/absensi/scan — satu endpoint, otomatis nentuin masuk/pulang
     public function scan(Request $request)
     {
+        Carbon::setLocale('id');
         $request->validate([
             'qr_code' => 'required|string',
         ]);
