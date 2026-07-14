@@ -91,6 +91,7 @@ Route::middleware(['auth:sanctum', 'role:manajer,hr,admin'])->group(function () 
         Route::get('/grafik-pengajuan', [DashboardController::class, 'grafikPengajuan']);
         Route::get('/total-keuangan', [DashboardController::class, 'totalKeuangan']);
         Route::get('/keuangan-per-bulan', [DashboardController::class, 'keuanganPerBulan']);
+        Route::get('/debug-keuangan', [DashboardController::class, 'debugKeuangan']);
     });
 });
 

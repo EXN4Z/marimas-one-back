@@ -168,4 +168,19 @@ class DashboardController extends Controller
 
         return response()->json($hasil);
     }
+    public function debugKeuangan() {
+        $data = MutasiBarang::with('barang')->get()->map(function ($m) {
+            return [
+                'id' => $m->id,
+                'tipe' => $m->tipe,
+                'jumlah' => $m->jumlah,
+                'barang_id' => $m->barang_id,
+                'barang_ada' => $m->barang ? true : false,
+                'harga' => $m->barang->harga ?? 'BARANG NULL',
+                'created_at' => $m->created_at,
+            ];
+        });
+
+        return response()->json($data);
+    }
 }
