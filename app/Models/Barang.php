@@ -15,6 +15,7 @@ class Barang extends Model
         'satuan',
         'stok',
         'stok_minimum',
+        'harga',
     ];
 
     public function mutasi()

@@ -45,26 +45,32 @@ class DashboardController extends Controller
 
         return response()->json($karyawan);
     }
-    public function mutasiBarang() {
+    public function mutasiBarang() 
+    {
         Carbon::setLocale('id');
+        $hasil = [];
 
-        $now = Carbon::now();
+        for ($i = 5; $i >= 0; $i--) {
+            $bulan = Carbon::now()->subMonths($i);
 
-        $masuk = MutasiBarang::where('tipe', 'masuk')
-                ->whereMonth('created_at', $now->month)
-                ->whereYear('created_at', $now->year)
-                ->sum('jumlah');
+            $masuk = MutasiBarang::where('tipe', 'masuk')
+                    ->whereMonth('created_at', $bulan->month)
+                    ->whereYear('created_at', $bulan->year)
+                    ->sum('jumlah');
 
-        $keluar = MutasiBarang::where('tipe', 'keluar')
-                ->whereMonth('created_at', $now->month)
-                ->whereYear('created_at', $now->year)
-                ->sum('jumlah');
+            $keluar = MutasiBarang::where('tipe', 'keluar')
+                    ->whereMonth('created_at', $bulan->month)
+                    ->whereYear('created_at', $bulan->year)
+                    ->sum('jumlah');
 
-        return response()->json([
-            'bulan' => Carbon::now()->translatedFormat('M'),
-            'jumlah_masuk' => $masuk,
-            'jumlah_keluar' => $keluar,
-        ]);
+            $hasil[] = [
+                'bulan' => $bulan->translatedFormat('M'),
+                'jumlah_masuk' => $masuk,
+                'jumlah_keluar' => $keluar,
+            ];
+        }
+
+        return response()->json($hasil);
     }
     public function totalBarang() {
         $update_masuk = MutasiBarang::where('tipe', 'masuk')->max('updated_at');
@@ -108,6 +114,55 @@ class DashboardController extends Controller
             $hasil[] = [
                 'bulan' => $bulan->translatedFormat('M'),
                 'pengajuan' => $jumlah,
+            ];
+        }
+
+        return response()->json($hasil);
+    }
+    public function keuanganPerBulan() {
+        $totalPengeluaran = MutasiBarang::with('barang')
+                        ->where('tipe', 'keluar')
+                        ->get()
+                        ->sum(function ($item) {
+                            return $item->jumlah * $item->barang->harga;
+                        });
+        $totalPemasukan = MutasiBarang::with('barang')
+                        ->where('tipe', 'masuk')
+                        ->get()
+                        ->sum(function ($item) {
+                            return $item->jumlah * $item->barang->harga;
+                        });
+        return response()->json([
+            'totalPengeluaran' => $totalPengeluaran,
+            'totalPemasukan' => $totalPemasukan,
+        ]);
+    }
+    public function totalKeuangan() 
+    {
+        Carbon::setLocale('id');
+        $hasil = [];
+
+        for ($i = 5; $i >= 0; $i--) {
+            $bulan = Carbon::now()->subMonths($i);
+
+            $pengeluaran = MutasiBarang::with('barang')
+                ->where('tipe', 'masuk')
+                ->whereMonth('created_at', $bulan->month)
+                ->whereYear('created_at', $bulan->year)
+                ->get()
+                ->sum(fn ($item) => $item->jumlah * $item->barang->harga);
+
+            $pemasukan = MutasiBarang::with('barang')
+                ->where('tipe', 'keluar')
+                ->whereMonth('created_at', $bulan->month)
+                ->whereYear('created_at', $bulan->year)
+                ->get()
+                ->sum(fn ($item) => $item->jumlah * $item->barang->harga);
+
+            $hasil[] = [
+                'bulan' => $bulan->translatedFormat('M'),
+                'pemasukan' => $pemasukan,
+                'pengeluaran' => $pengeluaran,
             ];
         }
 

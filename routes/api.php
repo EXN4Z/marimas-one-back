@@ -16,6 +16,7 @@ use App\Http\Controllers\CutiController;
 use App\Http\Controllers\IzinController;
 use App\Http\Controllers\DashboardController;
 use Illuminate\Http\Request;
+use SebastianBergmann\CodeCoverage\Report\Html\Dashboard;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
@@ -88,6 +89,8 @@ Route::middleware(['auth:sanctum', 'role:manajer,hr,admin'])->group(function () 
         Route::get('/total-barang', [DashboardController::class, 'totalBarang']);
         Route::get('/top-kehadiran', [DashboardController::class, 'topKehadiran']);
         Route::get('/grafik-pengajuan', [DashboardController::class, 'grafikPengajuan']);
+        Route::get('/total-keuangan', [DashboardController::class, 'totalKeuangan']);
+        Route::get('/keuangan-per-bulan', [DashboardController::class, 'keuanganPerBulan']);
     });
 });
 
