@@ -54,7 +54,7 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
 
     Route::get('/karyawan/kode/{kode}', [AbsensiController::class, 'getByKode']);
     Route::get('/user', [AuthController::class, 'user']);
-    Route::post('/chatbot/ask', [ChatbotController::class, 'ask']);
+    Route::post('/chat', [ChatbotController::class, 'ask']);
     Route::get('/mutasi-barang', [MutasiBarangController::class, 'index']);
     Route::get('/barang', [BarangController::class, 'index']);
     Route::get('/barang/kode/{kode_barang}', [BarangController::class, 'findByKode']);

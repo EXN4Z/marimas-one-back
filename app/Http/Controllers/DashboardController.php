@@ -200,28 +200,22 @@ class DashboardController extends Controller
         $user = Auth::user();
         $pekerja = Pekerja::where('user_id', $user->id)->first(); // TAMBAH: cari Pekerja yang sesuai
 
-        if (!$pekerja) {
-            return response()->json(['message' => 'Data pekerja tidak ditemukan untuk user ini.'], 404);
-        }
-
-        $izin = PengajuanIzin::where('karyawan_id', $pekerja->id);      // UBAH: $user->id -> $pekerja->id
+        $izin = PengajuanIzin::where('karyawan_id', $user->id);      // UBAH: $user->id -> $pekerja->id
         $absensi = Absensi::where('karyawan_id', $pekerja->id);         // UBAH: $user->id -> $pekerja->id
         $ticket = Ticket::where('user_id', $user->id);                  // TETAP: ini emang refer ke users.id
         $value = '-';
 
-        $cutiAktif = PengajuanCuti::where('karyawan_id', $pekerja->id)  // UBAH: $user->id -> $pekerja->id
+        $izinAktif = pengajuanIzin::where('karyawan_id', $user->id)  // UBAH: $user->id -> $pekerja->id
             ->where('status', 'disetujui')
             ->latest()
             ->first();
 
-        if ($cutiAktif) {
-            $mulai = Carbon::parse($cutiAktif->tanggal_mulai);
-            $selesai = Carbon::parse($cutiAktif->tanggal_selesai);
+        if ($izinAktif) {
+            $mulai = Carbon::parse($izinAktif->tanggal_mulai);
+            $selesai = Carbon::parse($izinAktif->tanggal_selesai);
             $hari = $mulai->diffInDays($selesai) + 1;
             $value = $hari . ' hari';
-        }
-
-        $cuti = PengajuanCuti::where('karyawan_id', $pekerja->id); // UBAH: $user->id -> $pekerja->id
+        } // UBAH: $user->id -> $pekerja->id
 
         return response()->json([
             'kehadiran' => [
@@ -232,12 +226,12 @@ class DashboardController extends Controller
                 'value' => (clone $izin)->where('status', 'pending')->count(),
                 'trend' => $this->getTrend($izin),
             ],
-            'cuti' => [
+            'izinAktif' => [
                 'value' => $value,
-                'trend' => $this->getTrend($cuti)
+                'trend' => $this->getTrend($izin)
             ],
             'ticket' => [
-                'value' => (clone $ticket)->count(),
+                'value' => (clone $ticket)->where('status', 'diproses')->count(),
                 'trend' => $this->getTrend($ticket)
             ]
         ]);

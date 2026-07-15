@@ -8,7 +8,6 @@ use App\Models\User;
 use App\Models\Departemen;
 use App\Models\Jabatan;
 use App\Models\Absensi;
-use App\Models\PengajuanCuti;
 use App\Models\Ticket;
 use App\Models\Barang;
 
@@ -99,8 +98,6 @@ class ChatbotController extends Controller
         $today = now()->format('Y-m-d');
         $absensiHariIni = Absensi::where('tanggal', $today)->count();
 
-        $cutiPending = PengajuanCuti::where('status', 'pending')->count();
-
         $ticketAktif = Ticket::whereIn('status', Ticket::STATUS_AKTIF)->count();
 
         $stokRendah = Barang::whereColumn('stok', '<=', 'stok_minimum')->count();
@@ -109,7 +106,6 @@ class ChatbotController extends Controller
         $context .= "Rekap jumlah karyawan per departemen: {$perDepartemen}.\n";
         $context .= "Rekap jumlah karyawan per jabatan: {$perJabatan}.\n";
         $context .= "Jumlah data absensi tercatat hari ini ({$today}): {$absensiHariIni}.\n";
-        $context .= "Jumlah pengajuan cuti yang masih berstatus pending: {$cutiPending}.\n";
         $context .= "Jumlah tiket yang masih aktif (pending/diproses): {$ticketAktif}.\n";
         $context .= "Jumlah jenis barang dengan stok di bawah/sama dengan stok minimum: {$stokRendah}.\n";
 
