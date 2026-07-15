@@ -198,35 +198,35 @@ class DashboardController extends Controller
     public function statsCard()
     {
         $user = Auth::user();
-        $izin = PengajuanIzin::where('karyawan_id', $user->id);
-        $absensi = Absensi::where('karyawan_id', $user->id);
-        $ticket = Ticket::where('user_id', $user->id);
+        $pekerja = Pekerja::where('user_id', $user->id)->first(); // TAMBAH: cari Pekerja yang sesuai
+
+        if (!$pekerja) {
+            return response()->json(['message' => 'Data pekerja tidak ditemukan untuk user ini.'], 404);
+        }
+
+        $izin = PengajuanIzin::where('karyawan_id', $pekerja->id);      // UBAH: $user->id -> $pekerja->id
+        $absensi = Absensi::where('karyawan_id', $pekerja->id);         // UBAH: $user->id -> $pekerja->id
+        $ticket = Ticket::where('user_id', $user->id);                  // TETAP: ini emang refer ke users.id
         $value = '-';
 
-        // UBAH: eksekusi query-nya, ambil 1 record cuti yang relevan (bukan builder mentah)
-        $cutiAktif = PengajuanCuti::where('karyawan_id', $user->id)
-            ->where('status', 'disetujui') // sesuaikan status yang dianggap "aktif/berlaku"
+        $cutiAktif = PengajuanCuti::where('karyawan_id', $pekerja->id)  // UBAH: $user->id -> $pekerja->id
+            ->where('status', 'disetujui')
             ->latest()
             ->first();
 
         if ($cutiAktif) {
             $mulai = Carbon::parse($cutiAktif->tanggal_mulai);
             $selesai = Carbon::parse($cutiAktif->tanggal_selesai);
-
-            // +1 karena tanggal mulai dan selesai ikut dihitung
             $hari = $mulai->diffInDays($selesai) + 1;
-
             $value = $hari . ' hari';
         }
 
-        // trend juga masih butuh query builder $cuti yang belum dieksekusi,
-        // jadi tetap disiapkan terpisah buat dilempar ke getTrend()
-        $cuti = PengajuanCuti::where('karyawan_id', $user->id);
+        $cuti = PengajuanCuti::where('karyawan_id', $pekerja->id); // UBAH: $user->id -> $pekerja->id
 
         return response()->json([
             'kehadiran' => [
-                'value' => (clone $absensi)->count(),
-                'trend' => $this->getTrend($absensi),
+                'value' => (clone $absensi)->where('status', 'tepat_waktu')->count(),
+                'trend' => $this->getTrend((clone $absensi)->where('status', 'tepat_waktu')),
             ],
             'izin' => [
                 'value' => (clone $izin)->where('status', 'pending')->count(),
