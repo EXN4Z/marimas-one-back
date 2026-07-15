@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\PengajuanIzin;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class IzinController extends Controller
 {
@@ -224,6 +225,11 @@ class IzinController extends Controller
         $izin->direview_at = now();
         $izin->save();
 
+        Log::info('Sebelum notify', ['izin_id' => $izin->id, 'karyawan_id' => $izin->karyawan_id]);
+
+        $izin->karyawan->notify(new \App\Notifications\IzinStatusUpdated($izin));
+
+        Log::info('Setelah notify', ['izin_id' => $izin->id]);
         // TODO: kirim notifikasi ke karyawan pemohon (poin 7 di spec) —
         // butuh channel notifikasi (email/in-app) yang belum ada di project ini.
 
