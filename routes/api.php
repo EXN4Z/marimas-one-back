@@ -12,7 +12,6 @@ use App\Http\Controllers\DepartemenController;
 use App\Http\Controllers\JabatanController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\AuditLogController;
-use App\Http\Controllers\CutiController;
 use App\Http\Controllers\IzinController;
 use App\Http\Controllers\DashboardController;
 use Illuminate\Http\Request;
@@ -41,12 +40,6 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
         Route::get('/kpd', [DashboardController::class, 'KaryawanPerDepart']);
         Route::get('/izin-pending', [DashboardController::class, 'izinPending']);
         Route::get('/stats-card', [DashboardController::class, 'statsCard']);
-    });
-    Route::post('/cuti/create', [CutiController::class, 'create']);
-
-    Route::prefix('cuti')->group(function () {
-        Route::get('/', [CutiController::class, 'riwayatCuti']);
-        Route::delete('/{id}', [CutiController::class, 'batalkanCuti']);
     });
 
     Route::prefix('izin')->group(function () {
@@ -82,10 +75,8 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
 Route::middleware(['auth:sanctum', 'role:manajer,hr,admin'])->group(function () {
     Route::put('/ticketing/{ticket}/status', [TicketController::class, 'updateStatus']);
     Route::patch('/izin/{id}/status', [IzinController::class, 'updateStatus']);
-    Route::patch('/cuti/{id}', [CutiController::class, 'updateStatusCuti']);
 
     Route::prefix('dashboard-analytics')->group(function () {
-        Route::get('/analisis-cuti', [DashboardController::class, 'analisisCuti']);
         Route::get('/top-karyawan', [DashboardController::class, 'topKaryawan']);
         Route::get('/mutasi-barang', [DashboardController::class, 'mutasiBarang']);
         Route::get('/total-barang', [DashboardController::class, 'totalBarang']);
