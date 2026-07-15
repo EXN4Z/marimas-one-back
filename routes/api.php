@@ -39,6 +39,8 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
         });
     Route::prefix('dashboard')->group(function () {
         Route::get('/kpd', [DashboardController::class, 'KaryawanPerDepart']);
+        Route::get('/izin-pending', [DashboardController::class, 'izinPending']);
+        Route::get('/stats-card', [DashboardController::class, 'statsCard']);
     });
     Route::post('/cuti/create', [CutiController::class, 'create']);
 
@@ -59,7 +61,7 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
 
     Route::get('/karyawan/kode/{kode}', [AbsensiController::class, 'getByKode']);
     Route::get('/user', [AuthController::class, 'user']);
-    Route::post('/chat', [ChatbotController::class, 'ask']);
+    Route::post('/chatbot/ask', [ChatbotController::class, 'ask']);
     Route::get('/mutasi-barang', [MutasiBarangController::class, 'index']);
     Route::get('/barang', [BarangController::class, 'index']);
     Route::get('/barang/kode/{kode_barang}', [BarangController::class, 'findByKode']);

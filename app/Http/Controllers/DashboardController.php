@@ -8,7 +8,12 @@ use Illuminate\Support\Facades\DB;
 use App\Models\Pekerja;
 use App\Models\MutasiBarang;
 use Carbon\Carbon;
+use App\Models\PengajuanIzin;
 use App\Models\Absensi;
+use App\Models\Ticket;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Database\Eloquent\Builder;
+
 class DashboardController extends Controller
 {
     public function analisisCuti() {
@@ -42,6 +47,13 @@ class DashboardController extends Controller
             )
             ->groupBy('departemen.nama')
             ->get();
+
+            $maxJumlah = $karyawan->max('jumlah') ?: 1; // fallback 1 biar ga divide by zero
+
+            $karyawan = $karyawan->map(function ($item) use ($maxJumlah) {
+            $item->percent = round(($item->jumlah / $maxJumlah) * 100);
+            return $item;
+        });
 
         return response()->json($karyawan);
     }
@@ -183,4 +195,60 @@ class DashboardController extends Controller
 
         return response()->json($data);
     }
+    public function statsCard()
+    {
+        $user = Auth::user();
+        $izin = PengajuanIzin::where('karyawan_id', $user->id);
+        $absensi = Absensi::where('karyawan_id', $user->id);
+        $ticket = Ticket::where('user_id', $user->id);
+        $value = '-';
+
+        // UBAH: eksekusi query-nya, ambil 1 record cuti yang relevan (bukan builder mentah)
+        $cutiAktif = PengajuanCuti::where('karyawan_id', $user->id)
+            ->where('status', 'disetujui') // sesuaikan status yang dianggap "aktif/berlaku"
+            ->latest()
+            ->first();
+
+        if ($cutiAktif) {
+            $mulai = Carbon::parse($cutiAktif->tanggal_mulai);
+            $selesai = Carbon::parse($cutiAktif->tanggal_selesai);
+
+            // +1 karena tanggal mulai dan selesai ikut dihitung
+            $hari = $mulai->diffInDays($selesai) + 1;
+
+            $value = $hari . ' hari';
+        }
+
+        // trend juga masih butuh query builder $cuti yang belum dieksekusi,
+        // jadi tetap disiapkan terpisah buat dilempar ke getTrend()
+        $cuti = PengajuanCuti::where('karyawan_id', $user->id);
+
+        return response()->json([
+            'kehadiran' => [
+                'value' => (clone $absensi)->count(),
+                'trend' => $this->getTrend($absensi),
+            ],
+            'izin' => [
+                'value' => (clone $izin)->where('status', 'pending')->count(),
+                'trend' => $this->getTrend($izin),
+            ],
+            'cuti' => [
+                'value' => $value,
+                'trend' => $this->getTrend($cuti)
+            ],
+            'ticket' => [
+                'value' => (clone $ticket)->count(),
+                'trend' => $this->getTrend($ticket)
+            ]
+        ]);
+    }
+    private function getTrend(Builder $query): string
+    {
+        $updatedAt = (clone $query)->max('updated_at');
+
+        return $updatedAt
+            ? 'Update terakhir ' . Carbon::parse($updatedAt)->diffForHumans()
+            : 'Belum ada data';
+    }
+    
 }
