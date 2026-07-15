@@ -15,17 +15,28 @@ use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\IzinController;
 use App\Http\Controllers\DashboardController;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Broadcast;
 use SebastianBergmann\CodeCoverage\Report\Html\Dashboard;
+use App\Http\Controllers\NotificationController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
 Route::post('/resend-otp', [AuthController::class, 'resendOtp']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/debug-keuangan', [DashboardController::class, 'debugKeuangan']);
+
+Broadcast::routes(['middleware' => ['auth:sanctum']]);
+
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::put('/profile', [AuthController::class, 'updateProfile']);
     Route::put('/change-password', [AuthController::class, 'changePassword']);
+
+    Route::prefix('notifications')->group(function () {
+        Route::get('/', [NotificationController::class, 'index']);
+        Route::post('/{id}/read', [NotificationController::class, 'markAsRead']);
+        Route::post('/read-all', [NotificationController::class, 'markAllAsRead']);
+    });
 });
 
 
