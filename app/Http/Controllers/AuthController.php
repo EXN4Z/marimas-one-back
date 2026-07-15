@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\OtpMail;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -33,10 +34,10 @@ class AuthController extends Controller
             'otp_code' => $otp,
         ], now()->addMinutes(5));
 
-        $this->sendOtpWhatsapp($request->phone, $otp);
+        $this->sendOtpEmail($request->email, $otp);
 
         return response()->json([
-            'message' => 'Kode OTP sudah dikirim ke WhatsApp kamu',
+            'message' => 'Kode OTP sudah dikirim ke email kamu',
             'registration_id' => $registrationId,
         ], 200);
     }
@@ -101,20 +102,14 @@ class AuthController extends Controller
 
         Cache::put("register:{$request->registration_id}", $data, now()->addMinutes(5));
 
-        $this->sendOtpWhatsapp($data['phone'], $otp);
+        $this->sendOtpEmail($data['email'], $otp);
 
         return response()->json(['message' => 'Kode OTP baru sudah dikirim']);
     }
 
-    private function sendOtpWhatsapp(string $phone, int $otp): void
+    private function sendOtpEmail(string $email, int $otp): void
     {
-        Http::withHeaders([
-            'Authorization' => config('services.fonnte.token'),
-        ])->post('https://api.fonnte.com/send', [
-            'target' => $phone,
-            'message' => "Kode verifikasi MARIMAS ONE kamu: {$otp}\n\nBerlaku 5 menit. Jangan berikan kode ini ke siapa pun.",
-            'countryCode' => '62',
-        ]);
+        Mail::to($email)->send(new OtpMail($otp));
     }
 
     public function login(Request $request)
