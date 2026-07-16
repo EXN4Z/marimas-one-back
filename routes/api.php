@@ -90,6 +90,9 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
         Route::post('/', [TicketController::class, 'store']);
         Route::get('/{ticket}', [TicketController::class, 'show']);
     });
+    Route::prefix('agenda')->group(function () {
+        
+    });
 });
 
 Route::middleware(['auth:sanctum', 'role:manajer,hr,admin'])->group(function () {
