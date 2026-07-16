@@ -198,11 +198,26 @@ class DashboardController extends Controller
     public function statsCard()
     {
         $user = Auth::user();
-        $pekerja = Pekerja::where('user_id', $user->id)->first(); // TAMBAH: cari Pekerja yang sesuai
 
-        $izin = PengajuanIzin::where('karyawan_id', $user->id);      // UBAH: $user->id -> $pekerja->id
-        $absensi = Absensi::where('karyawan_id', $pekerja->id);         // UBAH: $user->id -> $pekerja->id
-        $ticket = Ticket::where('user_id', $user->id);                  // TETAP: ini emang refer ke users.id
+        if (! $user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        $pekerja = Pekerja::where('user_id', $user->id)->first(); // cari Pekerja yang sesuai
+
+        // Jika pekerja tidak ditemukan, kembalikan nilai default agar tidak error
+        if (! $pekerja) {
+            return response()->json([
+                'kehadiran' => ['value' => 0, 'trend' => 'Belum ada data'],
+                'izin' => ['value' => 0, 'trend' => 'Belum ada data'],
+                'izinAktif' => ['value' => '-', 'trend' => 'Belum ada data'],
+                'ticket' => ['value' => 0, 'trend' => 'Belum ada data'],
+            ]);
+        }
+
+        $izin = PengajuanIzin::where('karyawan_id', $pekerja->id);
+        $absensi = Absensi::where('karyawan_id', $pekerja->id);
+        $ticket = Ticket::where('user_id', $user->id);
         $value = '-';
 
         $izinAktif = pengajuanIzin::where('karyawan_id', $user->id)  // UBAH: $user->id -> $pekerja->id
