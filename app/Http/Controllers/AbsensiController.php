@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Pekerja;
 use App\Models\Absensi;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Notification;
+use App\Notifications\AbsensiBaruDicatat;
 
 class AbsensiController extends Controller
 {
@@ -98,6 +101,12 @@ class AbsensiController extends Controller
                 'jam_masuk' => $sekarang->format('H:i:s'),
                 'status' => $status,
             ]);
+
+            // TAMBAH: notif ke admin & hr tiap ada karyawan yang absen masuk
+            Notification::send(
+                User::whereIn('role', ['admin', 'hr'])->get(),
+                new AbsensiBaruDicatat($absensi)
+            );
 
             return response()->json([
                 'tipe' => 'masuk',

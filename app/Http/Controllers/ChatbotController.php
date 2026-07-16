@@ -26,7 +26,7 @@ class ChatbotController extends Controller
         }
 
         // Ambil data relevan si user (masih placeholder, nanti diisi query beneran
-        // setelah tabel cuti/izin/ticket dibuat)
+        // setelah tabel izin/ticket dibuat)
         $context = $this->buildContext($user);
 
         $prompt = <<<PROMPT

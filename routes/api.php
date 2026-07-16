@@ -18,6 +18,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use SebastianBergmann\CodeCoverage\Report\Html\Dashboard;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\AgendaController;
+use App\Http\Controllers\LaporanController;
+use App\Http\Controllers\PayrollController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
@@ -38,6 +41,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/read-all', [NotificationController::class, 'markAllAsRead']);
         Route::delete('/{id}', [NotificationController::class, 'destroy']);
     });
+
+    Route::get('/agenda', [AgendaController::class, 'index']);
 });
 
 
@@ -52,12 +57,15 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
         Route::get('/kpd', [DashboardController::class, 'KaryawanPerDepart']);
         Route::get('/izin-pending', [DashboardController::class, 'izinPending']);
         Route::get('/stats-card', [DashboardController::class, 'statsCard']);
+        Route::get('/kehadiran-mingguan', [DashboardController::class, 'kehadiranMingguan']);
+        Route::get('/beban-kerja', [DashboardController::class, 'bebanKerja']);
     });
 
     Route::prefix('izin')->group(function () {
         Route::get('/', [IzinController::class, 'index']);
         Route::get('/dashboard', [IzinController::class, 'dashboard']);
         Route::get('/statistik', [IzinController::class, 'statistik']);
+        Route::get('/kuota', [IzinController::class, 'kuota']);
         Route::get('/{id}', [IzinController::class, 'show']);
         Route::post('/', [IzinController::class, 'store']);
         Route::put('/{id}', [IzinController::class, 'update']);
@@ -89,6 +97,7 @@ Route::middleware(['auth:sanctum', 'role:manajer,hr,admin'])->group(function () 
     Route::patch('/izin/{id}/status', [IzinController::class, 'updateStatus']);
 
     Route::prefix('dashboard-analytics')->group(function () {
+        Route::get('/analisis-izin', [DashboardController::class, 'analisisIzin']);
         Route::get('/top-karyawan', [DashboardController::class, 'topKaryawan']);
         Route::get('/mutasi-barang', [DashboardController::class, 'mutasiBarang']);
         Route::get('/total-barang', [DashboardController::class, 'totalBarang']);
@@ -96,6 +105,12 @@ Route::middleware(['auth:sanctum', 'role:manajer,hr,admin'])->group(function () 
         Route::get('/grafik-pengajuan', [DashboardController::class, 'grafikPengajuan']);
         Route::get('/total-keuangan', [DashboardController::class, 'totalKeuangan']);
         Route::get('/keuangan-per-bulan', [DashboardController::class, 'keuanganPerBulan']);
+    });
+
+    Route::prefix('laporan')->group(function () {
+        Route::get('/absensi', [LaporanController::class, 'absensi']);
+        Route::get('/izin', [LaporanController::class, 'izin']);
+        Route::get('/inventaris', [LaporanController::class, 'inventaris']);
     });
 });
 
@@ -114,6 +129,14 @@ Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
     Route::apiResource('kategori-barang', KategoriBarangController::class)->except(['show']);
     Route::apiResource('departemen', DepartemenController::class)->except(['show']);
     Route::apiResource('jabatan', JabatanController::class)->except(['show']);
+
+    Route::prefix('payroll')->group(function () {
+        Route::get('/', [PayrollController::class, 'index']);
+        Route::get('/export', [PayrollController::class, 'export']);
+    });
+
+    Route::post('/agenda', [AgendaController::class, 'store']);
+    Route::delete('/agenda/{agenda}', [AgendaController::class, 'destroy']);
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {

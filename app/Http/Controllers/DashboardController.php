@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\PengajuanCuti;
 use Illuminate\Support\Facades\DB;
 use App\Models\Pekerja;
 use App\Models\MutasiBarang;
@@ -11,26 +10,29 @@ use Carbon\Carbon;
 use App\Models\PengajuanIzin;
 use App\Models\Absensi;
 use App\Models\Ticket;
+use App\Models\Departemen;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Builder;
 
 class DashboardController extends Controller
 {
-    public function analisisCuti() {
+    // UBAH: dari analisisCuti() ke analisisIzin() -- fitur cuti dihapus, semua ditangani lewat izin
+    public function analisisIzin() {
         return response()->json([
-            'total' => PengajuanCuti::count(),
-            'pending' => PengajuanCuti::where('status', 'pending')->count(),
-            'disetujui' => PengajuanCuti::where('status', 'disetujui')->count(),
-            'ditolak' => PengajuanCuti::where('status', 'ditolak')->count(),
+            'total' => PengajuanIzin::count(),
+            'pending' => PengajuanIzin::where('status', 'pending')->count(),
+            'disetujui' => PengajuanIzin::where('status', 'disetujui')->count(),
+            'ditolak' => PengajuanIzin::where('status', 'ditolak')->count(),
         ]);
     }
     public function topKaryawan()
     {
-        $topKaryawan = PengajuanCuti::select(
+        // UBAH: sumbernya sekarang pengajuan_izin, bukan pengajuan_cuti
+        $topKaryawan = PengajuanIzin::select(
                 'users.name as nama',
-                DB::raw('COUNT(pengajuan_cuti.id) as jumlah')
+                DB::raw('COUNT(pengajuan_izin.id) as jumlah')
             )
-            ->join('users', 'pengajuan_cuti.karyawan_id', '=', 'users.id')
+            ->join('users', 'pengajuan_izin.karyawan_id', '=', 'users.id')
             ->groupBy('users.id', 'users.name')
             ->orderByDesc('jumlah')
             ->limit(5)
@@ -57,6 +59,86 @@ class DashboardController extends Controller
 
         return response()->json($karyawan);
     }
+    // TAMBAH: kehadiran real 7 hari terakhir (bukan data contoh)
+    public function kehadiranMingguan()
+    {
+        Carbon::setLocale('id');
+
+        $startDate = Carbon::now()->subDays(6)->startOfDay();
+        $endDate   = Carbon::now()->endOfDay();
+
+        $totalPekerja = Pekerja::count();
+
+        // hadir = ada absensi hari itu dengan status tepat_waktu ATAU telat
+        $absensiPerHari = Absensi::whereBetween('tanggal', [
+                $startDate->toDateString(),
+                $endDate->toDateString(),
+            ])
+            ->whereIn('status', ['tepat_waktu', 'telat'])
+            ->select('tanggal', DB::raw('COUNT(DISTINCT karyawan_id) as jumlah'))
+            ->groupBy('tanggal')
+            ->pluck('jumlah', 'tanggal');
+
+        $hasil = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $tanggal = Carbon::now()->subDays($i);
+            $key = $tanggal->toDateString();
+
+            $hasil[] = [
+                'day'     => $tanggal->translatedFormat('D'), // Sen, Sel, Rab, ...
+                'tanggal' => $key,
+                'hadir'   => (int) ($absensiPerHari[$key] ?? 0),
+                'target'  => $totalPekerja,
+            ];
+        }
+
+        return response()->json($hasil);
+    }
+
+    // UBAH: sebelumnya "tidak hadir" cuma dihitung dari izin yang disetujui &
+    // aktif hari ini — di kondisi normal itu hampir selalu 0 orang, jadi
+    // beban_percent selalu 0% buat semua departemen tiap hari (keliatan statis).
+    // Sekarang "hadir" dihitung dari absensi check-in beneran hari ini, jadi
+    // angkanya ikut berubah sesuai siapa yang udah absen masuk.
+    public function bebanKerja()
+    {
+        $today = Carbon::today()->toDateString();
+
+        $departemenList = Departemen::withCount('pekerja')->get();
+
+        // id Pekerja (bukan users.id) yang sudah absen masuk hari ini
+        $pekerjaIdHadirHariIni = Absensi::where('tanggal', $today)
+            ->whereIn('status', ['tepat_waktu', 'telat'])
+            ->pluck('karyawan_id')
+            ->unique();
+
+        $hasil = $departemenList->map(function ($dept) use ($pekerjaIdHadirHariIni) {
+            $total = $dept->pekerja_count;
+
+            $hadir = Pekerja::where('departemen_id', $dept->id)
+                ->whereIn('id', $pekerjaIdHadirHariIni)
+                ->count();
+
+            $tidakHadir = max($total - $hadir, 0);
+
+            if ($hadir > 0) {
+                $bebanPercent = round(($tidakHadir / $hadir) * 100);
+            } else {
+                $bebanPercent = $total > 0 ? 100 : 0; // belum ada yang absen sama sekali = kritis
+            }
+
+            return [
+                'departemen'   => $dept->nama,
+                'total'        => $total,
+                'hadir'        => $hadir,
+                'tidak_hadir'  => $tidakHadir,
+                'beban_percent' => (int) $bebanPercent,
+            ];
+        });
+
+        return response()->json($hasil->sortByDesc('beban_percent')->values());
+    }
+
     public function mutasiBarang() 
     {
         Carbon::setLocale('id');
@@ -119,7 +201,8 @@ class DashboardController extends Controller
         for ($i = 5; $i >= 0; $i--) {
             $bulan = Carbon::now()->subMonths($i);
 
-            $jumlah = PengajuanCuti::whereMonth('tanggal_mulai', $bulan->month)
+            // UBAH: dari PengajuanCuti ke PengajuanIzin
+            $jumlah = PengajuanIzin::whereMonth('tanggal_mulai', $bulan->month)
                         ->whereYear('tanggal_mulai', $bulan->year)
                         ->count();
 
@@ -198,14 +281,18 @@ class DashboardController extends Controller
     public function statsCard()
     {
         $user = Auth::user();
-        $pekerja = Pekerja::where('user_id', $user->id)->first(); // TAMBAH: cari Pekerja yang sesuai
+        $pekerja = Pekerja::where('user_id', $user->id)->first();
 
-        $izin = PengajuanIzin::where('karyawan_id', $user->id);      // UBAH: $user->id -> $pekerja->id
-        $absensi = Absensi::where('karyawan_id', $pekerja->id);         // UBAH: $user->id -> $pekerja->id
-        $ticket = Ticket::where('user_id', $user->id);                  // TETAP: ini emang refer ke users.id
+        $izin = PengajuanIzin::where('karyawan_id', $user->id);
+        // FIX: user (misal admin murni) bisa gak punya record Pekerja, jadi absensi
+        // di-scope ke pekerja->id cuma kalau pekerja-nya ada. Kalau nggak, query kosong.
+        $absensi = $pekerja
+            ? Absensi::where('karyawan_id', $pekerja->id)
+            : Absensi::whereRaw('1 = 0');
+        $ticket = Ticket::where('user_id', $user->id);
         $value = '-';
 
-        $izinAktif = pengajuanIzin::where('karyawan_id', $user->id)  // UBAH: $user->id -> $pekerja->id
+        $izinAktif = (clone $izin)
             ->where('status', 'disetujui')
             ->latest()
             ->first();
@@ -215,7 +302,7 @@ class DashboardController extends Controller
             $selesai = Carbon::parse($izinAktif->tanggal_selesai);
             $hari = $mulai->diffInDays($selesai) + 1;
             $value = $hari . ' hari';
-        } // UBAH: $user->id -> $pekerja->id
+        }
 
         return response()->json([
             'kehadiran' => [

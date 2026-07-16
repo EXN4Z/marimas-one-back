@@ -16,6 +16,7 @@ class Pekerja extends Model
         'qr_code',
         'tanggal_masuk',
         'foto',
+        'kuota_izin_tahunan',
     ];
 
     public function user()

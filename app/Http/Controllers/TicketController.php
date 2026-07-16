@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Notification;
+use App\Notifications\TicketBaruMasuk;
 
 class TicketController extends Controller
 {
@@ -57,6 +59,12 @@ class TicketController extends Controller
             'user_id' => $request->user()->id,
             'status' => Ticket::STATUS_PENDING,
         ]);
+
+        // TAMBAH: notif ke manajer/hr/admin tiap ada laporan baru masuk
+        Notification::send(
+            User::whereIn('role', ['manajer', 'hr', 'admin'])->get(),
+            new TicketBaruMasuk($ticket)
+        );
 
         return response()->json(
             $ticket->load('pelapor:id,name,role'),
