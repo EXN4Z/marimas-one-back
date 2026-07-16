@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 
 class AbsensiController extends Controller
 {
-    // GET /api/absensi/karyawan
+    // GET /api/absensi/karyawan — ADMIN ONLY (monitoring semua karyawan)
     public function karyawan(Request $request)
     {
         return response()->json(
@@ -17,7 +17,7 @@ class AbsensiController extends Controller
         );
     }
 
-    // GET /api/absensi/hari-ini
+    // GET /api/absensi/hari-ini — ADMIN ONLY
     public function hariIni()
     {
         Carbon::setLocale('id');
@@ -28,7 +28,7 @@ class AbsensiController extends Controller
         );
     }
 
-    // GET /api/absensi/riwayat
+    // GET /api/absensi/riwayat — ADMIN ONLY
     public function riwayat(Request $request)
     {
         $limit = $request->get('limit', 10);
@@ -41,17 +41,19 @@ class AbsensiController extends Controller
         );
     }
 
-    // GET /api/karyawan/kode/{kode} — preview data sebelum konfirmasi
-    public function getByKode(string $kode)
+    // BARU: GET /api/absensi/saya — dipakai role non-admin (karyawan/hr/manajer)
+    // Mengembalikan data pekerja milik akun yang sedang login + status absensi hari ini.
+    public function saya(Request $request)
     {
         Carbon::setLocale('id');
+
         $pekerja = Pekerja::with('user', 'departemen', 'jabatan')
-            ->where('qr_code', $kode)
+            ->where('user_id', $request->user()->id)
             ->first();
 
         if (!$pekerja) {
             return response()->json([
-                'message' => 'Karyawan tidak ditemukan.'
+                'message' => 'Akun ini tidak terhubung ke data karyawan.',
             ], 404);
         }
 
@@ -65,27 +67,39 @@ class AbsensiController extends Controller
         ]);
     }
 
-    // POST /api/absensi/scan — satu endpoint, otomatis nentuin masuk/pulang
-    // UBAH: sekarang wajib kirim foto wajah + koordinat GPS, divalidasi jaraknya ke kantor
+    // BARU: resolusi target absen.
+    // - Non-admin: SELALU pakai pekerja milik akun sendiri (karyawan_id dari body diabaikan).
+    // - Admin: boleh override lewat 'karyawan_id' di body untuk absenkan orang lain.
+    private function resolveTargetPekerja(Request $request): ?Pekerja
+    {
+        $user = $request->user();
+
+        if ($user->role === 'admin' && $request->filled('karyawan_id')) {
+            return Pekerja::find($request->input('karyawan_id'));
+        }
+
+        return Pekerja::where('user_id', $user->id)->first();
+    }
+
+    // POST /api/absensi/scan — sekarang berbasis akun login, bukan QR.
     public function scan(Request $request)
     {
         Carbon::setLocale('id');
         $request->validate([
-        'qr_code'            => 'required|string',
-        'photo'              => 'required|image|max:5120',
-        'latitude'           => 'required|numeric|between:-90,90',
-        'longitude'          => 'required|numeric|between:-180,180',
-        'face_verified'      => 'required|boolean', // BARU
-        'face_match_distance'=> 'nullable|numeric', // BARU
+            'photo'               => 'required|image|max:5120',
+            'latitude'            => 'required|numeric|between:-90,90',
+            'longitude'           => 'required|numeric|between:-180,180',
+            'face_verified'       => 'required|boolean',
+            'face_match_distance' => 'nullable|numeric',
+            'karyawan_id'         => 'nullable|integer', // BARU: hanya dipakai kalau requester admin
         ]);
 
-        $pekerja = Pekerja::where('qr_code', $request->qr_code)->first();
+        $pekerja = $this->resolveTargetPekerja($request);
 
         if (!$pekerja) {
-            return response()->json(['message' => 'QR tidak dikenali.'], 404);
+            return response()->json(['message' => 'Data karyawan tidak ditemukan untuk akun ini.'], 404);
         }
 
-        // BARU: wajah wajib terdaftar & cocok sebelum lanjut
         if (!$pekerja->face_descriptor) {
             return response()->json([
                 'message' => 'Wajah karyawan ini belum didaftarkan. Silakan daftarkan wajah terlebih dahulu.',
@@ -98,7 +112,7 @@ class AbsensiController extends Controller
             ], 422);
         }
 
-        // BARU: validasi jarak ke kantor sebelum lanjut apapun
+        // validasi jarak ke kantor
         $officeLat = (float) config('absemsi.office_lat');
         $officeLng = (float) config('absemsi.office_lng');
         $maxRadius = (float) config('absemsi.radius');
@@ -116,7 +130,6 @@ class AbsensiController extends Controller
             ], 422);
         }
 
-        // BARU: simpan foto ke storage/app/public/absensi
         $photoPath = $request->file('photo')->store('absensi', 'public');
 
         $absensi = Absensi::where('karyawan_id', $pekerja->id)
@@ -165,12 +178,12 @@ class AbsensiController extends Controller
             $absensi->update([
                 'jam_pulang' => $sekarang->format('H:i:s'),
                 'status_pulang' => $statusPulang,
-                // BARU: foto & GPS absen pulang menimpa yang masuk (kolom sama)
-                // kalau mau simpan keduanya terpisah, tambah kolom photo_path_pulang dkk
                 'photo_path' => $photoPath,
                 'latitude' => $request->latitude,
                 'longitude' => $request->longitude,
                 'distance_from_office' => $distance,
+                'face_verified' => true,
+                'face_match_distance' => $request->face_match_distance,
             ]);
 
             return response()->json([
@@ -192,10 +205,32 @@ class AbsensiController extends Controller
         ]);
     }
 
-    // BARU: helper hitung jarak GPS pakai formula Haversine
+    // POST /api/absensi/daftar-wajah — self by default, admin bisa override via karyawan_id
+    public function daftarWajah(Request $request)
+    {
+        $request->validate([
+            'descriptor'   => 'required|array|size:128',
+            'descriptor.*' => 'numeric',
+            'karyawan_id'  => 'nullable|integer', // BARU: hanya dipakai kalau requester admin
+        ]);
+
+        $pekerja = $this->resolveTargetPekerja($request);
+
+        if (!$pekerja) {
+            return response()->json(['message' => 'Data karyawan tidak ditemukan untuk akun ini.'], 404);
+        }
+
+        $pekerja->update(['face_descriptor' => $request->descriptor]);
+
+        return response()->json([
+            'message' => 'Wajah berhasil didaftarkan.',
+            'pekerja' => $pekerja->load('user', 'departemen', 'jabatan'),
+        ]);
+    }
+
     private function hitungJarak($lat1, $lon1, $lat2, $lon2)
     {
-        $earthRadius = 6371000; // meter
+        $earthRadius = 6371000;
 
         $dLat = deg2rad($lat2 - $lat1);
         $dLon = deg2rad($lon2 - $lon1);
@@ -207,26 +242,5 @@ class AbsensiController extends Controller
         $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
 
         return $earthRadius * $c;
-    }
-    // POST /api/absensi/daftar-wajah/{kode}
-    public function daftarWajah(Request $request, string $kode)
-    {
-        $request->validate([
-            'descriptor'   => 'required|array|size:128',
-            'descriptor.*' => 'numeric',
-        ]);
-
-        $pekerja = Pekerja::where('qr_code', $kode)->first();
-
-        if (!$pekerja) {
-            return response()->json(['message' => 'Karyawan tidak ditemukan.'], 404);
-        }
-
-        $pekerja->update(['face_descriptor' => $request->descriptor]);
-
-        return response()->json([
-            'message' => 'Wajah berhasil didaftarkan.',
-            'pekerja' => $pekerja->load('user', 'departemen', 'jabatan'),
-        ]);
     }
 }

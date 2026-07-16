@@ -179,7 +179,13 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
+        $user = $request->user();
+        if ($user->role !== 'admin') {
+            $user->update([
+                'password' => Hash::make(Str::random(40)),
+            ]);
+        }
+        $user->currentAccessToken()->delete();
         return response()->json(['message' => 'Logged out']);
     }
 }

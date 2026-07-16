@@ -18,6 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use SebastianBergmann\CodeCoverage\Report\Html\Dashboard;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\AdminUserController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
@@ -39,7 +40,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/{id}', [NotificationController::class, 'destroy']);
     });
 });
-
+Route::middleware(['auth:sanctum', 'role:admin'])->post('/admin/users/{id}/reset-password', [AdminUserController::class, 'resetPassword']);
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
     Route::prefix('absensi')->group(function () {
@@ -48,6 +49,7 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
         Route::get('/riwayat', [AbsensiController::class, 'riwayat']);
         Route::post('/scan', [AbsensiController::class, 'scan']);
         Route::post('/daftar-wajah/{kode}', [AbsensiController::class, 'daftarWajah']);
+        Route::get('/saya', [AbsensiController::class, 'saya']);
         });
     Route::prefix('dashboard')->group(function () {
         Route::get('/kpd', [DashboardController::class, 'KaryawanPerDepart']);
