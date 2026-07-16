@@ -24,6 +24,7 @@ return [
         'https://marimas-one-front-production.up.railway.app',
         'https://marimas-one-back-production.up.railway.app',
         'http://localhost:5173',
+        'http://localhost:5174',
         'http://marimas-one.test',
     ],
     
@@ -32,6 +33,7 @@ return [
         '#^https://marimas-one-front-.*\.up\.railway\.app$#',
         '#^https://marimas-one-back-.*\.up\.railway\.app$#',
         '#^http://localhost:5173$#',
+        '#^http://localhost:5174$#',
         '#^http://marimas-one\.test$#',
     ],
 
