@@ -48,7 +48,7 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
         Route::get('/hari-ini', [AbsensiController::class, 'hariIni']);
         Route::get('/riwayat', [AbsensiController::class, 'riwayat']);
         Route::post('/scan', [AbsensiController::class, 'scan']);
-        Route::post('/daftar-wajah/{kode}', [AbsensiController::class, 'daftarWajah']);
+        Route::post('/daftar-wajah', [AbsensiController::class, 'daftarWajah']);
         Route::get('/saya', [AbsensiController::class, 'saya']);
         });
     Route::prefix('dashboard')->group(function () {
