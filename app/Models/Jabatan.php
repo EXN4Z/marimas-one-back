@@ -8,7 +8,7 @@ class Jabatan extends Model
 {
     protected $table = 'jabatan';
 
-    protected $fillable = ['nama'];
+    protected $fillable = ['nama', 'gaji_pokok'];
 
     public function pekerja()
     {

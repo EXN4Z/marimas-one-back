@@ -10,4 +10,3 @@ Artisan::command('inspire', function () {
 
 Schedule::command('audit:cleanup')->hourly();
 Schedule::command('audit:purge')->daily();
-Schedule::command('app:delete-expired-cuti')->daily();
