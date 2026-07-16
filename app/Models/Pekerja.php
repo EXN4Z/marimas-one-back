@@ -16,6 +16,10 @@ class Pekerja extends Model
         'qr_code',
         'tanggal_masuk',
         'foto',
+        'face_descriptor',
+    ];
+    protected $casts = [
+        'face_descriptor' => 'array',
     ];
 
     public function user()

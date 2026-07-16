@@ -12,6 +12,13 @@ class Absensi extends Model
         'jam_masuk',
         'jam_pulang',
         'status',
+        'status_pulang',        // BARU: sebelumnya juga kepakai di controller tapi belum ada di fillable
+        'photo_path',           // BARU
+        'latitude',             // BARU
+        'longitude',            // BARU
+        'distance_from_office', // BARU
+        'face_verified',
+        'face_match_distance',
     ];
 
     public function pekerja()
