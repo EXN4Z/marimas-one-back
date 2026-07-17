@@ -19,14 +19,15 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [
+    'allowed_origins' => array_filter([
         'https://marimas-one-front.vercel.app',
         'https://marimas-one-front-production.up.railway.app',
         'https://marimas-one-back-production.up.railway.app',
         'http://localhost:5173',
         'http://localhost:5174',
         'http://marimas-one.test',
-    ],
+        env('FRONTEND_URL'),
+    ]),
     
     'allowed_origins_patterns' => [
         '#^https://marimas-one-front-.*\.vercel\.app$#',
