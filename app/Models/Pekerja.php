@@ -20,6 +20,7 @@ class Pekerja extends Model
     ];
     protected $casts = [
         'face_descriptor' => 'array',
+        'kuota_izin_tahunan',
     ];
 
     public function user()

@@ -49,6 +49,7 @@ class UserController extends Controller
             'departemen_id' => 'nullable|exists:departemen,id',
             'jabatan_id' => 'nullable|exists:jabatan,id',
             'tanggal_masuk' => 'nullable|date',
+            'kuota_izin_tahunan' => 'nullable|integer|min:0|max:365',
         ]);
 
         $plainPassword = Str::random(8);
@@ -69,6 +70,7 @@ class UserController extends Controller
                 'jabatan_id' => $validated['jabatan_id'] ?? null,
                 'qr_code' => Str::uuid()->toString(),
                 'tanggal_masuk' => $validated['tanggal_masuk'] ?? null,
+                'kuota_izin_tahunan' => $validated['kuota_izin_tahunan'] ?? 12,
             ]);
 
             return [$user, $pekerja];
@@ -93,13 +95,14 @@ class UserController extends Controller
             'departemen_id' => 'nullable|exists:departemen,id',
             'jabatan_id' => 'nullable|exists:jabatan,id',
             'tanggal_masuk' => 'nullable|date',
+            'kuota_izin_tahunan' => 'nullable|integer|min:0|max:365',
         ]);
 
         $user->update(collect($validated)->only(['name', 'email', 'phone', 'role'])->toArray());
 
         if ($user->pekerja) {
             $user->pekerja->update(
-                collect($validated)->only(['nip', 'departemen_id', 'jabatan_id', 'tanggal_masuk'])->toArray()
+                collect($validated)->only(['nip', 'departemen_id', 'jabatan_id', 'tanggal_masuk', 'kuota_izin_tahunan'])->toArray()
             );
         }
 

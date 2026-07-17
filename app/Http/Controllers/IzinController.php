@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\PengajuanIzin;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
+use App\Notifications\IzinBaruDiajukan;
 
 class IzinController extends Controller
 {
@@ -160,10 +163,50 @@ class IzinController extends Controller
             'status' => 'pending',
         ]);
 
+        // TAMBAH: notif ke admin & hr tiap ada pengajuan izin baru yang masuk
+        Notification::send(
+            User::whereIn('role', ['admin', 'hr'])->get(),
+            new IzinBaruDiajukan($izin)
+        );
+
         return response()->json([
             'message' => 'Pengajuan izin berhasil dibuat.',
             'data' => $izin,
         ], 201);
+    }
+
+    // GET /api/izin/kuota — sisa jatah izin pribadi tahun berjalan.
+    // Karyawan cuma bisa liat punya sendiri. Manajer/hr/admin bisa liat punya
+    // karyawan lain lewat ?user_id=.
+    public function kuota(Request $request)
+    {
+        $user = $request->user();
+        $targetUserId = $user->id;
+
+        if ($request->filled('user_id') && $user->hasRoleAtLeast('manajer')) {
+            $targetUserId = (int) $request->user_id;
+        }
+
+        $target = \App\Models\User::with('pekerja')->findOrFail($targetUserId);
+        $kuota = $target->pekerja->kuota_izin_tahunan ?? 12;
+
+        $tahun = $request->get('tahun', now()->year);
+
+        // Cuma hitung jenis "pribadi" yang disetujui — jenis lain (sakit, dinas,
+        // dll) gak makan kuota cuti tahunan.
+        $terpakai = PengajuanIzin::where('karyawan_id', $targetUserId)
+            ->where('jenis_izin', 'pribadi')
+            ->where('status', 'disetujui')
+            ->whereYear('tanggal_mulai', $tahun)
+            ->get()
+            ->sum('lama_izin');
+
+        return response()->json([
+            'tahun' => (int) $tahun,
+            'kuota' => (int) $kuota,
+            'terpakai' => (int) $terpakai,
+            'sisa' => max((int) $kuota - (int) $terpakai, 0),
+        ]);
     }
 
     // PUT /api/izin/{id} — edit pengajuan (hanya pemilik, hanya selama pending)

@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Barang;
 use App\Models\MutasiBarang;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\ValidationException;
+use App\Notifications\StokBarangRendah;
 
 class BarangController extends Controller
 {
@@ -119,6 +122,16 @@ class BarangController extends Controller
             $stokSebelum = $barang->stok;
             $barang->stok -= $request->jumlah;
             $barang->save();
+
+            // TAMBAH: notif ke admin & hr cuma pas stok BARU AJA nyampe/nembus batas minimum,
+            // biar gak spam notif tiap kali scan keluar selama masih di bawah minimum.
+            $barusajaMenipis = $stokSebelum > $barang->stok_minimum && $barang->stok <= $barang->stok_minimum;
+            if ($barusajaMenipis) {
+                Notification::send(
+                    User::whereIn('role', ['admin', 'hr'])->get(),
+                    new StokBarangRendah($barang)
+                );
+            }
 
             $mutasi = MutasiBarang::create([
                 'barang_id' => $barang->id,

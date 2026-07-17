@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Pekerja;
 use App\Models\Absensi;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Notification;
+use App\Notifications\AbsensiBaruDicatat;
 
 class AbsensiController extends Controller
 {
@@ -113,9 +116,9 @@ class AbsensiController extends Controller
         }
 
         // validasi jarak ke kantor
-        $officeLat = (float) config('absemsi.office_lat');
-        $officeLng = (float) config('absemsi.office_lng');
-        $maxRadius = (float) config('absemsi.radius');
+        $officeLat = (float) config('absensi.office_lat');
+        $officeLng = (float) config('absensi.office_lng');
+        $maxRadius = (float) config('absensi.radius');
 
         $distance = $this->hitungJarak(
             $request->latitude,
@@ -157,6 +160,12 @@ class AbsensiController extends Controller
                 'face_verified' => true,
                 'face_match_distance' => $request->face_match_distance,
             ]);
+
+            // TAMBAH: notif ke admin & hr tiap ada karyawan yang absen masuk
+            Notification::send(
+                User::whereIn('role', ['admin', 'hr'])->get(),
+                new AbsensiBaruDicatat($absensi)
+            );
 
             return response()->json([
                 'tipe' => 'masuk',

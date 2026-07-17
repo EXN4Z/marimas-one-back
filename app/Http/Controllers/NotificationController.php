@@ -34,7 +34,9 @@ class NotificationController extends Controller
         return response()->json(['message' => 'Semua notifikasi ditandai sudah dibaca.']);
     }
     public function destroy(Request $request, $id) {
-        $notification = $request->user()->notification()->findOrFail($id);
+        $notification = $request->user()->notifications()->findOrFail($id);
         $notification->delete();
+
+        return response()->json(['message' => 'Notifikasi dihapus.']);
     }
 }
