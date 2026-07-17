@@ -281,7 +281,6 @@ class DashboardController extends Controller
     public function statsCard()
     {
         $user = Auth::user();
-<<<<<<< HEAD
 
         if (! $user) {
             return response()->json(['message' => 'Unauthenticated'], 401);
@@ -301,16 +300,6 @@ class DashboardController extends Controller
 
         $izin = PengajuanIzin::where('karyawan_id', $pekerja->id);
         $absensi = Absensi::where('karyawan_id', $pekerja->id);
-=======
-        $pekerja = Pekerja::where('user_id', $user->id)->first();
-
-        $izin = PengajuanIzin::where('karyawan_id', $user->id);
-        // FIX: user (misal admin murni) bisa gak punya record Pekerja, jadi absensi
-        // di-scope ke pekerja->id cuma kalau pekerja-nya ada. Kalau nggak, query kosong.
-        $absensi = $pekerja
-            ? Absensi::where('karyawan_id', $pekerja->id)
-            : Absensi::whereRaw('1 = 0');
->>>>>>> 574332644e77c23dbc8ceeede4dab9e45574c615
         $ticket = Ticket::where('user_id', $user->id);
         $value = '-';
 
