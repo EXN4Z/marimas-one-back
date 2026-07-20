@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\ValidationException;
 use App\Notifications\StokBarangRendah;
-
+use App\Models\Peminjaman;
 class BarangController extends Controller
 {
     /**
@@ -18,9 +18,21 @@ class BarangController extends Controller
      */
     public function index()
     {
-        return response()->json(
-            Barang::with('kategoriBarang:id,nama')->orderBy('nama')->get()
-        );
+    $barang = Barang::with('kategoriBarang')
+            ->get()
+            ->map(function ($item) {
+
+                $stokDipinjam = Peminjaman::where('barang_id', $item->id)
+                    ->where('status', 'dipinjam')
+                    ->sum('jumlah');
+
+                $item->stok_dipinjam = $stokDipinjam;
+                $item->stok_tersedia = $item->stok - $stokDipinjam;
+
+                return $item;
+            });
+
+        return response()->json($barang);
     }
 
     /**

@@ -22,6 +22,9 @@ class Barang extends Model
     {
         return $this->hasMany(MutasiBarang::class);
     }
+    public function peminjaman() {
+        return $this->hasMany(Peminjaman::class);
+    }
 
     public function kategoriBarang()
     {

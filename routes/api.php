@@ -22,6 +22,7 @@ use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\PeminjamanController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
@@ -121,6 +122,10 @@ Route::middleware(['auth:sanctum', 'role:manajer,hr,admin'])->group(function () 
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
+    Route::get('/peminjaman', [PeminjamanController::class, 'index']);
+    Route::get('/barang/{barang}/peminjaman', [PeminjamanController::class, 'aktifByBarang']);
+    Route::post('/barang/{barang}/pinjamkan', [PeminjamanController::class, 'pinjamkan']);
+    Route::post('/peminjaman/{peminjaman}/kembalikan', [PeminjamanController::class, 'kembalikan']);
     Route::get('/karyawan/{user}', [UserController::class, 'edit']);
     Route::put('/karyawan/{user}', [UserController::class, 'update']);
     Route::delete('/karyawan/{user}', [UserController::class, 'destroy']);
