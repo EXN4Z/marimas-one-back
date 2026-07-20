@@ -23,6 +23,13 @@ use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PeminjamanController;
+use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\JenisAsetController;
+use App\Http\Controllers\KelengkapanMasterController;
+use App\Http\Controllers\AsetController;
+use App\Http\Controllers\AsetPemakaiController;
+use App\Http\Controllers\AsetPerbaikanController;
+use App\Http\Controllers\AsetPenggantianSparepartController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
@@ -153,4 +160,32 @@ Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/audit-log', [AuditLogController::class, 'index']);
     Route::get('/audit-log/trash', [AuditLogController::class, 'trash']);
+});
+
+Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
+    Route::get('/aset', [AsetController::class, 'index']);
+    Route::get('/aset/{aset}', [AsetController::class, 'show']);
+    Route::get('/jenis-aset', [JenisAsetController::class, 'index']);
+    Route::get('/kelengkapan-master', [KelengkapanMasterController::class, 'index']);
+    Route::get('/supplier', [SupplierController::class, 'index']);
+});
+
+Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
+    Route::post('/aset', [AsetController::class, 'store']);
+    Route::post('/aset/{aset}', [AsetController::class, 'update']); // pakai POST + _method=PUT dari frontend krn ada file upload
+    Route::delete('/aset/{aset}', [AsetController::class, 'destroy']);
+
+    Route::post('/aset/{aset}/pemakai', [AsetPemakaiController::class, 'store']);
+    Route::post('/aset-pemakai/{asetPemakai}/kembalikan', [AsetPemakaiController::class, 'kembalikan']);
+
+    Route::post('/aset/{aset}/perbaikan', [AsetPerbaikanController::class, 'store']);
+    Route::patch('/aset-perbaikan/{asetPerbaikan}/selesai', [AsetPerbaikanController::class, 'selesai']);
+    Route::delete('/aset-perbaikan/{asetPerbaikan}', [AsetPerbaikanController::class, 'destroy']);
+
+    Route::post('/aset/{aset}/penggantian-sparepart', [AsetPenggantianSparepartController::class, 'store']);
+    Route::delete('/aset-penggantian-sparepart/{asetPenggantianSparepart}', [AsetPenggantianSparepartController::class, 'destroy']);
+
+    Route::apiResource('jenis-aset', JenisAsetController::class)->except(['index', 'show']);
+    Route::apiResource('kelengkapan-master', KelengkapanMasterController::class)->except(['index', 'show']);
+    Route::apiResource('supplier', SupplierController::class)->except(['index', 'show']);
 });
