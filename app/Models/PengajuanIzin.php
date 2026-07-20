@@ -32,7 +32,7 @@ class PengajuanIzin extends Model
 
     protected $appends = ['lama_izin'];
 
-    public const JENIS = ['tahunan', 'pribadi', 'sakit', 'terlambat', 'pulang_cepat', 'dinas', 'lahiran', 'lainnya'];
+    public const JENIS = ['tahunan', 'pribadi', 'sakit', 'terlambat', 'pulang_cepat', 'dinas', 'lahiran', 'pendamping_lahiran', 'lainnya'];
 
     public const STATUS_PENDING = 'pending';
     public const STATUS_DISETUJUI = 'disetujui';
