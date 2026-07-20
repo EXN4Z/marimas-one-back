@@ -16,6 +16,8 @@ class JabatanController extends Controller
     {
         $validated = $request->validate([
             'nama' => 'required|string|unique:jabatan,nama',
+            'gaji_pokok' => 'nullable|numeric|min:0',
+            'tunjangan' => 'nullable|numeric|min:0',
         ]);
 
         $jabatan = Jabatan::create($validated);
@@ -27,6 +29,8 @@ class JabatanController extends Controller
     {
         $validated = $request->validate([
             'nama' => 'required|string|unique:jabatan,nama,' . $jabatan->id,
+            'gaji_pokok' => 'nullable|numeric|min:0',
+            'tunjangan' => 'nullable|numeric|min:0',
         ]);
 
         $jabatan->update($validated);
