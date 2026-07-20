@@ -183,6 +183,7 @@ class BarangController extends Controller
      */
     public function destroy(Barang $barang)
     {
+        MutasiBarang::where('barang_id', $barang->id)->delete();
         $barang->delete();
 
         return response()->json(['message' => "Barang {$barang->nama} berhasil dihapus."]);
