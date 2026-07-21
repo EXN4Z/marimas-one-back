@@ -9,7 +9,7 @@ class AsetPenanganan extends Model
     protected $table = 'aset_penanganan';
 
     protected $fillable = [
-        'aset_id', 'aset_peminjaman_id', 'jenis_kerusakan', 'keluhan',
+        'aset_id', 'aset_pemakai_id', 'jenis_kerusakan', 'keluhan',
         'tanggal_lapor', 'tanggal_selesai', 'harga_jasa', 'biaya_komponen',
         'hasil', 'no_struk', 'catatan',
     ];
@@ -26,18 +26,17 @@ class AsetPenanganan extends Model
         return $this->belongsTo(Aset::class);
     }
 
-    public function peminjaman()
+    // ganti: relasinya ke AsetPemakai (bukan AsetPeminjaman, yang itu punya Barang)
+    public function pemakai()
     {
-        return $this->belongsTo(AsetPeminjaman::class, 'aset_peminjaman_id');
+        return $this->belongsTo(AsetPemakai::class, 'aset_pemakai_id');
     }
 
-    // Total biaya penanganan (jasa + komponen), dihitung -- gak disimpan dobel.
     public function getTotalBiayaAttribute(): float
     {
         return (float) $this->harga_jasa + (float) $this->biaya_komponen;
     }
 
-    // Lama penanganan dalam hari, dihitung dari tanggal -- gak disimpan dobel.
     public function getDurasiHariAttribute(): ?int
     {
         if (!$this->tanggal_selesai) {
