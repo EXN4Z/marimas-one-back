@@ -8,10 +8,15 @@ class AsetKelengkapan extends Model
 {
     protected $table = 'aset_kelengkapan';
 
-    protected $fillable = ['aset_id', 'nama', 'serial_number', 'keterangan'];
+    protected $fillable = ['aset_id', 'kelengkapan_master_id', 'keterangan'];
 
     public function aset()
     {
-        return $this->belongsTo(Aset::class);
+        return $this->belongsTo(Aset::class, 'aset_id');
+    }
+
+    public function kelengkapanMaster()
+    {
+        return $this->belongsTo(KelengkapanMaster::class, 'kelengkapan_master_id');
     }
 }
