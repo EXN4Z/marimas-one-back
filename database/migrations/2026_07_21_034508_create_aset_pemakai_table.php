@@ -18,6 +18,9 @@ return new class extends Migration
             $table->string('nomor_pengembalian')->nullable();
             $table->date('tanggal_pengembalian')->nullable();
             $table->text('catatan_pengembalian')->nullable();
+            $table->enum('status', ['pending', 'disetujui', 'ditolak'])->default('disetujui'); // default 'disetujui' biar data lama & serah-terima admin langsung tetap jalan
+            $table->foreignId('requested_by_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->text('catatan_penolakan')->nullable();
             $table->timestamps();
         });
     }
