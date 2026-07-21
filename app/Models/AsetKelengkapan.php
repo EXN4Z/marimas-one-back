@@ -12,7 +12,7 @@ class AsetKelengkapan extends Model
 
     public function aset()
     {
-        return $this->belongsTo(Aset::class);
+        return $this->belongsTo(Aset::class, 'aset_id');
     }
 
     public function kelengkapanMaster()
