@@ -43,12 +43,20 @@ class Aset extends Model
     {
         return $this->hasMany(AsetPemakai::class, 'aset_id')->latest('tanggal_penerimaan');
     }
-
+    
     public function pemakaiSaatIni()
     {
         return $this->hasOne(AsetPemakai::class, 'aset_id')
+            ->where('status', 'disetujui')
             ->whereNull('tanggal_pengembalian')
             ->latest('tanggal_penerimaan');
+    }
+    
+    public function pemakaiPending()
+    {
+        return $this->hasMany(AsetPemakai::class, 'aset_id')
+            ->where('status', 'pending')
+            ->latest();
     }
 
     public function perbaikan()

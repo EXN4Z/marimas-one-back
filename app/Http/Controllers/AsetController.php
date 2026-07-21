@@ -20,14 +20,12 @@ class AsetController extends Controller
             'supplier',
             'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni.pekerja.user',
+            'pemakaiPending.pekerja.user', // baru — biar tau aset mana yang ada request pending
         ])->latest()->get();
-
+    
         return response()->json($aset);
     }
-
-    /**
-     * Display detail + full history (pemakai, perbaikan, sparepart) for one aset.
-     */
+    
     public function show(Aset $aset)
     {
         $aset->load([
@@ -35,10 +33,11 @@ class AsetController extends Controller
             'supplier',
             'kelengkapan.kelengkapanMaster',
             'pemakai.pekerja.user',
+            'pemakaiPending.pekerja.user', // baru
             'perbaikan',
             'penggantianSparepart',
         ]);
-
+    
         return response()->json($aset);
     }
 
@@ -90,7 +89,7 @@ class AsetController extends Controller
         });
 
         return response()->json(
-            $aset->load(['jenis', 'supplier', 'kelengkapan.kelengkapanMaster']),
+            $aset->load(['jenis', 'supplier', 'kelengkapan.kelengkapanMaster', 'pemakaiPending.pekerja.user']),
             201
         );
     }
