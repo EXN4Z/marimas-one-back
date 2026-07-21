@@ -179,7 +179,7 @@ class AuthController extends Controller
         return response()->json(['message' => 'Password berhasil diubah.']);
     }
 
-   public function logout(Request $request)
+    public function logout(Request $request)
     {
         $user = $request->user();
         $passwordDiganti = false;
@@ -190,10 +190,10 @@ class AuthController extends Controller
 
             if ($user->email) {
                 try {
-                    Mail::to($user->email)->send(new NewPasswordMail($newPassword));
+                    Mail::to($user->email)->queue(new NewPasswordMail($newPassword)); // <- queue, bukan send
                     $passwordDiganti = true;
                 } catch (\Exception $e) {
-                    Log::error('Gagal kirim email password baru: ' . $e->getMessage());
+                    Log::error('Gagal antre email password baru: ' . $e->getMessage());
                 }
             }
         }
