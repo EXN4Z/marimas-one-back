@@ -1,0 +1,97 @@
+[33m9104f57[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m)[m pindah-branch
+[33mac5eb45[m inventaris change
+[33mb00928b[m Merge branch 'main' of https://github.com/EXN4Z/marimas-one-back
+[33mc3af49c[m mendampingi-lahiran
+[33md57280d[m Merge branch 'main' of https://github.com/EXN4Z/marimas-one-back
+[33ma4369e8[m camera-fix
+[33m3285e63[m cuti lahiran
+[33m841d563[m cuti lahiran
+[33m7f1d36b[m upd
+[33m224d565[m[33m ([m[1;32mabsensi-foto[m[33m)[m Merge branch 'main' into absensi-foto
+[33m7155883[m merge main with absensi-foto
+[33mdcf64d3[m -
+[33mdc89432[m env
+[33mc7ebed2[m search
+[33m39ebd55[m -
+[33m6c94bad[m cors
+[33m6e86e01[m No Need Login
+[33m8c8f806[m Absensi Fix
+[33m097a12b[m dashboard
+[33md1413ff[m work absen
+[33m29f198b[m -
+[33mb67f1a3[m opsi-izin
+[33m99ce2ff[m  tambah opsi cuti tahunan
+[33m5743326[m big-update
+[33ma4c2a88[m testing-absensi
+[33m9c2e53b[m notification fix
+[33m7facc98[m verif
+[33m2251dd0[m verif
+[33m3b5c456[m verif
+[33m129a7c6[m Merge branch 'main' of https://github.com/EXN4Z/marimas-one-back
+[33m4a4db42[m notification #1
+[33m6f340f4[m nixpacks
+[33m9ab5c2b[m cors
+[33mbdf1ee9[m cors-acc
+[33m3f38b1c[m -
+[33m4ae97b1[m Rename otp-temp.blade.ph to otp-temp.blade.php
+[33mabe61e5[m fix rename otp
+[33m93005d7[m mail-verify
+[33m8df8e56[m mail-verify
+[33m9b674b4[m mail-verify
+[33m06527f5[m statsCard Fix #2 + chatBot fix
+[33m091e327[m delete-cuti
+[33m8f29abf[m statsCard Absen Fix
+[33m93feaf8[m statsCard
+[33m594898a[m debugging #2
+[33m9ebf7e4[m debugging #1
+[33ma269ca2[m Dashboard-analytics full
+[33m0741986[m Merge branch 'main' of https://github.com/EXN4Z/marimas-one-back
+[33mb4a3fe8[m Dashboard Analytics -Keuangan
+[33m6cefc75[m railway
+[33mdc0253c[m dashboard fix #1
+[33m320235d[m fix
+[33ma97f5cc[m optimize
+[33mcbdae43[m crud-barang
+[33m09f4915[m Merge branch 'main' of https://github.com/Rkaa-code/Marimas-ONE
+[33mb528ce6[m cors-fix
+[33maa08777[m cors
+[33m2c2a572[m cors
+[33m7ee8901[m cors
+[33mf6149e3[m tailwind
+[33m66823a9[m fix
+[33m4877f91[m Merge branch 'main' of https://github.com/Rkaa-code/Marimas-ONE
+[33m03d2ab9[m pengajuanizin
+[33md6a97a0[m Dashboard w database #1
+[33m0e2bbfc[m pengajuanizin
+[33m5f84289[m Merge branch 'main' of https://github.com/Rkaa-code/Marimas-ONE
+[33m7beb120[m Dashboard analytics (dummy
+[33m0b053df[m chatbotcontroller
+[33m1e3bccc[m Merge branch 'main' of https://github.com/Rkaa-code/Marimas-ONE
+[33mbef914f[m auto delete cuti
+[33m725de7f[m settings accounts
+[33mcc28548[m Cuti CRUD
+[33mb8ae4e3[m lupa njir
+[33m49c1b58[m fix-router
+[33m0ac0aa5[m controller fix
+[33mac9f9c9[m[33m ([m[1;32mfeatures/pengajuan-cuti[m[33m)[m CutiPageForm
+[33m18c607e[m Merge branch 'main' of https://github.com/Rkaa-code/Marimas-ONE
+[33mec62707[m auditlog
+[33m38462ab[m ticketing
+[33mac0c9c5[m ticket
+[33m79b463e[m history chat ai
+[33m48e76f0[m fix absensi
+[33m879be35[m error #1
+[33m2b1a676[m departemen
+[33m885e5e2[m absen
+[33m7601319[m DB Cleaning
+[33m1a1afbe[m absensi #1
+[33m3be1bf1[m CRUD Karyawan
+[33mc2092c1[m tambah & kurang barang
+[33m004e262[m qr-code
+[33mfe571c4[m Barang + Mutasi Barang
+[33m4b0a8f7[m[33m ([m[1;32mtesting[m[33m)[m chatbot
+[33m5223f33[m otp + auth
+[33mdf933ed[m auth
+[33m57b95f7[m Initial commit - setup Laravel + Sanctum
+[33md7f7ce7[m Initial commit - setup Laravel + Sanctum
+[33m52bbc9f[m Initial commit from Create Next App

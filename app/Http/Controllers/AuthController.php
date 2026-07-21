@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Mail\NewPasswordMail;
+use Illuminate\Support\Facades\Log;
 
 class AuthController extends Controller
 {
@@ -177,15 +179,30 @@ class AuthController extends Controller
         return response()->json(['message' => 'Password berhasil diubah.']);
     }
 
-    public function logout(Request $request)
+   public function logout(Request $request)
     {
         $user = $request->user();
+        $passwordDiganti = false;
+
         if ($user->role !== 'admin') {
-            $user->update([
-                'password' => Hash::make(Str::random(40)),
-            ]);
+            $newPassword = Str::random(12);
+            $user->update(['password' => Hash::make($newPassword)]);
+
+            if ($user->email) {
+                try {
+                    Mail::to($user->email)->send(new NewPasswordMail($newPassword));
+                    $passwordDiganti = true;
+                } catch (\Exception $e) {
+                    Log::error('Gagal kirim email password baru: ' . $e->getMessage());
+                }
+            }
         }
+
         $user->currentAccessToken()->delete();
-        return response()->json(['message' => 'Logged out']);
+
+        return response()->json([
+            'message' => 'Logged out',
+            'password_direset' => $passwordDiganti,
+        ]);
     }
 }
