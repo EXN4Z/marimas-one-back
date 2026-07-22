@@ -270,7 +270,15 @@ class IzinController extends Controller
 
         Log::info('Sebelum notify', ['izin_id' => $izin->id, 'karyawan_id' => $izin->karyawan_id]);
 
-        $izin->karyawan->notify(new \App\Notifications\IzinStatusUpdated($izin));
+        try {
+            $izin->karyawan->notify(new \App\Notifications\IzinStatusUpdated($izin));
+            } catch (\Throwable $e) {
+                Log::error('Gagal kirim notifikasi status izin', [
+                    'izin_id' => $izin->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+            }
 
         Log::info('Setelah notify', ['izin_id' => $izin->id]);
         // TODO: kirim notifikasi ke karyawan pemohon (poin 7 di spec) —
