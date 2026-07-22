@@ -12,6 +12,7 @@ class Pekerja extends Model
         'user_id',
         'nip',
         'departemen_id',
+        'lokasi_kantor_id',
         'jabatan_id',
         'qr_code',
         'tanggal_masuk',
@@ -20,7 +21,7 @@ class Pekerja extends Model
     ];
     protected $casts = [
         'face_descriptor' => 'array',
-        'kuota_izin_tahunan',
+        'kuota_izin_tahunan' => 'integer',
     ];
 
     public function user()
@@ -37,4 +38,8 @@ class Pekerja extends Model
     {
         return $this->belongsTo(Jabatan::class, 'jabatan_id');
     }
+    public function lokasiKantor()
+    {
+    return $this->belongsTo(LokasiKantor::class, 'lokasi_kantor_id');
+    }   
 }

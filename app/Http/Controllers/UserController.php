@@ -13,7 +13,7 @@ class UserController extends Controller
 {
     public function index(Request $request)
     {
-        $query = User::with('pekerja.departemen', 'pekerja.jabatan');
+        $query = User::with('pekerja.departemen', 'pekerja.jabatan', 'pekerja.lokasiKantor');
 
         if ($request->filled('role') && $request->role !== 'all') {
             $query->where('role', $request->role);
@@ -35,7 +35,7 @@ class UserController extends Controller
 
     public function edit(User $user)
     {
-        return response()->json($user->load('pekerja.departemen', 'pekerja.jabatan'));
+        return response()->json($user->load('pekerja.departemen', 'pekerja.jabatan', 'pekerja.lokasiKantor'));
     }
 
     public function store(Request $request)
@@ -48,6 +48,7 @@ class UserController extends Controller
             'nip' => 'required|string|unique:pekerja,nip',
             'departemen_id' => 'nullable|exists:departemen,id',
             'jabatan_id' => 'nullable|exists:jabatan,id',
+            'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
             'tanggal_masuk' => 'nullable|date',
             'kuota_izin_tahunan' => 'nullable|integer|min:0|max:365',
         ]);
@@ -69,6 +70,7 @@ class UserController extends Controller
                 'departemen_id' => $validated['departemen_id'] ?? null,
                 'jabatan_id' => $validated['jabatan_id'] ?? null,
                 'qr_code' => Str::uuid()->toString(),
+                'lokasi_kantor_id' => $validated['lokasi_kantor_id'] ?? null,
                 'tanggal_masuk' => $validated['tanggal_masuk'] ?? null,
                 'kuota_izin_tahunan' => $validated['kuota_izin_tahunan'] ?? 12,
             ]);
@@ -94,6 +96,7 @@ class UserController extends Controller
             'nip' => 'sometimes|required|string|unique:pekerja,nip,' . optional($user->pekerja)->id,
             'departemen_id' => 'nullable|exists:departemen,id',
             'jabatan_id' => 'nullable|exists:jabatan,id',
+            'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
             'tanggal_masuk' => 'nullable|date',
             'kuota_izin_tahunan' => 'nullable|integer|min:0|max:365',
         ]);
@@ -102,11 +105,11 @@ class UserController extends Controller
 
         if ($user->pekerja) {
             $user->pekerja->update(
-                collect($validated)->only(['nip', 'departemen_id', 'jabatan_id', 'tanggal_masuk', 'kuota_izin_tahunan'])->toArray()
+                collect($validated)->only(['nip', 'departemen_id', 'jabatan_id', 'tanggal_masuk', 'kuota_izin_tahunan', 'lokasi_kantor_id'])->toArray()
             );
         }
 
-        return response()->json($user->load('pekerja.departemen', 'pekerja.jabatan'));
+        return response()->json($user->load('pekerja.departemen', 'pekerja.jabatan', 'pekerja.lokasiKantor'));
     }
 
     public function destroy(User $user)
