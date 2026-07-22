@@ -182,6 +182,7 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $user = $request->user();
+<<<<<<< HEAD
         $passwordDiganti = false;
 
         // Password cuma dirotasi kalau user punya email DAN email password
@@ -199,12 +200,11 @@ class AuthController extends Controller
                 Log::error('Gagal kirim email password baru, password TIDAK diubah: ' . $e->getMessage());
             }
         }
+=======
+>>>>>>> 39a22db20402cf0b3e7095cf11e114b5eb53134c
 
         $user->currentAccessToken()->delete();
 
-        return response()->json([
-            'message' => 'Logged out',
-            'password_direset' => $passwordDiganti,
-        ]);
+        return response()->json(['message' => 'Logged out']);
     }
 }
