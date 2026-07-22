@@ -2,13 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\GeneratesStrukNumber;
 use App\Models\Aset;
 use App\Models\AsetPemakai;
+use App\Models\AsetPenanganan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class AsetPemakaiController extends Controller
 {
+    use GeneratesStrukNumber;
+
     /**
      * POST /api/aset/{aset}/pinjam
      * Karyawan request pinjam aset. Butuh approval admin sebelum resmi jadi pemakai.
@@ -75,9 +80,12 @@ class AsetPemakaiController extends Controller
         ]);
 
         DB::transaction(function () use ($asetPemakai, $validated) {
+            $noStruk = $this->generateNoStruk('STJ', 'aset_pemakai', 'no_struk_penerimaan');
+
             $asetPemakai->update([
                 'status' => 'disetujui',
                 'nomor_penerimaan' => $validated['nomor_penerimaan'] ?? $asetPemakai->nomor_penerimaan,
+                'no_struk_penerimaan' => $noStruk,
                 'tanggal_penerimaan' => $validated['tanggal_penerimaan'] ?? now()->toDateString(),
             ]);
 
@@ -85,6 +93,59 @@ class AsetPemakaiController extends Controller
         });
 
         return response()->json($asetPemakai->load('pekerja.user', 'aset'));
+    }
+
+    /**
+     * POST /api/aset-pemakai/{asetPemakai}/kembalikan
+     * Admin terima kembali aset dari pemakai. Wajib sertain no_struk_penerimaan
+     * (struk asli pas serah-terima) sebagai bukti pengembalian ini benar.
+     * Ditolak kalau masih ada laporan penanganan/perbaikan yang belum selesai.
+     */
+    public function kembalikan(Request $request, AsetPemakai $asetPemakai)
+    {
+        $validated = $request->validate([
+            'no_struk_penerimaan' => 'required|string',
+            'nomor_pengembalian' => 'nullable|string',
+            'tanggal_pengembalian' => 'required|date',
+            'catatan_pengembalian' => 'nullable|string',
+        ]);
+
+        if ($asetPemakai->status !== 'disetujui') {
+            throw ValidationException::withMessages([
+                'status' => ['Data pemakaian ini bukan pemakaian aktif yang bisa dikembalikan.'],
+            ]);
+        }
+
+        if ($validated['no_struk_penerimaan'] !== $asetPemakai->no_struk_penerimaan) {
+            throw ValidationException::withMessages([
+                'no_struk_penerimaan' => ['Nomor struk penerimaan tidak cocok. Pengembalian wajib menyertakan bukti serah-terima yang benar.'],
+            ]);
+        }
+
+        $adaPenangananBelumSelesai = AsetPenanganan::where('aset_pemakai_id', $asetPemakai->id)
+            ->whereNull('tanggal_selesai')
+            ->exists();
+
+        if ($adaPenangananBelumSelesai) {
+            throw ValidationException::withMessages([
+                'penanganan' => ['Masih ada laporan penanganan/perbaikan yang belum diselesaikan untuk pemakaian ini.'],
+            ]);
+        }
+
+        DB::transaction(function () use ($asetPemakai, $validated) {
+            $noStruk = $this->generateNoStruk('KBL', 'aset_pemakai', 'no_struk_pengembalian');
+
+            $asetPemakai->update([
+                'nomor_pengembalian' => $validated['nomor_pengembalian'] ?? $asetPemakai->nomor_pengembalian,
+                'no_struk_pengembalian' => $noStruk,
+                'tanggal_pengembalian' => $validated['tanggal_pengembalian'],
+                'catatan_pengembalian' => $validated['catatan_pengembalian'] ?? $asetPemakai->catatan_pengembalian,
+            ]);
+
+            $asetPemakai->aset()->update(['status' => 'tersedia']);
+        });
+
+        return response()->json($asetPemakai->fresh()->load('pekerja.user', 'aset'));
     }
 
     /**

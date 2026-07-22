@@ -2,23 +2,27 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\GeneratesStrukNumber;
+use App\Models\AsetPemakai;
 use App\Models\AsetPenanganan;
-use App\Models\AsetPeminjaman;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class AsetPenangananController extends Controller
 {
+    use GeneratesStrukNumber;
+
     // admin only (dicek di route middleware, lihat bawah)
     public function index()
     {
-        $data = AsetPenanganan::with(['aset.jenis', 'peminjaman.pekerja.user'])
+        $data = AsetPenanganan::with(['aset.jenis', 'pemakai.pekerja.user'])
             ->orderByDesc('tanggal_lapor')
             ->get();
 
         return response()->json($data);
     }
 
-    // peminjam lapor kerusakan aset yang sedang dia pinjam
+    // peminjam lapor kerusakan aset yang sedang dia pakai
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -29,25 +33,26 @@ class AsetPenangananController extends Controller
 
         $user = $request->user();
 
-        // cek user emang lagi pegang aset ini via peminjaman aktif (status dipinjam)
-        $peminjaman = AsetPeminjaman::where('aset_id', $validated['aset_id'])
-            ->where('status', 'dipinjam')
+        // cek user emang lagi pegang aset ini via pemakaian aktif (status disetujui, belum dikembalikan)
+        $pemakai = AsetPemakai::where('aset_id', $validated['aset_id'])
+            ->where('status', 'disetujui')
+            ->whereNull('tanggal_pengembalian')
             ->whereHas('pekerja', fn ($q) => $q->where('user_id', $user->id))
             ->first();
 
         // nullable: laporan kerusakan bisa juga muncul pas aset lagi nganggur (audit gudang)
         $penanganan = AsetPenanganan::create([
             'aset_id' => $validated['aset_id'],
-            'aset_peminjaman_id' => $peminjaman->id ?? null,
+            'aset_pemakai_id' => $pemakai->id ?? null,
             'jenis_kerusakan' => $validated['jenis_kerusakan'],
             'keluhan' => $validated['keluhan'],
             'tanggal_lapor' => now(),
         ]);
 
-        return response()->json($penanganan->load(['aset.jenis', 'peminjaman.pekerja.user']), 201);
+        return response()->json($penanganan->load(['aset.jenis', 'pemakai.pekerja.user']), 201);
     }
 
-    // admin: tandai penanganan selesai + isi hasil/biaya (dicek di route middleware, lihat bawah)
+    // admin: tandai penanganan selesai + isi hasil/biaya, generate no_struk (dicek di route middleware, lihat bawah)
     public function update(Request $request, AsetPenanganan $asetPenanganan)
     {
         $validated = $request->validate([
@@ -55,7 +60,6 @@ class AsetPenangananController extends Controller
             'harga_jasa' => 'nullable|numeric|min:0',
             'biaya_komponen' => 'nullable|numeric|min:0',
             'hasil' => 'nullable|string',
-            'no_struk' => 'nullable|string',
             'catatan' => 'nullable|string',
         ]);
 
@@ -64,8 +68,22 @@ class AsetPenangananController extends Controller
             $validated['tanggal_selesai'] = now();
         }
 
-        $asetPenanganan->update($validated);
+        DB::transaction(function () use ($asetPenanganan, $validated) {
+            // struk cuma digenerate sekali, pas pertama kali ditandai selesai
+            if (!$asetPenanganan->no_struk && ($validated['tanggal_selesai'] ?? null)) {
+                $validated['no_struk'] = $this->generateNoStruk('PNG', 'aset_penanganan', 'no_struk');
+            }
 
-        return response()->json($asetPenanganan->load(['aset.jenis', 'peminjaman.pekerja.user']));
+            $asetPenanganan->update($validated);
+        });
+
+        return response()->json($asetPenanganan->fresh()->load(['aset.jenis', 'pemakai.pekerja.user']));
+    }
+
+    public function destroy(AsetPenanganan $asetPenanganan)
+    {
+        $asetPenanganan->delete();
+
+        return response()->json(['message' => 'Laporan penanganan berhasil dihapus.']);
     }
 }

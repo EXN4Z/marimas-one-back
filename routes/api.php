@@ -28,10 +28,8 @@ use App\Http\Controllers\JenisAsetController;
 use App\Http\Controllers\KelengkapanMasterController;
 use App\Http\Controllers\AsetController;
 use App\Http\Controllers\AsetPemakaiController;
-use App\Http\Controllers\AsetPerbaikanController;
 use App\Http\Controllers\AsetPenggantianSparepartController;
 use App\Http\Controllers\AsetPenangananController;
-use App\Http\Controllers\AsetPeminjamanController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
@@ -165,8 +163,6 @@ Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/audit-log', [AuditLogController::class, 'index']);
     Route::get('/audit-log/trash', [AuditLogController::class, 'trash']);
-    Route::post('/aset/{aset}/peminjaman', [AsetPeminjamanController::class, 'store']);
-    Route::post('/aset-peminjaman/{peminjaman}/kembalikan', [AsetPeminjamanController::class, 'kembalikan']);
     Route::post('/aset-penanganan/{asetPenanganan}', [AsetPenangananController::class, 'update']); // pakai POST + _method=PUT biar konsisten sama pola aset/{aset}
 });
 
@@ -177,7 +173,6 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     Route::get('/kelengkapan-master', [KelengkapanMasterController::class, 'index']);
     Route::get('/supplier', [SupplierController::class, 'index']);
     Route::get('/aset-penanganan', [AsetPenangananController::class, 'index']);
-    Route::get('/aset-peminjaman', [AsetPeminjamanController::class, 'index']);
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
@@ -191,9 +186,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/aset-pemakai/{asetPemakai}/setujui', [AsetPemakaiController::class, 'setujui']); // admin: approve
     Route::post('/aset-pemakai/{asetPemakai}/tolak', [AsetPemakaiController::class, 'tolak']); // admin: reject
 
-    Route::post('/aset/{aset}/perbaikan', [AsetPerbaikanController::class, 'store']);
-    Route::patch('/aset-perbaikan/{asetPerbaikan}/selesai', [AsetPerbaikanController::class, 'selesai']);
-    Route::delete('/aset-perbaikan/{asetPerbaikan}', [AsetPerbaikanController::class, 'destroy']);
+    Route::delete('/aset-penanganan/{asetPenanganan}', [AsetPenangananController::class, 'destroy']);
 
     Route::post('/aset/{aset}/penggantian-sparepart', [AsetPenggantianSparepartController::class, 'store']);
     Route::delete('/aset-penggantian-sparepart/{asetPenggantianSparepart}', [AsetPenggantianSparepartController::class, 'destroy']);

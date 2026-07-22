@@ -35,7 +35,7 @@ class AsetController extends Controller
             'kelengkapan.kelengkapanMaster',
             'pemakai.pekerja.user',
             'pemakaiPending.pekerja.user', // baru
-            'perbaikan',
+            'penanganan.pemakai.pekerja.user',
             'penggantianSparepart',
             'penangananAktif',
         ]);
