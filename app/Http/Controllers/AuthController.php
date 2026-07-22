@@ -181,17 +181,6 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        if ($user->role !== 'admin' && $user->email) {
-            $newPassword = Str::random(12);
-
-            try {
-                Mail::to($user->email)->send(new NewPasswordMail($newPassword));
-                $user->update(['password' => Hash::make($newPassword)]);
-            } catch (\Exception $e) {
-                Log::error('Gagal kirim email password baru, password TIDAK diubah: ' . $e->getMessage());
-            }
-        }
-
         $user->currentAccessToken()->delete();
 
         return response()->json(['message' => 'Logged out']);

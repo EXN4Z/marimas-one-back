@@ -21,6 +21,7 @@ class AsetController extends Controller
             'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni.pekerja.user',
             'pemakaiPending.pekerja.user', // baru — biar tau aset mana yang ada request pending
+            'penangananAktif', // biar frontend tau aset mana yang laporan kerusakannya masih belum ditangani
         ])->latest()->get();
     
         return response()->json($aset);
@@ -32,10 +33,12 @@ class AsetController extends Controller
             'jenis',
             'supplier',
             'kelengkapan.kelengkapanMaster',
+            'pemakaiSaatIni.pekerja.user', // baru — detail modal butuh ini buat tombol kontekstual (Terima Kembali / Lapor Kerusakan)
             'pemakai.pekerja.user',
             'pemakaiPending.pekerja.user', // baru
-            'perbaikan',
+            'penanganan.pemakai.pekerja.user',
             'penggantianSparepart',
+            'penangananAktif',
         ]);
     
         return response()->json($aset);

@@ -59,13 +59,22 @@ class Aset extends Model
             ->latest();
     }
 
-    public function perbaikan()
+    // riwayat lengkap perbaikan/penanganan kerusakan (semua status, terbaru dulu)
+    public function penanganan()
     {
-        return $this->hasMany(AsetPerbaikan::class, 'aset_id')->latest('tanggal_perbaikan');
+        return $this->hasMany(AsetPenanganan::class, 'aset_id')->latest('tanggal_lapor');
     }
 
     public function penggantianSparepart()
     {
         return $this->hasMany(AsetPenggantianSparepart::class, 'aset_id')->latest('tanggal');
+    }
+
+    // laporan kerusakan yang belum ditangani (tanggal_selesai masih null)
+    public function penangananAktif()
+    {
+        return $this->hasOne(AsetPenanganan::class, 'aset_id')
+            ->whereNull('tanggal_selesai')
+            ->latest('tanggal_lapor');
     }
 }

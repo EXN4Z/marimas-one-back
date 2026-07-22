@@ -11,18 +11,36 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class LaporanController extends Controller
 {
     // GET /api/laporan/absensi?bulan=7&tahun=2026 — export CSV absensi bulanan.
+   // GET /api/laporan/absensi?bulan=&tahun= ATAU ?tanggal_mulai=&tanggal_selesai=&status=
     public function absensi(Request $request): StreamedResponse
     {
-        $bulan = (int) $request->get('bulan', now()->month);
-        $tahun = (int) $request->get('tahun', now()->year);
+        $status = $request->get('status');
+        $tanggalMulai = $request->get('tanggal_mulai');
+        $tanggalSelesai = $request->get('tanggal_selesai');
 
-        $data = Absensi::with('pekerja.user', 'pekerja.departemen')
-            ->whereMonth('tanggal', $bulan)
-            ->whereYear('tanggal', $tahun)
-            ->orderBy('tanggal')
-            ->get();
+        $query = Absensi::with('pekerja.user', 'pekerja.departemen');
 
-        $filename = "laporan-absensi-{$tahun}-{$bulan}.csv";
+        if ($tanggalMulai && $tanggalSelesai) {
+            // Mode rentang tanggal (dipakai chat AI: hari ini/kemarin/N hari lalu)
+            $query->whereBetween('tanggal', [$tanggalMulai, $tanggalSelesai]);
+            $labelFile = "{$tanggalMulai}_sd_{$tanggalSelesai}";
+        } else {
+            // Mode bulan (dipakai halaman Laporan.tsx yang sudah ada)
+            $bulan = (int) $request->get('bulan', now()->month);
+            $tahun = (int) $request->get('tahun', now()->year);
+            $query->whereMonth('tanggal', $bulan)->whereYear('tanggal', $tahun);
+            $labelFile = "{$tahun}-{$bulan}";
+        }
+
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        $data = $query->orderBy('tanggal')->get();
+
+        $filename = $status
+            ? "laporan-absensi-{$status}-{$labelFile}.csv"
+            : "laporan-absensi-{$labelFile}.csv";
 
         return $this->streamCsv($filename, [
             'Tanggal', 'NIP', 'Nama', 'Departemen', 'Jam Masuk', 'Jam Pulang', 'Status Masuk', 'Status Pulang',

@@ -11,23 +11,23 @@ return new class extends Migration
         Schema::create('aset_penanganan', function (Blueprint $table) {
             $table->id();
             $table->foreignId('aset_id')->constrained('aset');
-            // Nullable: kerusakan bisa ketemu pas lagi dipinjam ATAU pas lagi
-            // nganggur di gudang (ketemu waktu audit), jadi gak selalu ada
-            // peminjaman yang aktif.
+
+            // nullable: laporan bisa muncul pas aset lagi nganggur (audit gudang),
+            // gak selalu ada peminjaman aktif yang nempel.
             $table->foreignId('aset_peminjaman_id')->nullable()->constrained('aset_peminjaman')->nullOnDelete();
 
             $table->enum('jenis_kerusakan', ['software', 'hardware']);
             $table->text('keluhan');
-            $table->date('tanggal_lapor');
-            $table->date('tanggal_selesai')->nullable(); // durasi = tanggal_selesai - tanggal_lapor, gak disimpan dobel
-            $table->decimal('harga_jasa', 14, 2)->default(0);
-            $table->decimal('biaya_komponen', 14, 2)->default(0);
 
-            // null = masih ditangani, 'diperbaiki' = balik dipinjam,
-            // 'rusak_berat' = lanjut ke write-off.
-            $table->enum('hasil', ['diperbaiki', 'rusak_berat'])->nullable();
+            $table->date('tanggal_lapor');
+            $table->date('tanggal_selesai')->nullable();
+
+            $table->decimal('harga_jasa', 12, 2)->nullable();
+            $table->decimal('biaya_komponen', 12, 2)->nullable();
+            $table->string('hasil')->nullable();
             $table->string('no_struk')->nullable();
             $table->text('catatan')->nullable();
+
             $table->timestamps();
         });
     }

@@ -14,9 +14,11 @@ class AsetPemakai extends Model
         'status',
         'requested_by_user_id',
         'nomor_penerimaan',
+        'no_struk_penerimaan',
         'tanggal_penerimaan',
         'catatan_penerimaan',
         'nomor_pengembalian',
+        'no_struk_pengembalian',
         'tanggal_pengembalian',
         'catatan_pengembalian',
         'catatan_penolakan',
@@ -35,6 +37,11 @@ class AsetPemakai extends Model
     public function requestedBy()
     {
         return $this->belongsTo(User::class, 'requested_by_user_id');
+    }
+
+    public function penanganan()
+    {
+        return $this->hasMany(AsetPenanganan::class, 'aset_pemakai_id');
     }
     
 }

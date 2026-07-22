@@ -21,12 +21,16 @@ class AsetPenanganan extends Model
         'biaya_komponen' => 'decimal:2',
     ];
 
+    // frontend butuh dua ini ikut kekirim di JSON, bukan cuma keitung pas dipanggil manual
+    protected $appends = ['total_biaya', 'durasi_hari'];
+
     public function aset()
     {
         return $this->belongsTo(Aset::class);
     }
 
-    // ganti: relasinya ke AsetPemakai (bukan AsetPeminjaman, yang itu punya Barang)
+    // siapa yang lagi pegang aset ini pas dilaporkan rusak (nullable, bisa juga
+    // ketauan pas aset nganggur / audit gudang)
     public function pemakai()
     {
         return $this->belongsTo(AsetPemakai::class, 'aset_pemakai_id');

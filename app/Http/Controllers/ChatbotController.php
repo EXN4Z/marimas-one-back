@@ -15,15 +15,33 @@ class ChatbotController extends Controller
 {
     public function ask(Request $request)
     {
-        $request->validate([
-            'message' => 'required|string',
+    $request->validate([
+        'message' => 'required|string',
+        'previous_export' => 'nullable|array',
+    ]);
+
+    $user = $request->user();
+
+    if (!$user) {
+        return response()->json(['message' => 'Unauthenticated.'], 401);
+    }
+
+    $isStaff = in_array($user->role, ['admin', 'hr', 'manajer']);
+
+    if ($isStaff && ($intent = $this->detectAbsensiIntent($request->message, $request->input('previous_export')))) {
+        $statusLabel = $intent['status'] === 'telat' ? 'terlambat' : 'tepat waktu';
+
+        return response()->json([
+            'reply' => "Berikut data karyawan yang {$statusLabel} untuk {$intent['label_periode']}. Silakan pilih format:",
+            'exportPrompt' => [
+                'jenis' => 'absensi_status',
+                'status' => $intent['status'],
+                'tanggal_mulai' => $intent['tanggal_mulai'],
+                'tanggal_selesai' => $intent['tanggal_selesai'],
+                'label' => $intent['label_periode'],
+            ],
         ]);
-
-        $user = $request->user();
-
-        if (!$user) {
-            return response()->json(['message' => 'Unauthenticated.'], 401);
-        }
+    }
 
         // Ambil data relevan si user (masih placeholder, nanti diisi query beneran
         // setelah tabel izin/ticket dibuat)
@@ -76,7 +94,73 @@ class ChatbotController extends Controller
 
         return response()->json(['reply' => trim($reply)]);
     }
+    private function detectAbsensiIntent(string $message, ?array $previousExport = null): ?array
+    {
+        $msg = strtolower($message);
 
+        $adaSubjekEksplisit = str_contains($msg, 'karyawan') || str_contains($msg, 'pegawai');
+
+        $status = null;
+        if (str_contains($msg, 'tepat waktu') || str_contains($msg, 'on time') || str_contains($msg, 'ontime')) {
+            $status = 'tepat_waktu';
+        } elseif (str_contains($msg, 'terlambat') || str_contains($msg, 'telat')) {
+            $status = 'telat';
+        }
+
+        // Kalau tidak ada kata status sama sekali, jangan trigger — biar tetap ke Gemini
+        if (!$status) {
+            return null;
+        }
+
+        // Subjek dianggap "ada" kalau disebut eksplisit, ATAU pesan sebelumnya
+        // memang lagi dalam konteks laporan absensi (lanjutan pertanyaan, contoh:
+        // "gimana kalau yang tepat waktu" tanpa nyebut "karyawan" lagi)
+        $adaKonteksSebelumnya = $previousExport && ($previousExport['jenis'] ?? null) === 'absensi_status';
+
+        if (!$adaSubjekEksplisit && !$adaKonteksSebelumnya) {
+            return null;
+        }
+
+        [$tanggalMulai, $tanggalSelesai, $label] = $this->parseRentangTanggal($msg, $previousExport);
+
+        return [
+            'status' => $status,
+            'tanggal_mulai' => $tanggalMulai,
+            'tanggal_selesai' => $tanggalSelesai,
+            'label_periode' => $label,
+        ];
+    }
+
+    private function parseRentangTanggal(string $msg, ?array $previousExport = null): array
+    {
+        $today = now();
+
+        if (str_contains($msg, 'hari ini')) {
+            return [$today->toDateString(), $today->toDateString(), 'hari ini'];
+        }
+
+        if (str_contains($msg, 'kemarin')) {
+            $kemarin = $today->copy()->subDay();
+            return [$kemarin->toDateString(), $kemarin->toDateString(), 'kemarin'];
+        }
+
+        if (preg_match('/(\d+)\s*hari/', $msg, $match)) {
+            $n = (int) $match[1];
+            $mulai = $today->copy()->subDays($n - 1);
+            return [$mulai->toDateString(), $today->toDateString(), "{$n} hari terakhir"];
+        }
+
+        // BARU: tidak ada sinyal tanggal baru di pesan ini — kalau ada konteks
+        // dari pesan sebelumnya, pakai rentang tanggal yang sama (lanjutan
+        // pertanyaan), bukan reset ke bulan berjalan.
+        if ($previousExport && isset($previousExport['tanggal_mulai'], $previousExport['tanggal_selesai'], $previousExport['label'])) {
+            return [$previousExport['tanggal_mulai'], $previousExport['tanggal_selesai'], $previousExport['label']];
+        }
+
+        $mulai = $today->copy()->startOfMonth();
+        $selesai = $today->copy()->endOfMonth();
+        return [$mulai->toDateString(), $selesai->toDateString(), $today->translatedFormat('F Y')];
+    }
     private function buildContext($user): string
     {
         // PENTING: hanya kirim data AGREGAT (jumlah/rekap) ke prompt AI, bukan
