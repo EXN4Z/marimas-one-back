@@ -59,6 +59,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->post('/admin/users/{id}/reset
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
     Route::post('/aset/{aset}/pinjam', [AsetPemakaiController::class, 'requestPinjam']); // karyawan: request pinjam aset
+    Route::post('/aset-penanganan', [AsetPenangananController::class, 'store']); // karyawan: lapor kerusakan aset yang lagi dia pakai
 
     Route::prefix('absensi')->group(function () {
         Route::get('/karyawan', [AbsensiController::class, 'karyawan']);
@@ -188,8 +189,6 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/aset-pemakai/pending', [AsetPemakaiController::class, 'pending']); // admin: daftar request pinjam pending
     Route::post('/aset-pemakai/{asetPemakai}/setujui', [AsetPemakaiController::class, 'setujui']); // admin: approve
     Route::post('/aset-pemakai/{asetPemakai}/tolak', [AsetPemakaiController::class, 'tolak']); // admin: reject
-
-    Route::post('/aset-penanganan', [AsetPenangananController::class, 'store']);
 
     Route::post('/aset/{aset}/perbaikan', [AsetPerbaikanController::class, 'store']);
     Route::patch('/aset-perbaikan/{asetPerbaikan}/selesai', [AsetPerbaikanController::class, 'selesai']);
