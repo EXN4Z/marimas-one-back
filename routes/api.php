@@ -30,6 +30,8 @@ use App\Http\Controllers\AsetController;
 use App\Http\Controllers\AsetPemakaiController;
 use App\Http\Controllers\AsetPerbaikanController;
 use App\Http\Controllers\AsetPenggantianSparepartController;
+use App\Http\Controllers\AsetPenangananController;
+use App\Http\Controllers\AsetPeminjamanController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
@@ -162,6 +164,8 @@ Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/audit-log', [AuditLogController::class, 'index']);
     Route::get('/audit-log/trash', [AuditLogController::class, 'trash']);
+    Route::post('/aset/{aset}/peminjaman', [AsetPeminjamanController::class, 'store']);
+    Route::post('/aset-peminjaman/{peminjaman}/kembalikan', [AsetPeminjamanController::class, 'kembalikan']);
 });
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
@@ -170,6 +174,8 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     Route::get('/jenis-aset', [JenisAsetController::class, 'index']);
     Route::get('/kelengkapan-master', [KelengkapanMasterController::class, 'index']);
     Route::get('/supplier', [SupplierController::class, 'index']);
+    Route::get('/aset-penanganan', [AsetPenangananController::class, 'index']);
+    Route::get('/aset-peminjaman', [AsetPeminjamanController::class, 'index']);
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
@@ -182,6 +188,8 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/aset-pemakai/pending', [AsetPemakaiController::class, 'pending']); // admin: daftar request pinjam pending
     Route::post('/aset-pemakai/{asetPemakai}/setujui', [AsetPemakaiController::class, 'setujui']); // admin: approve
     Route::post('/aset-pemakai/{asetPemakai}/tolak', [AsetPemakaiController::class, 'tolak']); // admin: reject
+
+    Route::post('/aset-penanganan', [AsetPenangananController::class, 'store']);
 
     Route::post('/aset/{aset}/perbaikan', [AsetPerbaikanController::class, 'store']);
     Route::patch('/aset-perbaikan/{asetPerbaikan}/selesai', [AsetPerbaikanController::class, 'selesai']);
