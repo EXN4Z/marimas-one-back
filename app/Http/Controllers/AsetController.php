@@ -21,6 +21,7 @@ class AsetController extends Controller
             'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni.pekerja.user',
             'pemakaiPending.pekerja.user', // baru — biar tau aset mana yang ada request pending
+            'penangananAktif', // biar frontend tau aset mana yang laporan kerusakannya masih belum ditangani
         ])->latest()->get();
     
         return response()->json($aset);
@@ -36,6 +37,7 @@ class AsetController extends Controller
             'pemakaiPending.pekerja.user', // baru
             'perbaikan',
             'penggantianSparepart',
+            'penangananAktif',
         ]);
     
         return response()->json($aset);

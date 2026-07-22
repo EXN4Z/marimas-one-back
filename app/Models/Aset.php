@@ -68,4 +68,12 @@ class Aset extends Model
     {
         return $this->hasMany(AsetPenggantianSparepart::class, 'aset_id')->latest('tanggal');
     }
+
+    // laporan kerusakan yang belum ditangani (tanggal_selesai masih null)
+    public function penangananAktif()
+    {
+        return $this->hasOne(AsetPenanganan::class, 'aset_id')
+            ->whereNull('tanggal_selesai')
+            ->latest('tanggal_lapor');
+    }
 }
