@@ -184,17 +184,19 @@ class AuthController extends Controller
         $user = $request->user();
         $passwordDiganti = false;
 
-        if ($user->role !== 'admin') {
+        // Password cuma dirotasi kalau user punya email DAN email password
+        // barunya beneran berhasil terkirim (dikirim langsung, bukan di-queue).
+        // Kalau nggak, biarkan password lama tetap berlaku -- daripada user
+        // kekunci total karena queue worker mati atau emailnya kosong.
+        if ($user->role !== 'admin' && $user->email) {
             $newPassword = Str::random(12);
-            $user->update(['password' => Hash::make($newPassword)]);
 
-            if ($user->email) {
-                try {
-                    Mail::to($user->email)->queue(new NewPasswordMail($newPassword)); // <- queue, bukan send
-                    $passwordDiganti = true;
-                } catch (\Exception $e) {
-                    Log::error('Gagal antre email password baru: ' . $e->getMessage());
-                }
+            try {
+                Mail::to($user->email)->send(new NewPasswordMail($newPassword));
+                $user->update(['password' => Hash::make($newPassword)]);
+                $passwordDiganti = true;
+            } catch (\Exception $e) {
+                Log::error('Gagal kirim email password baru, password TIDAK diubah: ' . $e->getMessage());
             }
         }
 
