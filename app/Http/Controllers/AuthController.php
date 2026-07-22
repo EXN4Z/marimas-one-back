@@ -27,7 +27,6 @@ class AuthController extends Controller
         $otp = rand(100000, 999999);
         $registrationId = Str::uuid()->toString();
 
-        // simpan sementara di cache, bukan ke database, TTL 5 menit
         Cache::put("register:{$registrationId}", [
             'name' => $request->name,
             'email' => $request->email,
@@ -65,12 +64,11 @@ class AuthController extends Controller
             ]);
         }
 
-        // OTP benar -> baru bikin akun beneran di database
         $user = User::create([
             'name' => $data['name'],
             'email' => $data['email'],
             'phone' => $data['phone'],
-            'password' => $data['password'], // udah di-hash sebelumnya
+            'password' => $data['password'],
             'role' => 'karyawan',
             'phone_verified_at' => now(),
         ]);
@@ -182,26 +180,17 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $user = $request->user();
-<<<<<<< HEAD
-        $passwordDiganti = false;
 
-        // Password cuma dirotasi kalau user punya email DAN email password
-        // barunya beneran berhasil terkirim (dikirim langsung, bukan di-queue).
-        // Kalau nggak, biarkan password lama tetap berlaku -- daripada user
-        // kekunci total karena queue worker mati atau emailnya kosong.
         if ($user->role !== 'admin' && $user->email) {
             $newPassword = Str::random(12);
 
             try {
                 Mail::to($user->email)->send(new NewPasswordMail($newPassword));
                 $user->update(['password' => Hash::make($newPassword)]);
-                $passwordDiganti = true;
             } catch (\Exception $e) {
                 Log::error('Gagal kirim email password baru, password TIDAK diubah: ' . $e->getMessage());
             }
         }
-=======
->>>>>>> 39a22db20402cf0b3e7095cf11e114b5eb53134c
 
         $user->currentAccessToken()->delete();
 
