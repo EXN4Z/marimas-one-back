@@ -182,27 +182,9 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $user = $request->user();
-        $passwordDiganti = false;
-
-        if ($user->role !== 'admin') {
-            $newPassword = Str::random(12);
-            $user->update(['password' => Hash::make($newPassword)]);
-
-            if ($user->email) {
-                try {
-                    Mail::to($user->email)->queue(new NewPasswordMail($newPassword)); // <- queue, bukan send
-                    $passwordDiganti = true;
-                } catch (\Exception $e) {
-                    Log::error('Gagal antre email password baru: ' . $e->getMessage());
-                }
-            }
-        }
 
         $user->currentAccessToken()->delete();
 
-        return response()->json([
-            'message' => 'Logged out',
-            'password_direset' => $passwordDiganti,
-        ]);
+        return response()->json(['message' => 'Logged out']);
     }
 }
