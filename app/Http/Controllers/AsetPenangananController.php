@@ -46,4 +46,26 @@ class AsetPenangananController extends Controller
 
         return response()->json($penanganan->load(['aset.jenis', 'peminjaman.pekerja.user']), 201);
     }
+
+    // admin: tandai penanganan selesai + isi hasil/biaya (dicek di route middleware, lihat bawah)
+    public function update(Request $request, AsetPenanganan $asetPenanganan)
+    {
+        $validated = $request->validate([
+            'tanggal_selesai' => 'nullable|date',
+            'harga_jasa' => 'nullable|numeric|min:0',
+            'biaya_komponen' => 'nullable|numeric|min:0',
+            'hasil' => 'nullable|string',
+            'no_struk' => 'nullable|string',
+            'catatan' => 'nullable|string',
+        ]);
+
+        // kalau tanggal_selesai gak dikirim eksplisit, anggap "tandai selesai sekarang"
+        if (!$request->has('tanggal_selesai')) {
+            $validated['tanggal_selesai'] = now();
+        }
+
+        $asetPenanganan->update($validated);
+
+        return response()->json($asetPenanganan->load(['aset.jenis', 'peminjaman.pekerja.user']));
+    }
 }

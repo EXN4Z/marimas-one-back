@@ -167,6 +167,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/audit-log/trash', [AuditLogController::class, 'trash']);
     Route::post('/aset/{aset}/peminjaman', [AsetPeminjamanController::class, 'store']);
     Route::post('/aset-peminjaman/{peminjaman}/kembalikan', [AsetPeminjamanController::class, 'kembalikan']);
+    Route::post('/aset-penanganan/{asetPenanganan}', [AsetPenangananController::class, 'update']); // pakai POST + _method=PUT biar konsisten sama pola aset/{aset}
 });
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
