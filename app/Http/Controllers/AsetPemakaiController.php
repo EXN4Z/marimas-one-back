@@ -15,6 +15,46 @@ class AsetPemakaiController extends Controller
     use GeneratesStrukNumber;
 
     /**
+     * POST /aset/{aset}/pemakai
+     * Admin serah-terima aset langsung ke pekerja (tanpa lewat alur request/approve
+     * karyawan). Aset harus 'tersedia'. Struk penerimaan digenerate otomatis.
+     */
+    public function store(Request $request, Aset $aset)
+    {
+        if ($aset->status !== 'tersedia') {
+            return response()->json(['message' => 'Aset ini sedang tidak tersedia untuk diserahkan.'], 422);
+        }
+
+        $validated = $request->validate([
+            'pekerja_id' => 'required|exists:pekerja,id',
+            'nomor_penerimaan' => 'nullable|string',
+            'tanggal_penerimaan' => 'required|date',
+            'catatan_penerimaan' => 'nullable|string',
+        ]);
+
+        $pemakai = DB::transaction(function () use ($aset, $request, $validated) {
+            $noStruk = $this->generateNoStruk('STJ', 'aset_pemakai', 'no_struk_penerimaan');
+
+            $pemakai = AsetPemakai::create([
+                'aset_id' => $aset->id,
+                'pekerja_id' => $validated['pekerja_id'],
+                'status' => 'disetujui',
+                'requested_by_user_id' => $request->user()?->id,
+                'nomor_penerimaan' => $validated['nomor_penerimaan'] ?? null,
+                'no_struk_penerimaan' => $noStruk,
+                'tanggal_penerimaan' => $validated['tanggal_penerimaan'],
+                'catatan_penerimaan' => $validated['catatan_penerimaan'] ?? null,
+            ]);
+
+            $aset->update(['status' => 'dipakai']);
+
+            return $pemakai;
+        });
+
+        return response()->json($pemakai->load('pekerja.user', 'aset'), 201);
+    }
+
+    /**
      * POST /api/aset/{aset}/pinjam
      * Karyawan request pinjam aset. Butuh approval admin sebelum resmi jadi pemakai.
      */

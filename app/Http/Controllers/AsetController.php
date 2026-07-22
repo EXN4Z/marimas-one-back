@@ -11,10 +11,32 @@ use Illuminate\Support\Facades\Storage;
 class AsetController extends Controller
 {
     /**
+     * Sembunyiin no_struk_penerimaan/no_struk_pengembalian dari siapa aja
+     * selain admin dan karyawan yang jadi peminjam di record itu sendiri.
+     * Struk itu bukti fisik yang dipegang si peminjam — kalau bocor ke
+     * karyawan lain, orang lain bisa pura-pura jadi peminjam pas pengembalian.
+     */
+    private function maskStruk($pemakai, $userId, bool $isAdmin)
+    {
+        if ($isAdmin) {
+            return $pemakai;
+        }
+        $isOwner = $pemakai->pekerja?->user?->id === $userId;
+        if (!$isOwner) {
+            $pemakai->no_struk_penerimaan = null;
+            $pemakai->no_struk_pengembalian = null;
+        }
+        return $pemakai;
+    }
+
+    /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
+        $isAdmin = $request->user()->role === 'admin';
+        $userId = $request->user()->id;
+
         $aset = Aset::with([
             'jenis',
             'supplier',
@@ -23,12 +45,21 @@ class AsetController extends Controller
             'pemakaiPending.pekerja.user', // baru — biar tau aset mana yang ada request pending
             'penangananAktif', // biar frontend tau aset mana yang laporan kerusakannya masih belum ditangani
         ])->latest()->get();
-    
+
+        $aset->each(function ($a) use ($userId, $isAdmin) {
+            if ($a->pemakaiSaatIni) {
+                $this->maskStruk($a->pemakaiSaatIni, $userId, $isAdmin);
+            }
+        });
+
         return response()->json($aset);
     }
     
-    public function show(Aset $aset)
+    public function show(Request $request, Aset $aset)
     {
+        $isAdmin = $request->user()->role === 'admin';
+        $userId = $request->user()->id;
+
         $aset->load([
             'jenis',
             'supplier',
@@ -40,7 +71,12 @@ class AsetController extends Controller
             'penggantianSparepart',
             'penangananAktif',
         ]);
-    
+
+        if ($aset->pemakaiSaatIni) {
+            $this->maskStruk($aset->pemakaiSaatIni, $userId, $isAdmin);
+        }
+        $aset->pemakai->each(fn ($p) => $this->maskStruk($p, $userId, $isAdmin));
+
         return response()->json($aset);
     }
 
