@@ -30,6 +30,8 @@ use App\Http\Controllers\AsetController;
 use App\Http\Controllers\AsetPemakaiController;
 use App\Http\Controllers\AsetPenggantianSparepartController;
 use App\Http\Controllers\AsetPenangananController;
+use App\Http\Controllers\CabangController;
+
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
@@ -38,6 +40,10 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::get('/debug-keuangan', [DashboardController::class, 'debugKeuangan']);
 
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
+
+Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
+    Route::apiResource('cabang', CabangController::class);
+});
 
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
