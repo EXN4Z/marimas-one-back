@@ -15,14 +15,21 @@ class LaporanController extends Controller
     {
         $bulan = (int) $request->get('bulan', now()->month);
         $tahun = (int) $request->get('tahun', now()->year);
+        $status = $request->get('status');
 
-        $data = Absensi::with('pekerja.user', 'pekerja.departemen')
+        $query = Absensi::with('pekerja.user', 'pekerja.departemen')
             ->whereMonth('tanggal', $bulan)
-            ->whereYear('tanggal', $tahun)
-            ->orderBy('tanggal')
-            ->get();
+            ->whereYear('tanggal', $tahun);
 
-        $filename = "laporan-absensi-{$tahun}-{$bulan}.csv";
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        $data = $query->orderBy('tanggal')->get();
+
+        $filename = $status
+            ? "laporan-absensi-{$status}-{$tahun}-{$bulan}.csv"
+            : "laporan-absensi-{$tahun}-{$bulan}.csv";
 
         return $this->streamCsv($filename, [
             'Tanggal', 'NIP', 'Nama', 'Departemen', 'Jam Masuk', 'Jam Pulang', 'Status Masuk', 'Status Pulang',
