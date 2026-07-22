@@ -182,6 +182,26 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $user = $request->user();
+<<<<<<< HEAD
+        $passwordDiganti = false;
+
+        // Password cuma dirotasi kalau user punya email DAN email password
+        // barunya beneran berhasil terkirim (dikirim langsung, bukan di-queue).
+        // Kalau nggak, biarkan password lama tetap berlaku -- daripada user
+        // kekunci total karena queue worker mati atau emailnya kosong.
+        if ($user->role !== 'admin' && $user->email) {
+            $newPassword = Str::random(12);
+
+            try {
+                Mail::to($user->email)->send(new NewPasswordMail($newPassword));
+                $user->update(['password' => Hash::make($newPassword)]);
+                $passwordDiganti = true;
+            } catch (\Exception $e) {
+                Log::error('Gagal kirim email password baru, password TIDAK diubah: ' . $e->getMessage());
+            }
+        }
+=======
+>>>>>>> 39a22db20402cf0b3e7095cf11e114b5eb53134c
 
         $user->currentAccessToken()->delete();
 
