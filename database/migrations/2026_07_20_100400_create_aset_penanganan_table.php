@@ -1,39 +1,49 @@
 <?php
 
-use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
+namespace App\Http\Controllers;
 
-return new class extends Migration
+use App\Models\AsetPenanganan;
+use App\Models\AsetPeminjaman;
+use Illuminate\Http\Request;
+
+class AsetPenangananController extends Controller
 {
-    public function up(): void
+    // admin only (dicek di route middleware, lihat bawah)
+    public function index()
     {
-        Schema::create('aset_penanganan', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('aset_id')->constrained('aset');
-            // Nullable: kerusakan bisa ketemu pas lagi dipinjam ATAU pas lagi
-            // nganggur di gudang (ketemu waktu audit), jadi gak selalu ada
-            // peminjaman yang aktif.
-            $table->foreignId('aset_peminjaman_id')->nullable()->constrained('aset_peminjaman')->nullOnDelete();
+        $data = AsetPenanganan::with(['aset.jenis', 'peminjaman.pekerja.user'])
+            ->orderByDesc('tanggal_lapor')
+            ->get();
 
-            $table->enum('jenis_kerusakan', ['software', 'hardware']);
-            $table->text('keluhan');
-            $table->date('tanggal_lapor');
-            $table->date('tanggal_selesai')->nullable(); // durasi = tanggal_selesai - tanggal_lapor, gak disimpan dobel
-            $table->decimal('harga_jasa', 14, 2)->default(0);
-            $table->decimal('biaya_komponen', 14, 2)->default(0);
-
-            // null = masih ditangani, 'diperbaiki' = balik dipinjam,
-            // 'rusak_berat' = lanjut ke write-off.
-            $table->enum('hasil', ['diperbaiki', 'rusak_berat'])->nullable();
-            $table->string('no_struk')->nullable();
-            $table->text('catatan')->nullable();
-            $table->timestamps();
-        });
+        return response()->json($data);
     }
 
-    public function down(): void
+    // peminjam lapor kerusakan aset yang sedang dia pinjam
+    public function store(Request $request)
     {
-        Schema::dropIfExists('aset_penanganan');
+        $validated = $request->validate([
+            'aset_id' => 'required|exists:aset,id',
+            'jenis_kerusakan' => 'required|in:software,hardware',
+            'keluhan' => 'required|string',
+        ]);
+
+        $user = $request->user();
+
+        // cek user emang lagi pegang aset ini via peminjaman aktif (status dipinjam)
+        $peminjaman = AsetPeminjaman::where('aset_id', $validated['aset_id'])
+            ->where('status', 'dipinjam')
+            ->whereHas('pekerja', fn ($q) => $q->where('user_id', $user->id))
+            ->first();
+
+        // nullable: laporan kerusakan bisa juga muncul pas aset lagi nganggur (audit gudang)
+        $penanganan = AsetPenanganan::create([
+            'aset_id' => $validated['aset_id'],
+            'aset_peminjaman_id' => $peminjaman->id ?? null,
+            'jenis_kerusakan' => $validated['jenis_kerusakan'],
+            'keluhan' => $validated['keluhan'],
+            'tanggal_lapor' => now(),
+        ]);
+
+        return response()->json($penanganan->load(['aset.jenis', 'peminjaman.pekerja.user']), 201);
     }
-};
+}
