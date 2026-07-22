@@ -33,6 +33,7 @@ class AsetController extends Controller
             'jenis',
             'supplier',
             'kelengkapan.kelengkapanMaster',
+            'pemakaiSaatIni.pekerja.user', // baru — detail modal butuh ini buat tombol kontekstual (Terima Kembali / Lapor Kerusakan)
             'pemakai.pekerja.user',
             'pemakaiPending.pekerja.user', // baru
             'penanganan.pemakai.pekerja.user',
