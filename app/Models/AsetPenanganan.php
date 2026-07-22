@@ -9,7 +9,7 @@ class AsetPenanganan extends Model
     protected $table = 'aset_penanganan';
 
     protected $fillable = [
-        'aset_id', 'aset_pemakai_id', 'jenis_kerusakan', 'keluhan',
+        'aset_id', 'aset_peminjaman_id', 'jenis_kerusakan', 'keluhan',
         'tanggal_lapor', 'tanggal_selesai', 'harga_jasa', 'biaya_komponen',
         'hasil', 'no_struk', 'catatan',
     ];
@@ -26,10 +26,10 @@ class AsetPenanganan extends Model
         return $this->belongsTo(Aset::class);
     }
 
-    // ganti: relasinya ke AsetPemakai (bukan AsetPeminjaman, yang itu punya Barang)
-    public function pemakai()
+    // relasinya ke AsetPeminjaman (bukan AsetPemakai; sesuai migration aset_peminjaman_id)
+    public function peminjaman()
     {
-        return $this->belongsTo(AsetPemakai::class, 'aset_pemakai_id');
+        return $this->belongsTo(AsetPeminjaman::class, 'aset_peminjaman_id');
     }
 
     public function getTotalBiayaAttribute(): float
