@@ -19,6 +19,7 @@ trait GeneratesStrukNumber
         $count = DB::table($table)
             ->where($column, 'like', $like)
             ->lockForUpdate()
+            ->get()
             ->count();
 
         return sprintf('%s-%s-%04d', $prefix, $tanggal, $count + 1);
