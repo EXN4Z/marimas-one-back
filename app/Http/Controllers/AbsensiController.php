@@ -162,10 +162,20 @@ class AbsensiController extends Controller
             ]);
 
             // TAMBAH: notif ke admin & hr tiap ada karyawan yang absen masuk
-            Notification::send(
-                User::whereIn('role', ['admin', 'hr'])->get(),
-                new AbsensiBaruDicatat($absensi)
-            );
+            // PENTING: try-catch supaya absen yang SUDAH berhasil tercatat di atas
+            // tidak ikut gagal kalau pengiriman notifikasi bermasalah.
+            try {
+                Notification::send(
+                    User::whereIn('role', ['admin', 'hr'])->get(),
+                    new AbsensiBaruDicatat($absensi)
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Gagal mengirim notifikasi absensi baru', [
+                    'absensi_id' => $absensi->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+            }
 
             return response()->json([
                 'tipe' => 'masuk',
