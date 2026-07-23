@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\GeneratesStrukNumber;
+use App\Models\Aset;
 use App\Models\AsetPemakai;
 use App\Models\AsetPenanganan;
 use Illuminate\Http\Request;
@@ -32,6 +33,15 @@ class AsetPenangananController extends Controller
         ]);
 
         $user = $request->user();
+        $aset = Aset::findOrFail($validated['aset_id']);
+
+        // cegah lapor dobel kalau aset ini masih ada laporan yang belum selesai ditangani
+        // (baik yang masih menunggu diterima admin, maupun yang sudah diterima/sedang diperbaiki)
+        if (in_array($aset->status, ['menunggu_perbaikan', 'diperbaiki'], true)) {
+            return response()->json([
+                'message' => 'Aset ini sudah dilaporkan rusak dan sedang dalam penanganan.',
+            ], 422);
+        }
 
         // cek user emang lagi pegang aset ini via pemakaian aktif (status disetujui, belum dikembalikan)
         $pemakai = AsetPemakai::where('aset_id', $validated['aset_id'])
@@ -40,16 +50,48 @@ class AsetPenangananController extends Controller
             ->whereHas('pekerja', fn ($q) => $q->where('user_id', $user->id))
             ->first();
 
-        // nullable: laporan kerusakan bisa juga muncul pas aset lagi nganggur (audit gudang)
-        $penanganan = AsetPenanganan::create([
-            'aset_id' => $validated['aset_id'],
-            'aset_pemakai_id' => $pemakai->id ?? null,
-            'jenis_kerusakan' => $validated['jenis_kerusakan'],
-            'keluhan' => $validated['keluhan'],
-            'tanggal_lapor' => now(),
-        ]);
+        $penanganan = DB::transaction(function () use ($validated, $pemakai, $aset) {
+            // nullable: laporan kerusakan bisa juga muncul pas aset lagi nganggur (audit gudang)
+            $penanganan = AsetPenanganan::create([
+                'aset_id' => $validated['aset_id'],
+                'aset_pemakai_id' => $pemakai->id ?? null,
+                'jenis_kerusakan' => $validated['jenis_kerusakan'],
+                'keluhan' => $validated['keluhan'],
+                'tanggal_lapor' => now(),
+            ]);
+
+            // TAMBAH: begitu ada laporan kerusakan baru, status aset di tabel inventaris
+            // langsung berubah jadi "menunggu_perbaikan" — kelihatan baik oleh admin
+            // maupun karyawan, sampai admin menerima & mulai menangani laporannya.
+            $aset->update(['status' => 'menunggu_perbaikan']);
+
+            return $penanganan;
+        });
 
         return response()->json($penanganan->load(['aset.jenis', 'pemakai.pekerja.user']), 201);
+    }
+
+    // BARU: admin terima/mulai tangani laporan kerusakan -> status aset jadi "diperbaiki"
+    public function terima(AsetPenanganan $asetPenanganan)
+    {
+        if ($asetPenanganan->tanggal_diterima) {
+            return response()->json([
+                'message' => 'Laporan ini sudah diterima sebelumnya.',
+            ], 422);
+        }
+
+        if ($asetPenanganan->tanggal_selesai) {
+            return response()->json([
+                'message' => 'Laporan ini sudah ditandai selesai.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($asetPenanganan) {
+            $asetPenanganan->update(['tanggal_diterima' => now()]);
+            $asetPenanganan->aset()->update(['status' => 'diperbaiki']);
+        });
+
+        return response()->json($asetPenanganan->fresh()->load(['aset.jenis', 'pemakai.pekerja.user']));
     }
 
     // admin: tandai penanganan selesai + isi hasil/biaya, generate no_struk (dicek di route middleware, lihat bawah)
@@ -74,7 +116,25 @@ class AsetPenangananController extends Controller
                 $validated['no_struk'] = $this->generateNoStruk('PNG', 'aset_penanganan', 'no_struk');
             }
 
+            // jaga-jaga: kalau admin langsung tandai selesai tanpa lewat tombol
+            // "Terima" dulu, tetap isi tanggal_diterima biar datanya konsisten.
+            if (($validated['tanggal_selesai'] ?? null) && !$asetPenanganan->tanggal_diterima) {
+                $validated['tanggal_diterima'] = now();
+            }
+
             $asetPenanganan->update($validated);
+
+            // TAMBAH: begitu perbaikan ditandai selesai, status aset di tabel inventaris
+            // balik lagi — jadi "dipakai" kalau masih ada pemakai aktif, atau "tersedia" kalau tidak.
+            if ($validated['tanggal_selesai'] ?? null) {
+                $aset = $asetPenanganan->aset;
+                $masihDipakai = AsetPemakai::where('aset_id', $aset->id)
+                    ->where('status', 'disetujui')
+                    ->whereNull('tanggal_pengembalian')
+                    ->exists();
+
+                $aset->update(['status' => $masihDipakai ? 'dipakai' : 'tersedia']);
+            }
         });
 
         return response()->json($asetPenanganan->fresh()->load(['aset.jenis', 'pemakai.pekerja.user']));

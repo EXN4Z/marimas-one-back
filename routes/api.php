@@ -170,6 +170,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/audit-log', [AuditLogController::class, 'index']);
     Route::get('/audit-log/trash', [AuditLogController::class, 'trash']);
     Route::post('/aset-penanganan/{asetPenanganan}', [AsetPenangananController::class, 'update']); // pakai POST + _method=PUT biar konsisten sama pola aset/{aset}
+    Route::post('/aset-penanganan/{asetPenanganan}/terima', [AsetPenangananController::class, 'terima']); // admin: terima/mulai tangani laporan kerusakan
 });
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
@@ -189,6 +190,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/aset/{aset}/pemakai', [AsetPemakaiController::class, 'store']);
     Route::post('/aset-pemakai/{asetPemakai}/kembalikan', [AsetPemakaiController::class, 'kembalikan']);
     Route::get('/aset-pemakai/pending', [AsetPemakaiController::class, 'pending']); // admin: daftar request pinjam pending
+    Route::get('/aset-pemakai/riwayat', [AsetPemakaiController::class, 'riwayat']); // admin: riwayat global serah-terima + pengembalian aset
     Route::post('/aset-pemakai/{asetPemakai}/setujui', [AsetPemakaiController::class, 'setujui']); // admin: approve
     Route::post('/aset-pemakai/{asetPemakai}/tolak', [AsetPemakaiController::class, 'tolak']); // admin: reject
 
