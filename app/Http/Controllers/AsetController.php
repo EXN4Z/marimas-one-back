@@ -12,21 +12,16 @@ class AsetController extends Controller
 {
     /**
      * Sembunyiin no_struk_penerimaan/no_struk_pengembalian dari siapa aja
-     * selain admin dan karyawan/akun cabang yang jadi peminjam di record itu
-     * sendiri. Struk itu bukti fisik yang dipegang si peminjam — kalau bocor
-     * ke pihak lain, orang lain bisa pura-pura jadi peminjam pas pengembalian.
-     *
-     * FIX: sebelumnya cuma cek $pemakai->pekerja?->user?->id, jadi akun
-     * cabang (yang gak punya pekerja, cuma user_id langsung) selalu dianggap
-     * BUKAN pemiliknya sendiri dan struknya ke-mask terus. Sekarang cek dua
-     * kemungkinan: lewat pekerja.user ATAU lewat user langsung.
+     * selain admin/hr dan karyawan yang jadi peminjam di record itu sendiri.
+     * Struk itu bukti fisik yang dipegang si peminjam — kalau bocor ke
+     * karyawan lain, orang lain bisa pura-pura jadi peminjam pas pengembalian.
      */
-    private function maskStruk($pemakai, $userId, bool $isAdmin)
+    private function maskStruk($pemakai, $userId, bool $isPrivileged)
     {
-        if ($isAdmin) {
+        if ($isPrivileged) {
             return $pemakai;
         }
-        $isOwner = ($pemakai->pekerja?->user?->id === $userId) || ($pemakai->user?->id === $userId);
+        $isOwner = $pemakai->pekerja?->user?->id === $userId;
         if (!$isOwner) {
             $pemakai->no_struk_penerimaan = null;
             $pemakai->no_struk_pengembalian = null;
@@ -35,28 +30,83 @@ class AsetController extends Controller
     }
 
     /**
+     * BARU: karyawan/manajer cuma boleh lihat DATA PRIBADI sendiri — bukan siapa
+     * aja yang pinjam/lapor kerusakan aset lain. Cuma admin & hr yang boleh lihat
+     * identitas & riwayat lengkap semua karyawan. Aset itu sendiri (kode, jenis,
+     * status tersedia/dipakai, dll) tetap kelihatan buat semua — yang disembunyikan
+     * cuma identitas & riwayat pribadi orang lain.
+     */
+    private function sanitizeAsetForUser(Aset $aset, int $userId, bool $isPrivileged): Aset
+    {
+        if ($isPrivileged) {
+            return $aset;
+        }
+
+        // pemakai_saat_ini: tetap tampil (dipakai buat cek status "aku yang pinjam
+        // apa nggak" & tombol Kembalikan/Lapor Kerusakan), tapi nama & struk orang
+        // lain disembunyikan.
+        if ($aset->relationLoaded('pemakaiSaatIni') && $aset->pemakaiSaatIni) {
+            $isOwner = $aset->pemakaiSaatIni->pekerja?->user?->id === $userId;
+            if (!$isOwner && $aset->pemakaiSaatIni->pekerja?->user) {
+                $aset->pemakaiSaatIni->pekerja->user->name = null;
+            }
+        }
+
+        // pemakai_pending: id tetap ada (buat deteksi "ada pengajuan lain yang
+        // masih nunggu"), tapi nama pengaju lain disembunyikan.
+        if ($aset->relationLoaded('pemakaiPending')) {
+            $aset->pemakaiPending->each(function ($p) use ($userId) {
+                $isOwner = $p->pekerja?->user?->id === $userId;
+                if (!$isOwner && $p->pekerja?->user) {
+                    $p->pekerja->user->name = null;
+                }
+            });
+        }
+
+        // riwayat pemakai (detail): cuma tampilin riwayat peminjaman milik sendiri
+        if ($aset->relationLoaded('pemakai')) {
+            $aset->setRelation(
+                'pemakai',
+                $aset->pemakai->filter(fn ($p) => $p->pekerja?->user?->id === $userId)->values()
+            );
+        }
+
+        // riwayat penanganan/perbaikan (detail): cuma tampilin laporan milik sendiri
+        // (atau laporan tanpa pemakai — hasil audit gudang admin — tetap disembunyikan
+        // dari karyawan biasa karena bukan urusan mereka).
+        if ($aset->relationLoaded('penanganan')) {
+            $aset->setRelation(
+                'penanganan',
+                $aset->penanganan->filter(fn ($p) => $p->pemakai?->pekerja?->user?->id === $userId)->values()
+            );
+        }
+
+        return $aset;
+    }
+
+    /**
      * Display a listing of the resource.
      */
     public function index(Request $request)
     {
-        $isAdmin = $request->user()->role === 'admin';
-        $userId = $request->user()->id;
+        $user = $request->user();
+        $isPrivileged = in_array($user->role, ['admin', 'hr'], true);
+        $userId = $user->id;
 
         $aset = Aset::with([
             'jenis',
             'supplier',
             'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni.pekerja.user',
-            'pemakaiSaatIni.user', // FIX: penerima akun cabang gak punya pekerja, datanya di sini
             'pemakaiPending.pekerja.user', // baru — biar tau aset mana yang ada request pending
-            'pemakaiPending.user', // FIX: sama kayak di atas, buat pengajuan dari akun cabang
             'penangananAktif', // biar frontend tau aset mana yang laporan kerusakannya masih belum ditangani
         ])->latest()->get();
 
-        $aset->each(function ($a) use ($userId, $isAdmin) {
+        $aset->each(function ($a) use ($userId, $isPrivileged) {
             if ($a->pemakaiSaatIni) {
-                $this->maskStruk($a->pemakaiSaatIni, $userId, $isAdmin);
+                $this->maskStruk($a->pemakaiSaatIni, $userId, $isPrivileged);
             }
+            $this->sanitizeAsetForUser($a, $userId, $isPrivileged);
         });
 
         return response()->json($aset);
@@ -64,32 +114,32 @@ class AsetController extends Controller
     
     public function show(Request $request, Aset $aset)
     {
-        $isAdmin = $request->user()->role === 'admin';
-        $userId = $request->user()->id;
+        $user = $request->user();
+        $isPrivileged = in_array($user->role, ['admin', 'hr'], true);
+        $userId = $user->id;
 
         $aset->load([
             'jenis',
             'supplier',
             'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni.pekerja.user', // baru — detail modal butuh ini buat tombol kontekstual (Terima Kembali / Lapor Kerusakan)
-            'pemakaiSaatIni.user', // FIX: penerima akun cabang
             'pemakai.pekerja.user',
-            'pemakai.user', // FIX: riwayat pemakai yang penerimanya akun cabang
             'pemakaiPending.pekerja.user', // baru
-            'pemakaiPending.user', // FIX: pengajuan dari akun cabang
             'penanganan.pemakai.pekerja.user',
-            'penanganan.pemakai.user', // FIX: siapa yang minjem pas lapor rusak, kalau dia akun cabang
             'penggantianSparepart',
             'penangananAktif',
         ]);
 
         if ($aset->pemakaiSaatIni) {
-            $this->maskStruk($aset->pemakaiSaatIni, $userId, $isAdmin);
+            $this->maskStruk($aset->pemakaiSaatIni, $userId, $isPrivileged);
         }
-        $aset->pemakai->each(fn ($p) => $this->maskStruk($p, $userId, $isAdmin));
+        $aset->pemakai->each(fn ($p) => $this->maskStruk($p, $userId, $isPrivileged));
+
+        $this->sanitizeAsetForUser($aset, $userId, $isPrivileged);
 
         return response()->json($aset);
     }
+
 
     /**
      * Store a newly created resource in storage.
@@ -139,13 +189,7 @@ class AsetController extends Controller
         });
 
         return response()->json(
-            $aset->load([
-                'jenis',
-                'supplier',
-                'kelengkapan.kelengkapanMaster',
-                'pemakaiPending.pekerja.user',
-                'pemakaiPending.user', // FIX: konsisten sama index()/show()
-            ]),
+            $aset->load(['jenis', 'supplier', 'kelengkapan.kelengkapanMaster', 'pemakaiPending.pekerja.user']),
             201
         );
     }

@@ -174,11 +174,6 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/audit-log', [AuditLogController::class, 'index']);
     Route::get('/audit-log/trash', [AuditLogController::class, 'trash']);
     Route::post('/aset-penanganan/{asetPenanganan}', [AsetPenangananController::class, 'update']); // pakai POST + _method=PUT biar konsisten sama pola aset/{aset}
-<<<<<<< HEAD
-    Route::post('/aset-penanganan/{asetPenanganan}/terima', [AsetPenangananController::class, 'terima']); // admin: terima/mulai tangani laporan kerusakan
-=======
-    Route::post('/aset-penanganan/{asetPenanganan}/terima', [AsetPenangananController::class, 'terima']); // admin: terima laporan, aset jadi "diperbaiki"
->>>>>>> 3c98b01764fee6937e600bb8b6187bd05f5af980
 });
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
@@ -187,6 +182,12 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     Route::get('/jenis-aset', [JenisAsetController::class, 'index']);
     Route::get('/kelengkapan-master', [KelengkapanMasterController::class, 'index']);
     Route::get('/supplier', [SupplierController::class, 'index']);
+});
+
+// BARU: dipisah ke grup admin+hr — endpoint ini nampilin SEMUA laporan
+// kerusakan dari SELURUH karyawan tanpa filter, jadi gak boleh diakses
+// karyawan/manajer biasa (data pribadi karyawan lain).
+Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
     Route::get('/aset-penanganan', [AsetPenangananController::class, 'index']);
 });
 
