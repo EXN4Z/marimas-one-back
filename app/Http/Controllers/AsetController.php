@@ -12,16 +12,21 @@ class AsetController extends Controller
 {
     /**
      * Sembunyiin no_struk_penerimaan/no_struk_pengembalian dari siapa aja
-     * selain admin dan karyawan yang jadi peminjam di record itu sendiri.
-     * Struk itu bukti fisik yang dipegang si peminjam — kalau bocor ke
-     * karyawan lain, orang lain bisa pura-pura jadi peminjam pas pengembalian.
+     * selain admin dan karyawan/akun cabang yang jadi peminjam di record itu
+     * sendiri. Struk itu bukti fisik yang dipegang si peminjam — kalau bocor
+     * ke pihak lain, orang lain bisa pura-pura jadi peminjam pas pengembalian.
+     *
+     * FIX: sebelumnya cuma cek $pemakai->pekerja?->user?->id, jadi akun
+     * cabang (yang gak punya pekerja, cuma user_id langsung) selalu dianggap
+     * BUKAN pemiliknya sendiri dan struknya ke-mask terus. Sekarang cek dua
+     * kemungkinan: lewat pekerja.user ATAU lewat user langsung.
      */
     private function maskStruk($pemakai, $userId, bool $isAdmin)
     {
         if ($isAdmin) {
             return $pemakai;
         }
-        $isOwner = $pemakai->pekerja?->user?->id === $userId;
+        $isOwner = ($pemakai->pekerja?->user?->id === $userId) || ($pemakai->user?->id === $userId);
         if (!$isOwner) {
             $pemakai->no_struk_penerimaan = null;
             $pemakai->no_struk_pengembalian = null;
@@ -42,7 +47,9 @@ class AsetController extends Controller
             'supplier',
             'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni.pekerja.user',
+            'pemakaiSaatIni.user', // FIX: penerima akun cabang gak punya pekerja, datanya di sini
             'pemakaiPending.pekerja.user', // baru — biar tau aset mana yang ada request pending
+            'pemakaiPending.user', // FIX: sama kayak di atas, buat pengajuan dari akun cabang
             'penangananAktif', // biar frontend tau aset mana yang laporan kerusakannya masih belum ditangani
         ])->latest()->get();
 
@@ -65,9 +72,13 @@ class AsetController extends Controller
             'supplier',
             'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni.pekerja.user', // baru — detail modal butuh ini buat tombol kontekstual (Terima Kembali / Lapor Kerusakan)
+            'pemakaiSaatIni.user', // FIX: penerima akun cabang
             'pemakai.pekerja.user',
+            'pemakai.user', // FIX: riwayat pemakai yang penerimanya akun cabang
             'pemakaiPending.pekerja.user', // baru
+            'pemakaiPending.user', // FIX: pengajuan dari akun cabang
             'penanganan.pemakai.pekerja.user',
+            'penanganan.pemakai.user', // FIX: siapa yang minjem pas lapor rusak, kalau dia akun cabang
             'penggantianSparepart',
             'penangananAktif',
         ]);
@@ -128,7 +139,13 @@ class AsetController extends Controller
         });
 
         return response()->json(
-            $aset->load(['jenis', 'supplier', 'kelengkapan.kelengkapanMaster', 'pemakaiPending.pekerja.user']),
+            $aset->load([
+                'jenis',
+                'supplier',
+                'kelengkapan.kelengkapanMaster',
+                'pemakaiPending.pekerja.user',
+                'pemakaiPending.user', // FIX: konsisten sama index()/show()
+            ]),
             201
         );
     }

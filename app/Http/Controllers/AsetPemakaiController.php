@@ -28,13 +28,14 @@ class AsetPemakaiController extends Controller
 
         $events = collect();
 
-        AsetPemakai::with(['aset:id,kode_aset,merek,tipe', 'pekerja.user:id,name'])
+        AsetPemakai::with(['aset:id,kode_aset,merek,tipe', 'pekerja.user:id,name', 'user:id,name'])
             ->where('status', 'disetujui')
             ->latest('tanggal_penerimaan')
             ->limit($ambil)
             ->get()
             ->each(function ($p) use (&$events) {
-                $nama = $p->pekerja?->user?->name ?? '-';
+                // penerima bisa karyawan (lewat pekerja.user) atau akun cabang (lewat user langsung)
+                $nama = $p->pekerja?->user?->name ?? $p->user?->name ?? '-';
                 $events->push([
                     'type' => 'pinjam',
                     'waktu' => $p->tanggal_penerimaan,
@@ -81,8 +82,10 @@ class AsetPemakaiController extends Controller
 
     /**
      * POST /aset/{aset}/pemakai
-     * Admin serah-terima aset langsung ke pekerja (tanpa lewat alur request/approve
-     * karyawan). Aset harus 'tersedia'. Struk penerimaan digenerate otomatis.
+     * Admin serah-terima aset langsung ke pekerja ATAU akun cabang (tanpa lewat
+     * alur request/approve). Kirim salah satu: pekerja_id (karyawan) atau
+     * user_id (akun cabang) — nggak boleh dua-duanya, nggak boleh kosong dua-duanya.
+     * Aset harus 'tersedia'. Struk penerimaan digenerate otomatis.
      */
     public function store(Request $request, Aset $aset)
     {
@@ -91,7 +94,17 @@ class AsetPemakaiController extends Controller
         }
 
         $validated = $request->validate([
-            'pekerja_id' => 'required|exists:pekerja,id',
+            'pekerja_id' => 'required_without:user_id|nullable|exists:pekerja,id',
+            'user_id' => [
+                'required_without:pekerja_id',
+                'nullable',
+                'exists:users,id',
+                function ($attribute, $value, $fail) {
+                    if ($value && \App\Models\User::where('id', $value)->where('role', 'cabang')->doesntExist()) {
+                        $fail('Akun yang dipilih bukan akun cabang.');
+                    }
+                },
+            ],
             'nomor_penerimaan' => 'nullable|string',
             'tanggal_penerimaan' => 'required|date',
             'catatan_penerimaan' => 'nullable|string',
@@ -102,7 +115,8 @@ class AsetPemakaiController extends Controller
 
             $pemakai = AsetPemakai::create([
                 'aset_id' => $aset->id,
-                'pekerja_id' => $validated['pekerja_id'],
+                'pekerja_id' => $validated['pekerja_id'] ?? null,
+                'user_id' => $validated['user_id'] ?? null,
                 'status' => 'disetujui',
                 'requested_by_user_id' => $request->user()?->id,
                 'nomor_penerimaan' => $validated['nomor_penerimaan'] ?? null,
@@ -116,12 +130,13 @@ class AsetPemakaiController extends Controller
             return $pemakai;
         });
 
-        return response()->json($pemakai->load('pekerja.user', 'aset'), 201);
+        return response()->json($pemakai->load('pekerja.user', 'user', 'aset'), 201);
     }
 
     /**
      * POST /api/aset/{aset}/pinjam
      * Karyawan request pinjam aset. Butuh approval admin sebelum resmi jadi pemakai.
+     * (Akun cabang tidak lewat alur ini — cabang cuma diserahkan langsung oleh admin lewat store()).
      */
     public function requestPinjam(Request $request, Aset $aset)
     {
@@ -161,7 +176,7 @@ class AsetPemakaiController extends Controller
      */
     public function pending()
     {
-        $list = AsetPemakai::with(['aset', 'pekerja.user'])
+        $list = AsetPemakai::with(['aset', 'pekerja.user', 'user'])
             ->where('status', 'pending')
             ->latest()
             ->get();
@@ -197,7 +212,7 @@ class AsetPemakaiController extends Controller
             $asetPemakai->aset()->update(['status' => 'dipakai']);
         });
 
-        return response()->json($asetPemakai->load('pekerja.user', 'aset'));
+        return response()->json($asetPemakai->load('pekerja.user', 'user', 'aset'));
     }
 
     /**
@@ -250,7 +265,7 @@ class AsetPemakaiController extends Controller
             $asetPemakai->aset()->update(['status' => 'tersedia']);
         });
 
-        return response()->json($asetPemakai->fresh()->load('pekerja.user', 'aset'));
+        return response()->json($asetPemakai->fresh()->load('pekerja.user', 'user', 'aset'));
     }
 
     /**
@@ -272,6 +287,6 @@ class AsetPemakaiController extends Controller
             'catatan_penolakan' => $validated['catatan_penolakan'] ?? null,
         ]);
 
-        return response()->json($asetPemakai->load('pekerja.user', 'aset'));
+        return response()->json($asetPemakai->load('pekerja.user', 'user', 'aset'));
     }
 }

@@ -55,7 +55,7 @@ class UserController extends Controller
 
         $plainPassword = Str::random(8);
 
-        $result = DB::transaction(function () use ($validated, $plainPassword) {
+        [$user, $pekerja] = DB::transaction(function () use ($validated, $plainPassword) {
             $user = User::create([
                 'name' => $validated['name'],
                 'email' => $validated['email'] ?? null,
@@ -66,7 +66,7 @@ class UserController extends Controller
 
             $pekerja = null;
 
-            // akun cabang nggak punya profil pekerja
+            // akun cabang mewakili entitas cabang, bukan pegawai — nggak punya profil pekerja
             if ($validated['role'] !== 'cabang') {
                 $pekerja = Pekerja::create([
                     'user_id' => $user->id,
@@ -83,8 +83,6 @@ class UserController extends Controller
             return [$user, $pekerja];
         });
 
-        [$user, $pekerja] = $result;
-
         return response()->json([
             'message' => 'User berhasil dibuat.',
             'user' => $user,
@@ -99,8 +97,8 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|unique:users,email,' . $user->id,
             'phone' => 'nullable|string|unique:users,phone,' . $user->id,
-            'role' => 'required|string|in:guest,karyawan,manajer,hr,admin',
-            'nip' => 'sometimes|required|string|unique:pekerja,nip,' . optional($user->pekerja)->id,
+            'role' => 'required|string|in:guest,karyawan,manajer,hr,admin,cabang',
+            'nip' => 'required_unless:role,cabang|nullable|string|unique:pekerja,nip,' . optional($user->pekerja)->id,
             'departemen_id' => 'nullable|exists:departemen,id',
             'jabatan_id' => 'nullable|exists:jabatan,id',
             'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
@@ -110,10 +108,26 @@ class UserController extends Controller
 
         $user->update(collect($validated)->only(['name', 'email', 'phone', 'role'])->toArray());
 
-        if ($user->pekerja) {
+        if ($validated['role'] === 'cabang') {
+            // role diubah jadi cabang -> hapus profil pekerja lama (kalau ada)
+            // ganti ke soft-delete / simpan histori dulu kalau nggak mau datanya hilang
+            $user->pekerja()?->delete();
+        } elseif ($user->pekerja) {
             $user->pekerja->update(
                 collect($validated)->only(['nip', 'departemen_id', 'jabatan_id', 'tanggal_masuk', 'kuota_izin_tahunan', 'lokasi_kantor_id'])->toArray()
             );
+        } else {
+            // role diubah dari cabang -> jadi role pegawai, tapi belum punya record pekerja
+            Pekerja::create([
+                'user_id' => $user->id,
+                'nip' => $validated['nip'],
+                'departemen_id' => $validated['departemen_id'] ?? null,
+                'jabatan_id' => $validated['jabatan_id'] ?? null,
+                'qr_code' => Str::uuid()->toString(),
+                'lokasi_kantor_id' => $validated['lokasi_kantor_id'] ?? null,
+                'tanggal_masuk' => $validated['tanggal_masuk'] ?? null,
+                'kuota_izin_tahunan' => $validated['kuota_izin_tahunan'] ?? 12,
+            ]);
         }
 
         return response()->json($user->load('pekerja.departemen', 'pekerja.jabatan', 'pekerja.lokasiKantor'));
