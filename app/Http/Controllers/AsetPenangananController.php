@@ -5,8 +5,12 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Concerns\GeneratesStrukNumber;
 use App\Models\AsetPemakai;
 use App\Models\AsetPenanganan;
+use App\Models\User;
+use App\Notifications\AsetKerusakanDilaporkan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 
 class AsetPenangananController extends Controller
 {
@@ -48,6 +52,22 @@ class AsetPenangananController extends Controller
             'keluhan' => $validated['keluhan'],
             'tanggal_lapor' => now(),
         ]);
+
+        // TAMBAH: notif ke manajer/hr/admin tiap ada laporan kerusakan aset masuk
+        // (database + broadcast + web push, biar kekirim walau admin lagi di luar device)
+        // try-catch: laporan yang SUDAH tersimpan di atas jangan ikut gagal kalau notif error
+        try {
+            Notification::send(
+                User::whereIn('role', ['manajer', 'hr', 'admin'])->get(),
+                new AsetKerusakanDilaporkan($penanganan->load(['aset.jenis', 'pemakai.pekerja.user']))
+            );
+        } catch (\Throwable $e) {
+            Log::error('Gagal mengirim notifikasi laporan kerusakan aset', [
+                'aset_penanganan_id' => $penanganan->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
 
         return response()->json($penanganan->load(['aset.jenis', 'pemakai.pekerja.user']), 201);
     }

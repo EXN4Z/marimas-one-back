@@ -31,6 +31,7 @@ use App\Http\Controllers\AsetPemakaiController;
 use App\Http\Controllers\AsetPenggantianSparepartController;
 use App\Http\Controllers\AsetPenangananController;
 use App\Http\Controllers\CabangController;
+use App\Http\Controllers\PushSubscriptionController;
 
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -56,6 +57,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/read-all', [NotificationController::class, 'markAllAsRead']);
         Route::delete('/{id}', [NotificationController::class, 'destroy']);
     });
+
+    Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store']);
+    Route::delete('/push-subscriptions', [PushSubscriptionController::class, 'destroy']);
 
     Route::get('/agenda', [AgendaController::class, 'index']);
 });
