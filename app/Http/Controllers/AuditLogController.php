@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
 use Illuminate\Http\Request;
+use Illuminate\Database\Eloquent\Builder;
 
 class AuditLogController extends Controller
 {
@@ -20,22 +21,41 @@ class AuditLogController extends Controller
             $query->where('method', $request->method);
         }
 
-        $limit = $request->get('limit', 50);
+        if ($request->filled('search')) {
+            $this->applySearch($query, $request->search);
+        }
 
-        return response()->json($query->limit($limit)->get());
+        $perPage = $request->get('per_page', 20);
+
+        return response()->json($query->paginate($perPage));
     }
 
     // GET /api/audit-log/trash — log yang sudah di-trash
     public function trash(Request $request)
     {
-        $limit = $request->get('limit', 50);
+        $query = AuditLog::onlyTrashed()
+            ->with('user:id,name')
+            ->latest('deleted_at');
 
-        return response()->json(
-            AuditLog::onlyTrashed()
-                ->with('user:id,name')
-                ->latest('deleted_at')
-                ->limit($limit)
-                ->get()
-        );
+        if ($request->filled('search')) {
+            $this->applySearch($query, $request->search);
+        }
+
+        $perPage = $request->get('per_page', 20);
+
+        return response()->json($query->paginate($perPage));
+    }
+
+    // Cari di deskripsi, endpoint, ip_address, dan nama user terkait.
+    private function applySearch(Builder $query, string $search): void
+    {
+        $query->where(function (Builder $q) use ($search) {
+            $q->where('deskripsi', 'like', "%{$search}%")
+                ->orWhere('endpoint', 'like', "%{$search}%")
+                ->orWhere('ip_address', 'like', "%{$search}%")
+                ->orWhereHas('user', function (Builder $userQuery) use ($search) {
+                    $userQuery->where('name', 'like', "%{$search}%");
+                });
+        });
     }
 }
