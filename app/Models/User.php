@@ -29,9 +29,10 @@ class User extends Authenticatable
     protected static array $roleLevels = [
         'guest' => 0,
         'karyawan' => 1,
-        'manajer' => 2,
-        'hr' => 3,
-        'admin' => 4,
+        'cabang' => 2,
+        'manajer' => 3,
+        'hr' => 4,
+        'admin' => 5,
     ];
     public function hasRoleAtLeast(string $role): bool
     {
