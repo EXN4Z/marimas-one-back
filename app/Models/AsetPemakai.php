@@ -11,6 +11,7 @@ class AsetPemakai extends Model
     protected $fillable = [
         'aset_id',
         'pekerja_id',
+        'user_id',
         'status',
         'requested_by_user_id',
         'nomor_penerimaan',
@@ -43,5 +44,7 @@ class AsetPemakai extends Model
     {
         return $this->hasMany(AsetPenanganan::class, 'aset_pemakai_id');
     }
-    
+    public function user() {
+        return $this->belongsTo(User::class);
+    }
 }
