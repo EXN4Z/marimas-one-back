@@ -164,10 +164,22 @@ class IzinController extends Controller
         ]);
 
         // TAMBAH: notif ke admin & hr tiap ada pengajuan izin baru yang masuk
-        Notification::send(
-            User::whereIn('role', ['admin', 'hr'])->get(),
-            new IzinBaruDiajukan($izin)
-        );
+        // PENTING: dibungkus try-catch supaya kalau pengiriman notifikasi gagal
+        // (mis. broadcast/websocket server belum jalan atau salah konfigurasi),
+        // pengajuan izin yang SUDAH berhasil dibuat di atas tidak ikut gagal
+        // (kalau tidak, exception di sini bikin request 500 walau data sudah tersimpan).
+        try {
+            Notification::send(
+                User::whereIn('role', ['admin', 'hr'])->get(),
+                new IzinBaruDiajukan($izin)
+            );
+        } catch (\Throwable $e) {
+            Log::error('Gagal mengirim notifikasi izin baru', [
+                'izin_id' => $izin->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
 
         return response()->json([
             'message' => 'Pengajuan izin berhasil dibuat.',
