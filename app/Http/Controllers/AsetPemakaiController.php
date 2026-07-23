@@ -15,6 +15,71 @@ class AsetPemakaiController extends Controller
     use GeneratesStrukNumber;
 
     /**
+     * GET /api/aset-pemakai/riwayat
+     * Riwayat global SEMUA aktivitas aset — bukan cuma pinjam/kembali, tapi juga
+     * lapor kerusakan + selesai perbaikan — digabung jadi satu feed, terbaru
+     * duluan. Buat panel riwayat di halaman Inventaris tab Aset. Jangan dicampur
+     * sama riwayat peminjaman barang (beda tabel/beda satuan).
+     */
+    public function riwayat(Request $request)
+    {
+        $limit = (int) $request->query('limit', 10);
+        $ambil = $limit * 2; // ambil lebih banyak dari tiap sumber biar aman pas digabung+dipotong
+
+        $events = collect();
+
+        AsetPemakai::with(['aset:id,kode_aset,merek,tipe', 'pekerja.user:id,name'])
+            ->where('status', 'disetujui')
+            ->latest('tanggal_penerimaan')
+            ->limit($ambil)
+            ->get()
+            ->each(function ($p) use (&$events) {
+                $nama = $p->pekerja?->user?->name ?? '-';
+                $events->push([
+                    'type' => 'pinjam',
+                    'waktu' => $p->tanggal_penerimaan,
+                    'nama' => $nama,
+                    'aset' => $p->aset,
+                ]);
+                if ($p->tanggal_pengembalian) {
+                    $events->push([
+                        'type' => 'kembali',
+                        'waktu' => $p->tanggal_pengembalian,
+                        'nama' => $nama,
+                        'aset' => $p->aset,
+                    ]);
+                }
+            });
+
+        AsetPenanganan::with('aset:id,kode_aset,merek,tipe')
+            ->latest('tanggal_lapor')
+            ->limit($ambil)
+            ->get()
+            ->each(function ($pn) use (&$events) {
+                $events->push([
+                    'type' => 'lapor_rusak',
+                    'waktu' => $pn->tanggal_lapor,
+                    'nama' => null,
+                    'aset' => $pn->aset,
+                    'keluhan' => $pn->keluhan,
+                ]);
+                if ($pn->tanggal_selesai) {
+                    $events->push([
+                        'type' => 'selesai_perbaikan',
+                        'waktu' => $pn->tanggal_selesai,
+                        'nama' => null,
+                        'aset' => $pn->aset,
+                        'hasil' => $pn->hasil,
+                    ]);
+                }
+            });
+
+        $riwayat = $events->sortByDesc('waktu')->values()->take($limit);
+
+        return response()->json($riwayat);
+    }
+
+    /**
      * POST /aset/{aset}/pemakai
      * Admin serah-terima aset langsung ke pekerja (tanpa lewat alur request/approve
      * karyawan). Aset harus 'tersedia'. Struk penerimaan digenerate otomatis.
