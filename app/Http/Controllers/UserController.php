@@ -44,8 +44,8 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|unique:users,email',
             'phone' => 'nullable|string|unique:users,phone',
-            'role' => 'required|string|in:guest,karyawan,manajer,hr,admin',
-            'nip' => 'required|string|unique:pekerja,nip',
+            'role' => 'required|string|in:guest,karyawan,manajer,hr,admin,cabang',
+            'nip' => 'required_unless:role,cabang|nullable|string|unique:pekerja,nip',
             'departemen_id' => 'nullable|exists:departemen,id',
             'jabatan_id' => 'nullable|exists:jabatan,id',
             'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
@@ -55,7 +55,7 @@ class UserController extends Controller
 
         $plainPassword = Str::random(8);
 
-        [$user, $pekerja] = DB::transaction(function () use ($validated, $plainPassword) {
+        $result = DB::transaction(function () use ($validated, $plainPassword) {
             $user = User::create([
                 'name' => $validated['name'],
                 'email' => $validated['email'] ?? null,
@@ -64,24 +64,31 @@ class UserController extends Controller
                 'role' => $validated['role'],
             ]);
 
-            $pekerja = Pekerja::create([
-                'user_id' => $user->id,
-                'nip' => $validated['nip'],
-                'departemen_id' => $validated['departemen_id'] ?? null,
-                'jabatan_id' => $validated['jabatan_id'] ?? null,
-                'qr_code' => Str::uuid()->toString(),
-                'lokasi_kantor_id' => $validated['lokasi_kantor_id'] ?? null,
-                'tanggal_masuk' => $validated['tanggal_masuk'] ?? null,
-                'kuota_izin_tahunan' => $validated['kuota_izin_tahunan'] ?? 12,
-            ]);
+            $pekerja = null;
+
+            // akun cabang nggak punya profil pekerja
+            if ($validated['role'] !== 'cabang') {
+                $pekerja = Pekerja::create([
+                    'user_id' => $user->id,
+                    'nip' => $validated['nip'],
+                    'departemen_id' => $validated['departemen_id'] ?? null,
+                    'jabatan_id' => $validated['jabatan_id'] ?? null,
+                    'qr_code' => Str::uuid()->toString(),
+                    'lokasi_kantor_id' => $validated['lokasi_kantor_id'] ?? null,
+                    'tanggal_masuk' => $validated['tanggal_masuk'] ?? null,
+                    'kuota_izin_tahunan' => $validated['kuota_izin_tahunan'] ?? 12,
+                ]);
+            }
 
             return [$user, $pekerja];
         });
 
+        [$user, $pekerja] = $result;
+
         return response()->json([
-            'message' => 'Karyawan berhasil dibuat.',
+            'message' => 'User berhasil dibuat.',
             'user' => $user,
-            'pekerja' => $pekerja->load('departemen', 'jabatan'),
+            'pekerja' => $pekerja?->load('departemen', 'jabatan'),
             'password' => $plainPassword,
         ], 201);
     }
