@@ -10,12 +10,13 @@ class AsetPenanganan extends Model
 
     protected $fillable = [
         'aset_id', 'aset_pemakai_id', 'jenis_kerusakan', 'keluhan',
-        'tanggal_lapor', 'tanggal_selesai', 'harga_jasa', 'biaya_komponen',
+        'tanggal_lapor', 'tanggal_diterima', 'tanggal_selesai', 'harga_jasa', 'biaya_komponen',
         'hasil', 'no_struk', 'catatan',
     ];
 
     protected $casts = [
         'tanggal_lapor' => 'date',
+        'tanggal_diterima' => 'date',
         'tanggal_selesai' => 'date',
         'harga_jasa' => 'decimal:2',
         'biaya_komponen' => 'decimal:2',

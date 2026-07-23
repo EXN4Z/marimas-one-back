@@ -31,6 +31,7 @@ use App\Http\Controllers\AsetPemakaiController;
 use App\Http\Controllers\AsetPenggantianSparepartController;
 use App\Http\Controllers\AsetPenangananController;
 use App\Http\Controllers\CabangController;
+use App\Http\Controllers\PushSubscriptionController;
 
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -56,6 +57,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/read-all', [NotificationController::class, 'markAllAsRead']);
         Route::delete('/{id}', [NotificationController::class, 'destroy']);
     });
+
+    Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store']);
+    Route::delete('/push-subscriptions', [PushSubscriptionController::class, 'destroy']);
 
     Route::get('/agenda', [AgendaController::class, 'index']);
 });
@@ -170,6 +174,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/audit-log', [AuditLogController::class, 'index']);
     Route::get('/audit-log/trash', [AuditLogController::class, 'trash']);
     Route::post('/aset-penanganan/{asetPenanganan}', [AsetPenangananController::class, 'update']); // pakai POST + _method=PUT biar konsisten sama pola aset/{aset}
+    Route::post('/aset-penanganan/{asetPenanganan}/terima', [AsetPenangananController::class, 'terima']); // admin: terima laporan, aset jadi "diperbaiki"
 });
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
