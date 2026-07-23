@@ -20,22 +20,21 @@ class AuditLogController extends Controller
             $query->where('method', $request->method);
         }
 
-        $limit = $request->get('limit', 50);
+        $perPage = $request->get('per_page', 20);
 
-        return response()->json($query->limit($limit)->get());
+        return response()->json($query->paginate($perPage));
     }
 
     // GET /api/audit-log/trash — log yang sudah di-trash
     public function trash(Request $request)
     {
-        $limit = $request->get('limit', 50);
+        $perPage = $request->get('per_page', 20);
 
         return response()->json(
             AuditLog::onlyTrashed()
                 ->with('user:id,name')
                 ->latest('deleted_at')
-                ->limit($limit)
-                ->get()
+                ->paginate($perPage)
         );
     }
 }
