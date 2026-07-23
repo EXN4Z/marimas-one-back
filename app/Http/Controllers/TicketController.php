@@ -61,10 +61,20 @@ class TicketController extends Controller
         ]);
 
         // TAMBAH: notif ke manajer/hr/admin tiap ada laporan baru masuk
-        Notification::send(
-            User::whereIn('role', ['manajer', 'hr', 'admin'])->get(),
-            new TicketBaruMasuk($ticket)
-        );
+        // PENTING: try-catch supaya laporan yang SUDAH tersimpan di atas tidak
+        // ikut gagal kalau pengiriman notifikasi bermasalah.
+        try {
+            Notification::send(
+                User::whereIn('role', ['manajer', 'hr', 'admin'])->get(),
+                new TicketBaruMasuk($ticket)
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Gagal mengirim notifikasi tiket baru', [
+                'ticket_id' => $ticket->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
 
         return response()->json(
             $ticket->load('pelapor:id,name,role'),
