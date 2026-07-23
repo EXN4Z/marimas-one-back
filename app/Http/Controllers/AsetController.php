@@ -30,6 +30,27 @@ class AsetController extends Controller
     }
 
     /**
+     * BARU: karyawan/manajer cuma boleh lihat baris aset yang (a) lagi dia
+     * pinjam sendiri, atau (b) berstatus "tersedia" (biar bisa diajukan
+     * pinjam). Aset yang lagi dipinjam/ditangani KARYAWAN LAIN disembunyikan
+     * total dari tabel & gak bisa diakses langsung lewat /aset/{id}.
+     */
+    private function visibleToUser(Aset $aset, int $userId, bool $isPrivileged): bool
+    {
+        if ($isPrivileged) {
+            return true;
+        }
+
+        // gak ada pemakai saat ini (tersedia, atau rusak tanpa pemakai
+        // terpasang) — tetap kelihatan biar bisa diajukan pinjam.
+        if (!$aset->pemakaiSaatIni) {
+            return true;
+        }
+
+        return $aset->pemakaiSaatIni->pekerja?->user?->id === $userId;
+    }
+
+    /**
      * BARU: karyawan/manajer cuma boleh lihat DATA PRIBADI sendiri — bukan siapa
      * aja yang pinjam/lapor kerusakan aset lain. Cuma admin & hr yang boleh lihat
      * identitas & riwayat lengkap semua karyawan. Aset itu sendiri (kode, jenis,
@@ -102,6 +123,10 @@ class AsetController extends Controller
             'penangananAktif', // biar frontend tau aset mana yang laporan kerusakannya masih belum ditangani
         ])->latest()->get();
 
+        // BARU: buang total baris aset yang lagi dipinjam/ditangani KARYAWAN
+        // LAIN — karyawan biasa cuma boleh lihat punya sendiri + yang tersedia.
+        $aset = $aset->filter(fn ($a) => $this->visibleToUser($a, $userId, $isPrivileged))->values();
+
         $aset->each(function ($a) use ($userId, $isPrivileged) {
             if ($a->pemakaiSaatIni) {
                 $this->maskStruk($a->pemakaiSaatIni, $userId, $isPrivileged);
@@ -129,6 +154,11 @@ class AsetController extends Controller
             'penggantianSparepart',
             'penangananAktif',
         ]);
+
+        // BARU: kalau aset ini lagi dipinjam KARYAWAN LAIN, tolak akses sama
+        // sekali — konsisten sama yang disembunyikan di index(), dan mencegah
+        // karyawan buka detail lewat URL/API langsung.
+        abort_unless($this->visibleToUser($aset, $userId, $isPrivileged), 403, 'Anda tidak punya akses ke aset ini.');
 
         if ($aset->pemakaiSaatIni) {
             $this->maskStruk($aset->pemakaiSaatIni, $userId, $isPrivileged);
