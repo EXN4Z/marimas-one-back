@@ -28,22 +28,18 @@ class AsetPemakaiController extends Controller
 
         $events = collect();
 
-<<<<<<< HEAD
-        AsetPemakai::with(['aset:id,kode_aset,merek,tipe', 'pekerja.user:id,name'])
-=======
-        AsetPemakai::with(['aset:id,kode_aset,merek,tipe', 'pekerja.user:id,name', 'user:id,name'])
->>>>>>> 3c98b01764fee6937e600bb8b6187bd05f5af980
+        AsetPemakai::with([
+            'aset:id,kode_aset,merek,tipe',
+            'pekerja.user:id,name',
+            'user:id,name', // BARU — akun cabang gak punya pekerja, jadi user-nya harus di-load langsung
+        ])
             ->where('status', 'disetujui')
             ->latest('tanggal_penerimaan')
             ->limit($ambil)
             ->get()
             ->each(function ($p) use (&$events) {
-<<<<<<< HEAD
-                $nama = $p->pekerja?->user?->name ?? '-';
-=======
-                // penerima bisa karyawan (lewat pekerja.user) atau akun cabang (lewat user langsung)
+                // BARU — jatuh ke $p->user->name kalau pekerja-nya kosong (akun cabang)
                 $nama = $p->pekerja?->user?->name ?? $p->user?->name ?? '-';
->>>>>>> 3c98b01764fee6937e600bb8b6187bd05f5af980
                 $events->push([
                     'type' => 'pinjam',
                     'waktu' => $p->tanggal_penerimaan,

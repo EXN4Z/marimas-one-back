@@ -66,11 +66,7 @@ class UserController extends Controller
 
             $pekerja = null;
 
-<<<<<<< HEAD
             // akun cabang nggak punya profil pekerja
-=======
-            // akun cabang mewakili entitas cabang, bukan pegawai — nggak punya profil pekerja
->>>>>>> 3c98b01764fee6937e600bb8b6187bd05f5af980
             if ($validated['role'] !== 'cabang') {
                 $pekerja = Pekerja::create([
                     'user_id' => $user->id,

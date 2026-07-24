@@ -11,6 +11,17 @@ use Illuminate\Support\Facades\Storage;
 class AsetController extends Controller
 {
     /**
+     * BARU: ambil user id pemakai, entah dia karyawan (lewat pekerja.user)
+     * atau akun cabang (lewat user langsung). Dipakai di semua tempat yang
+     * sebelumnya cuma cek $pemakai->pekerja?->user?->id, biar akun cabang
+     * ikut kedeteksi dengan benar (bukan cuma karyawan).
+     */
+    private function pemakaiUserId($pemakai): ?int
+    {
+        return $pemakai?->pekerja?->user?->id ?? $pemakai?->user?->id;
+    }
+
+    /**
      * Sembunyiin no_struk_penerimaan/no_struk_pengembalian dari siapa aja
      * selain admin/hr dan karyawan yang jadi peminjam di record itu sendiri.
      * Struk itu bukti fisik yang dipegang si peminjam — kalau bocor ke
@@ -21,7 +32,7 @@ class AsetController extends Controller
         if ($isPrivileged) {
             return $pemakai;
         }
-        $isOwner = $pemakai->pekerja?->user?->id === $userId;
+        $isOwner = $this->pemakaiUserId($pemakai) === $userId;
         if (!$isOwner) {
             $pemakai->no_struk_penerimaan = null;
             $pemakai->no_struk_pengembalian = null;
@@ -47,7 +58,7 @@ class AsetController extends Controller
             return true;
         }
 
-        return $aset->pemakaiSaatIni->pekerja?->user?->id === $userId;
+        return $this->pemakaiUserId($aset->pemakaiSaatIni) === $userId;
     }
 
     /**
@@ -65,11 +76,17 @@ class AsetController extends Controller
 
         // pemakai_saat_ini: tetap tampil (dipakai buat cek status "aku yang pinjam
         // apa nggak" & tombol Kembalikan/Lapor Kerusakan), tapi nama & struk orang
-        // lain disembunyikan.
+        // lain disembunyikan. Berlaku buat dua bentuk pemakai: karyawan (pekerja.user)
+        // ATAU akun cabang (user langsung).
         if ($aset->relationLoaded('pemakaiSaatIni') && $aset->pemakaiSaatIni) {
-            $isOwner = $aset->pemakaiSaatIni->pekerja?->user?->id === $userId;
-            if (!$isOwner && $aset->pemakaiSaatIni->pekerja?->user) {
-                $aset->pemakaiSaatIni->pekerja->user->name = null;
+            $isOwner = $this->pemakaiUserId($aset->pemakaiSaatIni) === $userId;
+            if (!$isOwner) {
+                if ($aset->pemakaiSaatIni->pekerja?->user) {
+                    $aset->pemakaiSaatIni->pekerja->user->name = null;
+                }
+                if ($aset->pemakaiSaatIni->user) {
+                    $aset->pemakaiSaatIni->user->name = null;
+                }
             }
         }
 
@@ -77,9 +94,14 @@ class AsetController extends Controller
         // masih nunggu"), tapi nama pengaju lain disembunyikan.
         if ($aset->relationLoaded('pemakaiPending')) {
             $aset->pemakaiPending->each(function ($p) use ($userId) {
-                $isOwner = $p->pekerja?->user?->id === $userId;
-                if (!$isOwner && $p->pekerja?->user) {
-                    $p->pekerja->user->name = null;
+                $isOwner = $this->pemakaiUserId($p) === $userId;
+                if (!$isOwner) {
+                    if ($p->pekerja?->user) {
+                        $p->pekerja->user->name = null;
+                    }
+                    if ($p->user) {
+                        $p->user->name = null;
+                    }
                 }
             });
         }
@@ -88,7 +110,7 @@ class AsetController extends Controller
         if ($aset->relationLoaded('pemakai')) {
             $aset->setRelation(
                 'pemakai',
-                $aset->pemakai->filter(fn ($p) => $p->pekerja?->user?->id === $userId)->values()
+                $aset->pemakai->filter(fn ($p) => $this->pemakaiUserId($p) === $userId)->values()
             );
         }
 
@@ -98,7 +120,7 @@ class AsetController extends Controller
         if ($aset->relationLoaded('penanganan')) {
             $aset->setRelation(
                 'penanganan',
-                $aset->penanganan->filter(fn ($p) => $p->pemakai?->pekerja?->user?->id === $userId)->values()
+                $aset->penanganan->filter(fn ($p) => $this->pemakaiUserId($p->pemakai) === $userId)->values()
             );
         }
 
@@ -119,7 +141,9 @@ class AsetController extends Controller
             'supplier',
             'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni.pekerja.user',
-            'pemakaiPending.pekerja.user', // baru — biar tau aset mana yang ada request pending
+            'pemakaiSaatIni.user', // BARU — akun cabang gak punya pekerja, jadi user-nya harus di-load langsung
+            'pemakaiPending.pekerja.user',
+            'pemakaiPending.user', // BARU — sama, buat akun cabang yang lagi ngajuin pinjam
             'penangananAktif', // biar frontend tau aset mana yang laporan kerusakannya masih belum ditangani
         ])->latest()->get();
 
@@ -136,7 +160,7 @@ class AsetController extends Controller
 
         return response()->json($aset);
     }
-    
+
     public function show(Request $request, Aset $aset)
     {
         $user = $request->user();
@@ -148,9 +172,13 @@ class AsetController extends Controller
             'supplier',
             'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni.pekerja.user', // baru — detail modal butuh ini buat tombol kontekstual (Terima Kembali / Lapor Kerusakan)
+            'pemakaiSaatIni.user', // BARU — akun cabang
             'pemakai.pekerja.user',
+            'pemakai.user', // BARU — riwayat pemakai buat akun cabang
             'pemakaiPending.pekerja.user', // baru
+            'pemakaiPending.user', // BARU
             'penanganan.pemakai.pekerja.user',
+            'penanganan.pemakai.user', // BARU — riwayat perbaikan yang dilaporkan akun cabang
             'penggantianSparepart',
             'penangananAktif',
         ]);
@@ -219,7 +247,13 @@ class AsetController extends Controller
         });
 
         return response()->json(
-            $aset->load(['jenis', 'supplier', 'kelengkapan.kelengkapanMaster', 'pemakaiPending.pekerja.user']),
+            $aset->load([
+                'jenis',
+                'supplier',
+                'kelengkapan.kelengkapanMaster',
+                'pemakaiPending.pekerja.user',
+                'pemakaiPending.user', // BARU
+            ]),
             201
         );
     }
