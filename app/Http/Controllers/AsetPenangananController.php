@@ -152,18 +152,32 @@ class AsetPenangananController extends Controller
 
             $asetPenanganan->update($validated);
 
-            // balikin status aset ke normal begitu ditandai selesai: kalau masih
-            // ada pemakai aktif yang belum ngembaliin ya "dipakai" lagi, kalau
-            // enggak ya balik "tersedia" — bukan asal "tersedia" biar gak nyalahin
-            // data peminjaman yang masih jalan.
             if ($validated['tanggal_selesai'] ?? null) {
-                $masihDipakai = AsetPemakai::where('aset_id', $asetPenanganan->aset_id)
-                    ->where('status', 'disetujui')
-                    ->whereNull('tanggal_pengembalian')
-                    ->exists();
+                // FIX: hasil "rusak_berat" sebelumnya gak pernah dicek di sini,
+                // jadi aset selalu dibalikin ke 'dipakai'/'tersedia' walau admin
+                // udah pilih rusak berat di form. Sekarang dicek dulu hasil
+                // akhirnya (pakai nilai yang baru disimpan, fallback ke nilai
+                // lama kalau field 'hasil' gak dikirim di request ini).
+                $hasilAkhir = $validated['hasil'] ?? $asetPenanganan->hasil;
 
-                Aset::whereKey($asetPenanganan->aset_id)
-                    ->update(['status' => $masihDipakai ? 'dipakai' : 'tersedia']);
+                if ($hasilAkhir === 'rusak_berat') {
+                    // Rusak berat: aset TIDAK boleh balik ke sirkulasi peminjaman
+                    // (tersedia/dipakai) — dikunci di status 'rusak' sampai admin
+                    // menindaklanjuti (jual/buang/hapus dari inventaris).
+                    Aset::whereKey($asetPenanganan->aset_id)->update(['status' => 'rusak']);
+                } else {
+                    // balikin status aset ke normal begitu ditandai selesai: kalau masih
+                    // ada pemakai aktif yang belum ngembaliin ya "dipakai" lagi, kalau
+                    // enggak ya balik "tersedia" — bukan asal "tersedia" biar gak nyalahin
+                    // data peminjaman yang masih jalan.
+                    $masihDipakai = AsetPemakai::where('aset_id', $asetPenanganan->aset_id)
+                        ->where('status', 'disetujui')
+                        ->whereNull('tanggal_pengembalian')
+                        ->exists();
+
+                    Aset::whereKey($asetPenanganan->aset_id)
+                        ->update(['status' => $masihDipakai ? 'dipakai' : 'tersedia']);
+                }
             }
         });
 
