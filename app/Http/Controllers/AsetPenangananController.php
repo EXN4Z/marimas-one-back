@@ -42,10 +42,12 @@ class AsetPenangananController extends Controller
 
         // cegah lapor dobel kalau aset ini masih ada laporan yang belum selesai ditangani
         // (baik yang masih menunggu diterima admin, maupun yang sudah diterima/sedang diperbaiki)
-        if (in_array($aset->status, ['menunggu_perbaikan', 'diperbaiki'], true)) {
-            return response()->json([
-                'message' => 'Aset ini sudah dilaporkan rusak dan sedang dalam penanganan.',
-            ], 422);
+        if (in_array($aset->status, ['menunggu_perbaikan', 'diperbaiki', 'rusak_berat'], true)) {
+            $pesan = $aset->status === 'rusak_berat'
+                ? 'Aset ini sudah dinyatakan rusak berat, tidak bisa dilaporkan kerusakan lagi.'
+                : 'Aset ini sudah dilaporkan rusak dan sedang dalam penanganan.';
+
+            return response()->json(['message' => $pesan], 422);
         }
 
         // cegah lapor 2x: kalau aset ini masih ada laporan yang belum kelar
@@ -129,9 +131,17 @@ class AsetPenangananController extends Controller
             'tanggal_selesai' => 'nullable|date',
             'harga_jasa' => 'nullable|numeric|min:0',
             'biaya_komponen' => 'nullable|numeric|min:0',
-            'hasil' => 'nullable|string',
+            'hasil' => 'nullable|in:diperbaiki,rusak_berat',
             'catatan' => 'nullable|string',
         ]);
+
+        // rusak berat = gak ada biaya perbaikan (emang gak diperbaiki), jadi
+        // paksa null di server juga -- jangan cuma andelin frontend yang
+        // disable input-nya, biar gak ada celah kirim biaya manual lewat API.
+        if (($validated['hasil'] ?? null) === 'rusak_berat') {
+            $validated['harga_jasa'] = null;
+            $validated['biaya_komponen'] = null;
+        }
 
         // kalau tanggal_selesai gak dikirim eksplisit, anggap "tandai selesai sekarang"
         if (!$request->has('tanggal_selesai')) {
@@ -152,18 +162,25 @@ class AsetPenangananController extends Controller
 
             $asetPenanganan->update($validated);
 
-            // balikin status aset ke normal begitu ditandai selesai: kalau masih
+            // begitu ditandai selesai: kalau hasilnya rusak berat, aset gak
+            // balik "tersedia" (gak bisa dipinjem lagi) — status khusus
+            // 'rusak_berat', tetep nempel di tabel Aset yang sama.
+            // Selain itu (diperbaiki), balikin status ke normal: kalau masih
             // ada pemakai aktif yang belum ngembaliin ya "dipakai" lagi, kalau
-            // enggak ya balik "tersedia" — bukan asal "tersedia" biar gak nyalahin
-            // data peminjaman yang masih jalan.
+            // enggak ya balik "tersedia" — bukan asal "tersedia" biar gak
+            // nyalahin data peminjaman yang masih jalan.
             if ($validated['tanggal_selesai'] ?? null) {
-                $masihDipakai = AsetPemakai::where('aset_id', $asetPenanganan->aset_id)
-                    ->where('status', 'disetujui')
-                    ->whereNull('tanggal_pengembalian')
-                    ->exists();
+                if (($validated['hasil'] ?? null) === 'rusak_berat') {
+                    Aset::whereKey($asetPenanganan->aset_id)->update(['status' => 'rusak_berat']);
+                } else {
+                    $masihDipakai = AsetPemakai::where('aset_id', $asetPenanganan->aset_id)
+                        ->where('status', 'disetujui')
+                        ->whereNull('tanggal_pengembalian')
+                        ->exists();
 
-                Aset::whereKey($asetPenanganan->aset_id)
-                    ->update(['status' => $masihDipakai ? 'dipakai' : 'tersedia']);
+                    Aset::whereKey($asetPenanganan->aset_id)
+                        ->update(['status' => $masihDipakai ? 'dipakai' : 'tersedia']);
+                }
             }
         });
 
