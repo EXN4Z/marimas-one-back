@@ -67,11 +67,7 @@ class AsetPenangananController extends Controller
             ->whereHas('pekerja', fn ($q) => $q->where('user_id', $user->id))
             ->first();
 
-<<<<<<< HEAD
-        $penanganan = DB::transaction(function () use ($validated, $pemakai, $aset) {
-=======
         $penanganan = DB::transaction(function () use ($validated, $pemakai) {
->>>>>>> 3c98b01764fee6937e600bb8b6187bd05f5af980
             // nullable: laporan kerusakan bisa juga muncul pas aset lagi nganggur (audit gudang)
             $penanganan = AsetPenanganan::create([
                 'aset_id' => $validated['aset_id'],
@@ -81,15 +77,6 @@ class AsetPenangananController extends Controller
                 'tanggal_lapor' => now(),
             ]);
 
-<<<<<<< HEAD
-            // TAMBAH: begitu ada laporan kerusakan baru, status aset di tabel inventaris
-            // langsung berubah jadi "menunggu_perbaikan" — kelihatan baik oleh admin
-            // maupun karyawan, sampai admin menerima & mulai menangani laporannya.
-            $aset->update(['status' => 'menunggu_perbaikan']);
-
-            return $penanganan;
-        });
-=======
             // aset langsung ganti status "menunggu_perbaikan" biar kelihatan di tabel
             // (dan biar tombol "Lapor Kerusakan" ilang, gak bisa dobel lapor)
             Aset::whereKey($validated['aset_id'])->update(['status' => 'menunggu_perbaikan']);
@@ -112,26 +99,10 @@ class AsetPenangananController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
         }
->>>>>>> 3c98b01764fee6937e600bb8b6187bd05f5af980
 
         return response()->json($penanganan->load(['aset.jenis', 'pemakai.pekerja.user']), 201);
     }
 
-<<<<<<< HEAD
-    // BARU: admin terima/mulai tangani laporan kerusakan -> status aset jadi "diperbaiki"
-    public function terima(AsetPenanganan $asetPenanganan)
-    {
-        if ($asetPenanganan->tanggal_diterima) {
-            return response()->json([
-                'message' => 'Laporan ini sudah diterima sebelumnya.',
-            ], 422);
-        }
-
-        if ($asetPenanganan->tanggal_selesai) {
-            return response()->json([
-                'message' => 'Laporan ini sudah ditandai selesai.',
-            ], 422);
-=======
     // admin: terima & mulai tangani laporan -> aset jadi "diperbaiki" (sedang diperbaiki)
     public function terima(AsetPenanganan $asetPenanganan)
     {
@@ -141,16 +112,11 @@ class AsetPenangananController extends Controller
 
         if ($asetPenanganan->tanggal_selesai) {
             return response()->json(['message' => 'Laporan ini sudah selesai ditangani.'], 422);
->>>>>>> 3c98b01764fee6937e600bb8b6187bd05f5af980
         }
 
         DB::transaction(function () use ($asetPenanganan) {
             $asetPenanganan->update(['tanggal_diterima' => now()]);
-<<<<<<< HEAD
-            $asetPenanganan->aset()->update(['status' => 'diperbaiki']);
-=======
             Aset::whereKey($asetPenanganan->aset_id)->update(['status' => 'diperbaiki']);
->>>>>>> 3c98b01764fee6937e600bb8b6187bd05f5af980
         });
 
         return response()->json($asetPenanganan->fresh()->load(['aset.jenis', 'pemakai.pekerja.user']));
@@ -186,30 +152,18 @@ class AsetPenangananController extends Controller
 
             $asetPenanganan->update($validated);
 
-<<<<<<< HEAD
-            // TAMBAH: begitu perbaikan ditandai selesai, status aset di tabel inventaris
-            // balik lagi — jadi "dipakai" kalau masih ada pemakai aktif, atau "tersedia" kalau tidak.
-            if ($validated['tanggal_selesai'] ?? null) {
-                $aset = $asetPenanganan->aset;
-                $masihDipakai = AsetPemakai::where('aset_id', $aset->id)
-=======
             // balikin status aset ke normal begitu ditandai selesai: kalau masih
             // ada pemakai aktif yang belum ngembaliin ya "dipakai" lagi, kalau
             // enggak ya balik "tersedia" — bukan asal "tersedia" biar gak nyalahin
             // data peminjaman yang masih jalan.
             if ($validated['tanggal_selesai'] ?? null) {
                 $masihDipakai = AsetPemakai::where('aset_id', $asetPenanganan->aset_id)
->>>>>>> 3c98b01764fee6937e600bb8b6187bd05f5af980
                     ->where('status', 'disetujui')
                     ->whereNull('tanggal_pengembalian')
                     ->exists();
 
-<<<<<<< HEAD
-                $aset->update(['status' => $masihDipakai ? 'dipakai' : 'tersedia']);
-=======
                 Aset::whereKey($asetPenanganan->aset_id)
                     ->update(['status' => $masihDipakai ? 'dipakai' : 'tersedia']);
->>>>>>> 3c98b01764fee6937e600bb8b6187bd05f5af980
             }
         });
 
