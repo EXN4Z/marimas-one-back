@@ -317,13 +317,21 @@ class AsetController extends Controller
      */
     public function destroy(Aset $aset)
     {
-        if ($aset->foto) {
-            Storage::disk('public')->delete($aset->foto);
+        if ($aset->penanganan()->exists()) {
+            return response()->json([
+                'message' => 'Aset ini punya riwayat perbaikan/penanganan dan tidak bisa dihapus.',
+            ], 422);
+        }
+
+        if ($aset->pemakai()->exists()) {
+            return response()->json([
+                'message' => 'Aset ini punya riwayat peminjaman dan tidak bisa dihapus.',
+            ], 422);
         }
 
         $aset->delete();
 
-        return response()->json(['message' => "Aset {$aset->kode_aset} berhasil dihapus."]);
+        return response()->json(['message' => 'Aset berhasil dihapus.']);
     }
 
     /**
