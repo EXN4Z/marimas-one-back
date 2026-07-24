@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AsetPenangananController extends Controller
@@ -129,10 +130,19 @@ class AsetPenangananController extends Controller
     {
         $validated = $request->validate([
             'tanggal_selesai' => 'nullable|date',
-            'harga_jasa' => 'nullable|numeric|min:0',
-            'biaya_komponen' => 'nullable|numeric|min:0',
+            'harga_jasa' => [
+                'nullable', 'numeric', 'min:0',
+                Rule::requiredIf(fn () => $request->input('hasil') === 'diperbaiki'),
+            ],
+            'biaya_komponen' => [
+                'nullable', 'numeric', 'min:0',
+                Rule::requiredIf(fn () => $request->input('hasil') === 'diperbaiki'),
+            ],
             'hasil' => 'nullable|in:diperbaiki,rusak_berat',
             'catatan' => 'nullable|string',
+        ], [
+            'harga_jasa.required' => 'Biaya jasa wajib diisi kalau hasilnya diperbaiki.',
+            'biaya_komponen.required' => 'Biaya komponen wajib diisi kalau hasilnya diperbaiki.',
         ]);
 
         // rusak berat = gak ada biaya perbaikan (emang gak diperbaiki), jadi
