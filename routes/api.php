@@ -66,7 +66,11 @@ Route::middleware(['auth:sanctum'])->group(function () {
 Route::middleware(['auth:sanctum', 'role:admin'])->post('/admin/users/{id}/reset-password', [AdminUserController::class, 'resetPassword']);
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
-    Route::post('/aset/{aset}/pinjam', [AsetPemakaiController::class, 'requestPinjam']); // karyawan: request pinjam aset
+    // DICABUT: karyawan gak boleh lagi request pinjam sendiri. Aset cuma boleh
+    // diserahkan admin lewat AsetPemakaiController::store() (tombol "Serahkan"
+    // di tab Aset). Method requestPinjam() masih ada di controller tapi udah
+    // gak ke-route kemana pun -- sengaja dibiarin nganggur, bukan dihapus,
+    // biar gampang di-revert kalau alur ini mau dipake lagi nanti.
     Route::post('/aset-penanganan', [AsetPenangananController::class, 'store']); // karyawan: lapor kerusakan aset yang lagi dia pakai
 
     Route::prefix('absensi')->group(function () {
