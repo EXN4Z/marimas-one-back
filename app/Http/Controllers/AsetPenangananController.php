@@ -170,7 +170,12 @@ class AsetPenangananController extends Controller
             // enggak ya balik "tersedia" — bukan asal "tersedia" biar gak
             // nyalahin data peminjaman yang masih jalan.
             if ($validated['tanggal_selesai'] ?? null) {
-                if (($validated['hasil'] ?? null) === 'rusak_berat') {
+                // fallback ke hasil yang udah kesimpen kalau request ini gak
+                // ngirim ulang field 'hasil' (mis. admin cuma edit catatan) --
+                // jangan sampai aset rusak_berat ke-reset balik ke tersedia/dipakai.
+                $hasilAkhir = $validated['hasil'] ?? $asetPenanganan->hasil;
+
+                if ($hasilAkhir === 'rusak_berat') {
                     Aset::whereKey($asetPenanganan->aset_id)->update(['status' => 'rusak_berat']);
                 } else {
                     $masihDipakai = AsetPemakai::where('aset_id', $asetPenanganan->aset_id)
