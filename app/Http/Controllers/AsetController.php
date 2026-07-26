@@ -2,347 +2,308 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\GeneratesStrukNumber;
 use App\Models\Aset;
-use App\Models\AsetKelengkapan;
+use App\Models\AsetPemakai;
+use App\Models\AsetPenanganan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
-class AsetController extends Controller
+class AsetPemakaiController extends Controller
 {
-    /**
-     * BARU: ambil user id pemakai, entah dia karyawan (lewat pekerja.user)
-     * atau akun cabang (lewat user langsung). Dipakai di semua tempat yang
-     * sebelumnya cuma cek $pemakai->pekerja?->user?->id, biar akun cabang
-     * ikut kedeteksi dengan benar (bukan cuma karyawan).
-     */
-    private function pemakaiUserId($pemakai): ?int
-    {
-        return $pemakai?->pekerja?->user?->id ?? $pemakai?->user?->id;
-    }
+    use GeneratesStrukNumber;
 
     /**
-     * Sembunyiin no_struk_penerimaan/no_struk_pengembalian dari siapa aja
-     * selain admin/hr dan karyawan yang jadi peminjam di record itu sendiri.
-     * Struk itu bukti fisik yang dipegang si peminjam — kalau bocor ke
-     * karyawan lain, orang lain bisa pura-pura jadi peminjam pas pengembalian.
+     * GET /api/aset-pemakai/riwayat
+     * Riwayat global SEMUA aktivitas aset — bukan cuma pinjam/kembali, tapi juga
+     * lapor kerusakan + selesai perbaikan — digabung jadi satu feed, terbaru
+     * duluan. Buat panel riwayat di halaman Inventaris tab Aset. Jangan dicampur
+     * sama riwayat peminjaman barang (beda tabel/beda satuan).
      */
-    private function maskStruk($pemakai, $userId, bool $isPrivileged)
+    public function riwayat(Request $request)
     {
-        if ($isPrivileged) {
-            return $pemakai;
-        }
-        $isOwner = $this->pemakaiUserId($pemakai) === $userId;
-        if (!$isOwner) {
-            $pemakai->no_struk_penerimaan = null;
-            $pemakai->no_struk_pengembalian = null;
-        }
-        return $pemakai;
-    }
+        $limit = (int) $request->query('limit', 10);
+        $ambil = $limit * 2; // ambil lebih banyak dari tiap sumber biar aman pas digabung+dipotong
 
-    /**
-     * BARU: karyawan/manajer cuma boleh lihat baris aset yang (a) lagi dia
-     * pinjam sendiri, atau (b) berstatus "tersedia" (biar bisa diajukan
-     * pinjam). Aset yang lagi dipinjam/ditangani KARYAWAN LAIN disembunyikan
-     * total dari tabel & gak bisa diakses langsung lewat /aset/{id}.
-     */
-    private function visibleToUser(Aset $aset, int $userId, bool $isPrivileged): bool
-    {
-        if ($isPrivileged) {
-            return true;
-        }
+        $events = collect();
 
-        // gak ada pemakai saat ini (tersedia, atau rusak tanpa pemakai
-        // terpasang) — tetap kelihatan biar bisa diajukan pinjam.
-        if (!$aset->pemakaiSaatIni) {
-            return true;
-        }
-
-        return $this->pemakaiUserId($aset->pemakaiSaatIni) === $userId;
-    }
-
-    /**
-     * BARU: karyawan/manajer cuma boleh lihat DATA PRIBADI sendiri — bukan siapa
-     * aja yang pinjam/lapor kerusakan aset lain. Cuma admin & hr yang boleh lihat
-     * identitas & riwayat lengkap semua karyawan. Aset itu sendiri (kode, jenis,
-     * status tersedia/dipakai, dll) tetap kelihatan buat semua — yang disembunyikan
-     * cuma identitas & riwayat pribadi orang lain.
-     */
-    private function sanitizeAsetForUser(Aset $aset, int $userId, bool $isPrivileged): Aset
-    {
-        if ($isPrivileged) {
-            return $aset;
-        }
-
-        // pemakai_saat_ini: tetap tampil (dipakai buat cek status "aku yang pinjam
-        // apa nggak" & tombol Kembalikan/Lapor Kerusakan), tapi nama & struk orang
-        // lain disembunyikan. Berlaku buat dua bentuk pemakai: karyawan (pekerja.user)
-        // ATAU akun cabang (user langsung).
-        if ($aset->relationLoaded('pemakaiSaatIni') && $aset->pemakaiSaatIni) {
-            $isOwner = $this->pemakaiUserId($aset->pemakaiSaatIni) === $userId;
-            if (!$isOwner) {
-                if ($aset->pemakaiSaatIni->pekerja?->user) {
-                    $aset->pemakaiSaatIni->pekerja->user->name = null;
-                }
-                if ($aset->pemakaiSaatIni->user) {
-                    $aset->pemakaiSaatIni->user->name = null;
-                }
-            }
-        }
-
-        // pemakai_pending: id tetap ada (buat deteksi "ada pengajuan lain yang
-        // masih nunggu"), tapi nama pengaju lain disembunyikan.
-        if ($aset->relationLoaded('pemakaiPending')) {
-            $aset->pemakaiPending->each(function ($p) use ($userId) {
-                $isOwner = $this->pemakaiUserId($p) === $userId;
-                if (!$isOwner) {
-                    if ($p->pekerja?->user) {
-                        $p->pekerja->user->name = null;
-                    }
-                    if ($p->user) {
-                        $p->user->name = null;
-                    }
-                }
-            });
-        }
-
-        // riwayat pemakai (detail): cuma tampilin riwayat peminjaman milik sendiri
-        if ($aset->relationLoaded('pemakai')) {
-            $aset->setRelation(
-                'pemakai',
-                $aset->pemakai->filter(fn ($p) => $this->pemakaiUserId($p) === $userId)->values()
-            );
-        }
-
-        // riwayat penanganan/perbaikan (detail): cuma tampilin laporan milik sendiri
-        // (atau laporan tanpa pemakai — hasil audit gudang admin — tetap disembunyikan
-        // dari karyawan biasa karena bukan urusan mereka).
-        if ($aset->relationLoaded('penanganan')) {
-            $aset->setRelation(
-                'penanganan',
-                $aset->penanganan->filter(fn ($p) => $this->pemakaiUserId($p->pemakai) === $userId)->values()
-            );
-        }
-
-        return $aset;
-    }
-
-    /**
-     * Display a listing of the resource.
-     */
-    public function index(Request $request)
-    {
-        $user = $request->user();
-        $isPrivileged = in_array($user->role, ['admin', 'hr'], true);
-        $userId = $user->id;
-
-        $aset = Aset::with([
-            'jenis',
-            'supplier',
-            'kelengkapan.kelengkapanMaster',
-            'pemakaiSaatIni.pekerja.user',
-            'pemakaiSaatIni.user', // BARU — akun cabang gak punya pekerja, jadi user-nya harus di-load langsung
-            'pemakaiPending.pekerja.user',
-            'pemakaiPending.user', // BARU — sama, buat akun cabang yang lagi ngajuin pinjam
-            'penangananAktif', // biar frontend tau aset mana yang laporan kerusakannya masih belum ditangani
-        ])->latest()->get();
-
-        // BARU: buang total baris aset yang lagi dipinjam/ditangani KARYAWAN
-        // LAIN — karyawan biasa cuma boleh lihat punya sendiri + yang tersedia.
-        $aset = $aset->filter(fn ($a) => $this->visibleToUser($a, $userId, $isPrivileged))->values();
-
-        $aset->each(function ($a) use ($userId, $isPrivileged) {
-            if ($a->pemakaiSaatIni) {
-                $this->maskStruk($a->pemakaiSaatIni, $userId, $isPrivileged);
-            }
-            $this->sanitizeAsetForUser($a, $userId, $isPrivileged);
-        });
-
-        return response()->json($aset);
-    }
-
-    public function show(Request $request, Aset $aset)
-    {
-        $user = $request->user();
-        $isPrivileged = in_array($user->role, ['admin', 'hr'], true);
-        $userId = $user->id;
-
-        $aset->load([
-            'jenis',
-            'supplier',
-            'kelengkapan.kelengkapanMaster',
-            'pemakaiSaatIni.pekerja.user', // baru — detail modal butuh ini buat tombol kontekstual (Terima Kembali / Lapor Kerusakan)
-            'pemakaiSaatIni.user', // BARU — akun cabang
-            'pemakai.pekerja.user',
-            'pemakai.user', // BARU — riwayat pemakai buat akun cabang
-            'pemakaiPending.pekerja.user', // baru
-            'pemakaiPending.user', // BARU
-            'penanganan.pemakai.pekerja.user',
-            'penanganan.pemakai.user', // BARU — riwayat perbaikan yang dilaporkan akun cabang
-            'penggantianSparepart',
-            'penangananAktif',
-        ]);
-
-        // BARU: kalau aset ini lagi dipinjam KARYAWAN LAIN, tolak akses sama
-        // sekali — konsisten sama yang disembunyikan di index(), dan mencegah
-        // karyawan buka detail lewat URL/API langsung.
-        abort_unless($this->visibleToUser($aset, $userId, $isPrivileged), 403, 'Anda tidak punya akses ke aset ini.');
-
-        if ($aset->pemakaiSaatIni) {
-            $this->maskStruk($aset->pemakaiSaatIni, $userId, $isPrivileged);
-        }
-        $aset->pemakai->each(fn ($p) => $this->maskStruk($p, $userId, $isPrivileged));
-
-        $this->sanitizeAsetForUser($aset, $userId, $isPrivileged);
-
-        return response()->json($aset);
-    }
-
-
-    /**
-     * Store a newly created resource in storage.
-     *
-     * 'kelengkapan' dikirim sebagai JSON string dari frontend (karena bercampur
-     * dengan file upload di FormData), formatnya:
-     * '[{"kelengkapan_master_id":1,"keterangan":"S/N: xxx"}, ...]'
-     */
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'jenis_id' => 'nullable|exists:jenis_aset,id',
-            'merek' => 'nullable|string',
-            'tipe' => 'nullable|string',
-            'warna' => 'nullable|string',
-            'serial_number' => 'nullable|string|unique:aset,serial_number',
-            'perusahaan' => 'nullable|string',
-            'keterangan' => 'nullable|string',
-            'foto' => 'nullable|file|mimes:jpg,jpeg,png|max:2048',
-            'supplier_id' => 'nullable|exists:supplier,id',
-            'tanggal_pembelian' => 'nullable|date',
-            'no_surat_jalan' => 'nullable|string',
-            'no_good_receive' => 'nullable|string',
-            'kelengkapan' => 'nullable|string',
-        ]);
-
-        $kelengkapanData = $this->parseKelengkapan($request->input('kelengkapan'));
-
-        $aset = DB::transaction(function () use ($validated, $request, $kelengkapanData) {
-            if ($request->hasFile('foto')) {
-                $validated['foto'] = $request->file('foto')->store('foto-aset', 'public');
-            }
-            unset($validated['kelengkapan']);
-
-            // kode_aset sengaja gak dikirim, biar trigger DB yang generate
-            $aset = Aset::create($validated);
-
-            foreach ($kelengkapanData as $item) {
-                AsetKelengkapan::create([
-                    'aset_id' => $aset->id,
-                    'kelengkapan_master_id' => $item['kelengkapan_master_id'],
-                    'keterangan' => $item['keterangan'] ?? null,
+        AsetPemakai::with([
+            'aset:id,kode_aset,merek,tipe',
+            'pekerja.user:id,name',
+            'user:id,name', // BARU — akun cabang gak punya pekerja, jadi user-nya harus di-load langsung
+        ])
+            ->where('status', 'disetujui')
+            ->latest('tanggal_penerimaan')
+            ->limit($ambil)
+            ->get()
+            ->each(function ($p) use (&$events) {
+                // BARU — jatuh ke $p->user->name kalau pekerja-nya kosong (akun cabang)
+                $nama = $p->pekerja?->user?->name ?? $p->user?->name ?? '-';
+                $events->push([
+                    'type' => 'pinjam',
+                    'waktu' => $p->tanggal_penerimaan,
+                    'nama' => $nama,
+                    'aset' => $p->aset,
                 ]);
-            }
-
-            return $aset;
-        });
-
-        return response()->json(
-            $aset->load([
-                'jenis',
-                'supplier',
-                'kelengkapan.kelengkapanMaster',
-                'pemakaiPending.pekerja.user',
-                'pemakaiPending.user', // BARU
-            ]),
-            201
-        );
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, Aset $aset)
-    {
-        $validated = $request->validate([
-            'jenis_id' => 'nullable|exists:jenis_aset,id',
-            'merek' => 'nullable|string',
-            'tipe' => 'nullable|string',
-            'warna' => 'nullable|string',
-            'serial_number' => 'nullable|string|unique:aset,serial_number,' . $aset->id,
-            'perusahaan' => 'nullable|string',
-            'keterangan' => 'nullable|string',
-            'foto' => 'nullable|file|mimes:jpg,jpeg,png|max:2048',
-            'supplier_id' => 'nullable|exists:supplier,id',
-            'tanggal_pembelian' => 'nullable|date',
-            'no_surat_jalan' => 'nullable|string',
-            'no_good_receive' => 'nullable|string',
-            'kelengkapan' => 'nullable|string',
-        ]);
-
-        $kelengkapanRaw = $request->input('kelengkapan');
-        $kelengkapanProvided = $request->has('kelengkapan');
-
-        DB::transaction(function () use ($validated, $request, $aset, $kelengkapanRaw, $kelengkapanProvided) {
-            if ($request->hasFile('foto')) {
-                if ($aset->foto) {
-                    Storage::disk('public')->delete($aset->foto);
-                }
-                $validated['foto'] = $request->file('foto')->store('foto-aset', 'public');
-            }
-            unset($validated['kelengkapan']);
-
-            $aset->update($validated);
-
-            // kalau frontend kirim ulang daftar kelengkapan, timpa yang lama
-            if ($kelengkapanProvided) {
-                $aset->kelengkapan()->delete();
-
-                foreach ($this->parseKelengkapan($kelengkapanRaw) as $item) {
-                    AsetKelengkapan::create([
-                        'aset_id' => $aset->id,
-                        'kelengkapan_master_id' => $item['kelengkapan_master_id'],
-                        'keterangan' => $item['keterangan'] ?? null,
+                if ($p->tanggal_pengembalian) {
+                    $events->push([
+                        'type' => 'kembali',
+                        'waktu' => $p->tanggal_pengembalian,
+                        'nama' => $nama,
+                        'aset' => $p->aset,
                     ]);
                 }
-            }
+            });
+
+        AsetPenanganan::with('aset:id,kode_aset,merek,tipe')
+            ->latest('tanggal_lapor')
+            ->limit($ambil)
+            ->get()
+            ->each(function ($pn) use (&$events) {
+                $events->push([
+                    'type' => 'lapor_rusak',
+                    'waktu' => $pn->tanggal_lapor,
+                    'nama' => null,
+                    'aset' => $pn->aset,
+                    'keluhan' => $pn->keluhan,
+                ]);
+                if ($pn->tanggal_selesai) {
+                    $events->push([
+                        'type' => 'selesai_perbaikan',
+                        'waktu' => $pn->tanggal_selesai,
+                        'nama' => null,
+                        'aset' => $pn->aset,
+                        'hasil' => $pn->hasil,
+                    ]);
+                }
+            });
+
+        $riwayat = $events->sortByDesc('waktu')->values()->take($limit);
+
+        return response()->json($riwayat);
+    }
+
+    /**
+     * POST /aset/{aset}/pemakai
+     * Admin serah-terima aset langsung ke pekerja ATAU akun cabang (tanpa lewat
+     * alur request/approve). Kirim salah satu: pekerja_id (karyawan) atau
+     * user_id (akun cabang) — nggak boleh dua-duanya, nggak boleh kosong dua-duanya.
+     * Aset harus 'tersedia'. Struk penerimaan digenerate otomatis.
+     */
+    public function store(Request $request, Aset $aset)
+    {
+        if ($aset->status !== 'tersedia') {
+            return response()->json(['message' => 'Aset ini sedang tidak tersedia untuk diserahkan.'], 422);
+        }
+
+        $validated = $request->validate([
+            'pekerja_id' => 'required_without:user_id|nullable|exists:pekerja,id',
+            'user_id' => [
+                'required_without:pekerja_id',
+                'nullable',
+                'exists:users,id',
+                function ($attribute, $value, $fail) {
+                    if ($value && \App\Models\User::where('id', $value)->where('role', 'cabang')->doesntExist()) {
+                        $fail('Akun yang dipilih bukan akun cabang.');
+                    }
+                },
+            ],
+            'nomor_penerimaan' => 'nullable|string',
+            'tanggal_penerimaan' => 'required|date',
+            'catatan_penerimaan' => 'nullable|string',
+        ]);
+
+        $pemakai = DB::transaction(function () use ($aset, $request, $validated) {
+            $noStruk = $this->generateNoStruk('STJ', 'aset_pemakai', 'no_struk_penerimaan');
+
+            $pemakai = AsetPemakai::create([
+                'aset_id' => $aset->id,
+                'pekerja_id' => $validated['pekerja_id'] ?? null,
+                'user_id' => $validated['user_id'] ?? null,
+                'status' => 'disetujui',
+                'requested_by_user_id' => $request->user()?->id,
+                'nomor_penerimaan' => $validated['nomor_penerimaan'] ?? null,
+                'no_struk_penerimaan' => $noStruk,
+                'tanggal_penerimaan' => $validated['tanggal_penerimaan'],
+                'catatan_penerimaan' => $validated['catatan_penerimaan'] ?? null,
+            ]);
+
+            $aset->update(['status' => 'dipakai']);
+
+            return $pemakai;
         });
 
-        return response()->json(
-            $aset->load(['jenis', 'supplier', 'kelengkapan.kelengkapanMaster'])
-        );
+        return response()->json($pemakai->load('pekerja.user', 'user', 'aset'), 201);
     }
 
     /**
-     * Remove the specified resource from storage.
+     * POST /api/aset/{aset}/pinjam
+     * Karyawan request pinjam aset. Butuh approval admin sebelum resmi jadi pemakai.
+     * (Akun cabang tidak lewat alur ini — cabang cuma diserahkan langsung oleh admin lewat store()).
      */
-    public function destroy(Aset $aset)
+    public function requestPinjam(Request $request, Aset $aset)
     {
-        if ($aset->foto) {
-            Storage::disk('public')->delete($aset->foto);
+        $user = $request->user();
+        $pekerjaId = $user->pekerja?->id;
+
+        if (!$pekerjaId) {
+            return response()->json(['message' => 'Akun kamu belum terhubung ke data pekerja.'], 422);
         }
 
-        $aset->delete();
+        if ($aset->status !== 'tersedia') {
+            return response()->json(['message' => 'Aset ini sedang tidak tersedia untuk dipinjam.'], 422);
+        }
 
-        return response()->json(['message' => "Aset {$aset->kode_aset} berhasil dihapus."]);
+        if ($aset->pemakai()->where('status', 'pending')->exists()) {
+            return response()->json(['message' => 'Sudah ada permintaan pinjam yang masih menunggu persetujuan untuk aset ini.'], 422);
+        }
+
+        $validated = $request->validate([
+            'catatan_penerimaan' => 'nullable|string',
+        ]);
+
+        $pemakai = AsetPemakai::create([
+            'aset_id' => $aset->id,
+            'pekerja_id' => $pekerjaId,
+            'status' => 'pending',
+            'requested_by_user_id' => $user->id,
+            'catatan_penerimaan' => $validated['catatan_penerimaan'] ?? null,
+        ]);
+
+        return response()->json($pemakai->load('pekerja.user'), 201);
     }
 
     /**
-     * Decode & validasi ringan payload kelengkapan dari JSON string.
+     * GET /api/aset-pemakai/pending
+     * Admin: daftar request pinjam yang menunggu persetujuan.
      */
-    private function parseKelengkapan(?string $raw): array
+    public function pending()
     {
-        if (!$raw) {
-            return [];
+        $list = AsetPemakai::with(['aset', 'pekerja.user', 'user'])
+            ->where('status', 'pending')
+            ->latest()
+            ->get();
+
+        return response()->json($list);
+    }
+
+    /**
+     * POST /api/aset-pemakai/{asetPemakai}/setujui
+     * Admin approve request pinjam -> aset resmi jadi 'dipakai'.
+     */
+    public function setujui(Request $request, AsetPemakai $asetPemakai)
+    {
+        if ($asetPemakai->status !== 'pending') {
+            return response()->json(['message' => 'Request ini sudah diproses sebelumnya.'], 422);
         }
 
-        $decoded = json_decode($raw, true);
+        $validated = $request->validate([
+            'nomor_penerimaan' => 'nullable|string',
+            'tanggal_penerimaan' => 'nullable|date',
+        ]);
 
-        if (!is_array($decoded)) {
-            return [];
+        DB::transaction(function () use ($asetPemakai, $validated) {
+            $noStruk = $this->generateNoStruk('STJ', 'aset_pemakai', 'no_struk_penerimaan');
+
+            $asetPemakai->update([
+                'status' => 'disetujui',
+                'nomor_penerimaan' => $validated['nomor_penerimaan'] ?? $asetPemakai->nomor_penerimaan,
+                'no_struk_penerimaan' => $noStruk,
+                'tanggal_penerimaan' => $validated['tanggal_penerimaan'] ?? now()->toDateString(),
+            ]);
+
+            $asetPemakai->aset()->update(['status' => 'dipakai']);
+        });
+
+        return response()->json($asetPemakai->load('pekerja.user', 'user', 'aset'));
+    }
+
+    /**
+     * POST /api/aset-pemakai/{asetPemakai}/kembalikan
+     * Admin terima kembali aset dari pemakai. Wajib sertain no_struk_penerimaan
+     * (struk asli pas serah-terima) sebagai bukti pengembalian ini benar.
+     * Ditolak kalau masih ada laporan penanganan/perbaikan yang belum selesai.
+     */
+    public function kembalikan(Request $request, AsetPemakai $asetPemakai)
+    {
+        $validated = $request->validate([
+            'no_struk_penerimaan' => 'required|string',
+            'nomor_pengembalian' => 'nullable|string',
+            'tanggal_pengembalian' => 'required|date',
+            'catatan_pengembalian' => 'nullable|string',
+        ]);
+
+        if ($asetPemakai->status !== 'disetujui') {
+            throw ValidationException::withMessages([
+                'status' => ['Data pemakaian ini bukan pemakaian aktif yang bisa dikembalikan.'],
+            ]);
         }
 
-        return array_values(array_filter($decoded, function ($item) {
-            return is_array($item) && !empty($item['kelengkapan_master_id']);
-        }));
+        if ($validated['no_struk_penerimaan'] !== $asetPemakai->no_struk_penerimaan) {
+            throw ValidationException::withMessages([
+                'no_struk_penerimaan' => ['Nomor struk penerimaan tidak cocok. Pengembalian wajib menyertakan bukti serah-terima yang benar.'],
+            ]);
+        }
+
+        $adaPenangananBelumSelesai = AsetPenanganan::where('aset_pemakai_id', $asetPemakai->id)
+            ->whereNull('tanggal_selesai')
+            ->exists();
+
+        if ($adaPenangananBelumSelesai) {
+            throw ValidationException::withMessages([
+                'penanganan' => ['Masih ada laporan penanganan/perbaikan yang belum diselesaikan untuk pemakaian ini.'],
+            ]);
+        }
+
+        DB::transaction(function () use ($asetPemakai, $validated) {
+            $noStruk = $this->generateNoStruk('KBL', 'aset_pemakai', 'no_struk_pengembalian');
+
+            // kalau aset ini pernah rusak berat & udah ditandai selesai perbaikan
+            // (hasil tetep rusak_berat, gak ketolong), catatan pengembalian default
+            // kasih tau kondisinya -- kecuali admin udah isi catatan sendiri.
+            $asetRusakBerat = $asetPemakai->aset?->status === 'rusak_berat';
+            $catatanDefault = $asetRusakBerat
+                ? 'Dikembalikan dalam kondisi rusak berat (tidak bisa diperbaiki).'
+                : $asetPemakai->catatan_pengembalian;
+
+            $asetPemakai->update([
+                'nomor_pengembalian' => $validated['nomor_pengembalian'] ?? $asetPemakai->nomor_pengembalian,
+                'no_struk_pengembalian' => $noStruk,
+                'tanggal_pengembalian' => $validated['tanggal_pengembalian'],
+                'catatan_pengembalian' => $validated['catatan_pengembalian'] ?? $catatanDefault,
+            ]);
+
+            // jangan paksa balik 'tersedia' kalau asetnya lagi rusak_berat --
+            // dia tetep gak boleh dipinjemin lagi walau pemakaiannya udah ditutup.
+            // Selain rusak_berat, baru balik normal ke 'tersedia' kayak biasa.
+            $asetPemakai->aset()
+                ->where('status', '!=', 'rusak_berat')
+                ->update(['status' => 'tersedia']);
+        });
+
+        return response()->json($asetPemakai->fresh()->load('pekerja.user', 'user', 'aset'));
+    }
+
+    /**
+     * POST /api/aset-pemakai/{asetPemakai}/tolak
+     * Admin tolak request pinjam -> aset tetap 'tersedia'.
+     */
+    public function tolak(Request $request, AsetPemakai $asetPemakai)
+    {
+        if ($asetPemakai->status !== 'pending') {
+            return response()->json(['message' => 'Request ini sudah diproses sebelumnya.'], 422);
+        }
+
+        $validated = $request->validate([
+            'catatan_penolakan' => 'nullable|string',
+        ]);
+
+        $asetPemakai->update([
+            'status' => 'ditolak',
+            'catatan_penolakan' => $validated['catatan_penolakan'] ?? null,
+        ]);
+
+        return response()->json($asetPemakai->load('pekerja.user', 'user', 'aset'));
     }
 }

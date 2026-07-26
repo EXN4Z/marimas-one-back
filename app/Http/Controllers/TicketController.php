@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
 use App\Notifications\TicketBaruMasuk;
+use App\Notifications\TicketStatusUpdated;
 
 class TicketController extends Controller
 {
@@ -100,6 +101,8 @@ class TicketController extends Controller
                 ? now()
                 : null,
         ]);
+
+        $ticket->pelapor?->notify(new TicketStatusUpdated($ticket));
 
         return response()->json(
             $ticket->load(['pelapor:id,name,role', 'penanggungJawab:id,name'])
