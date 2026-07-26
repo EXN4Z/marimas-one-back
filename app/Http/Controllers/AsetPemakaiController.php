@@ -259,14 +259,27 @@ class AsetPemakaiController extends Controller
         DB::transaction(function () use ($asetPemakai, $validated) {
             $noStruk = $this->generateNoStruk('KBL', 'aset_pemakai', 'no_struk_pengembalian');
 
+            // kalau aset ini pernah rusak berat & udah ditandai selesai perbaikan
+            // (hasil tetep rusak_berat, gak ketolong), catatan pengembalian default
+            // kasih tau kondisinya -- kecuali admin udah isi catatan sendiri.
+            $asetRusakBerat = $asetPemakai->aset?->status === 'rusak_berat';
+            $catatanDefault = $asetRusakBerat
+                ? 'Dikembalikan dalam kondisi rusak berat (tidak bisa diperbaiki).'
+                : $asetPemakai->catatan_pengembalian;
+
             $asetPemakai->update([
                 'nomor_pengembalian' => $validated['nomor_pengembalian'] ?? $asetPemakai->nomor_pengembalian,
                 'no_struk_pengembalian' => $noStruk,
                 'tanggal_pengembalian' => $validated['tanggal_pengembalian'],
-                'catatan_pengembalian' => $validated['catatan_pengembalian'] ?? $asetPemakai->catatan_pengembalian,
+                'catatan_pengembalian' => $validated['catatan_pengembalian'] ?? $catatanDefault,
             ]);
 
-            $asetPemakai->aset()->update(['status' => 'tersedia']);
+            // jangan paksa balik 'tersedia' kalau asetnya lagi rusak_berat --
+            // dia tetep gak boleh dipinjemin lagi walau pemakaiannya udah ditutup.
+            // Selain rusak_berat, baru balik normal ke 'tersedia' kayak biasa.
+            $asetPemakai->aset()
+                ->where('status', '!=', 'rusak_berat')
+                ->update(['status' => 'tersedia']);
         });
 
         return response()->json($asetPemakai->fresh()->load('pekerja.user', 'user', 'aset'));
