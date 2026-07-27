@@ -7,6 +7,7 @@ use App\Models\Pekerja;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
 class UserController extends Controller
@@ -14,6 +15,15 @@ class UserController extends Controller
     public function index(Request $request)
     {
         $query = User::with('pekerja.departemen', 'pekerja.jabatan', 'pekerja.lokasiKantor');
+
+        // BARU: kalau yang akses akun cabang, cuma tampilin karyawan yang
+        // lokasi_kantor_id-nya sama dengan lokasi_kantor_id akun cabang tsb.
+        $user = Auth::user();
+        if ($user && $user->role === 'cabang' && $user->lokasi_kantor_id) {
+            $query->whereHas('pekerja', function ($q) use ($user) {
+                $q->where('lokasi_kantor_id', $user->lokasi_kantor_id);
+            });
+        }
 
         if ($request->filled('role') && $request->role !== 'all') {
             $query->where('role', $request->role);
@@ -48,7 +58,8 @@ class UserController extends Controller
             'nip' => 'required_unless:role,cabang|nullable|string|unique:pekerja,nip',
             'departemen_id' => 'nullable|exists:departemen,id',
             'jabatan_id' => 'nullable|exists:jabatan,id',
-            'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
+            // UBAH: wajib diisi kalau role cabang, biar gak lolos dengan null lagi.
+            'lokasi_kantor_id' => 'required_if:role,cabang|nullable|exists:lokasi_kantor,id',
             'tanggal_masuk' => 'nullable|date',
             'kuota_izin_tahunan' => 'nullable|integer|min:0|max:365',
         ]);
@@ -62,11 +73,15 @@ class UserController extends Controller
                 'phone' => $validated['phone'] ?? null,
                 'password' => Hash::make($plainPassword),
                 'role' => $validated['role'],
+                // BARU: akun cabang butuh lokasi_kantor_id di tabel users
+                // sendiri, karena dia gak punya baris di tabel pekerja.
+                'lokasi_kantor_id' => $validated['role'] === 'cabang'
+                    ? $validated['lokasi_kantor_id']
+                    : null,
             ]);
 
             $pekerja = null;
 
-            // akun cabang nggak punya profil pekerja
             if ($validated['role'] !== 'cabang') {
                 $pekerja = Pekerja::create([
                     'user_id' => $user->id,
@@ -103,23 +118,27 @@ class UserController extends Controller
             'nip' => 'required_unless:role,cabang|nullable|string|unique:pekerja,nip,' . optional($user->pekerja)->id,
             'departemen_id' => 'nullable|exists:departemen,id',
             'jabatan_id' => 'nullable|exists:jabatan,id',
-            'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
+            'lokasi_kantor_id' => 'required_if:role,cabang|nullable|exists:lokasi_kantor,id',
             'tanggal_masuk' => 'nullable|date',
             'kuota_izin_tahunan' => 'nullable|integer|min:0|max:365',
         ]);
 
         $user->update(collect($validated)->only(['name', 'email', 'phone', 'role'])->toArray());
 
+        // BARU: sync lokasi_kantor_id di tabel users -- cuma relevan/dipakai
+        // buat role cabang, role lain di-null-kan biar gak nyangkut data lama.
+        $user->lokasi_kantor_id = $validated['role'] === 'cabang'
+            ? $validated['lokasi_kantor_id']
+            : null;
+        $user->save();
+
         if ($validated['role'] === 'cabang') {
-            // role diubah jadi cabang -> hapus profil pekerja lama (kalau ada)
-            // ganti ke soft-delete / simpan histori dulu kalau nggak mau datanya hilang
             $user->pekerja()?->delete();
         } elseif ($user->pekerja) {
             $user->pekerja->update(
                 collect($validated)->only(['nip', 'departemen_id', 'jabatan_id', 'tanggal_masuk', 'kuota_izin_tahunan', 'lokasi_kantor_id'])->toArray()
             );
         } else {
-            // role diubah dari cabang -> jadi role pegawai, tapi belum punya record pekerja
             Pekerja::create([
                 'user_id' => $user->id,
                 'nip' => $validated['nip'],

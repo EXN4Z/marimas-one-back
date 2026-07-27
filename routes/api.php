@@ -112,7 +112,24 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     });
 });
 
-Route::middleware(['auth:sanctum', 'role:manajer,hr,admin'])->group(function () {
+// BARU: role 'cabang' butuh akses read-only ke stats-card, kehadiran-mingguan,
+// beban-kerja, dan kpd juga (dipakai DashboardCabang) -- tapi dia gak boleh
+// ikut ke grup 'karyawan,manajer,hr,admin' di atas soalnya grup itu juga
+// nge-cover endpoint create/update izin & ticketing milik pribadi karyawan
+// yang gak relevan buat akun cabang. Jadi endpoint dashboard read-only
+// dipisah sendiri biar akses cabang tetap ke-scope minimal.
+Route::middleware(['auth:sanctum', 'role:cabang,karyawan,manajer,hr,admin'])->group(function () {
+    Route::get('/user', [AuthController::class, 'user']);
+
+    Route::prefix('dashboard')->group(function () {
+        Route::get('/kpd', [DashboardController::class, 'KaryawanPerDepart']);
+        Route::get('/stats-card', [DashboardController::class, 'statsCard']);
+        Route::get('/kehadiran-mingguan', [DashboardController::class, 'kehadiranMingguan']);
+        Route::get('/beban-kerja', [DashboardController::class, 'bebanKerja']);
+    });
+});
+
+Route::middleware(['auth:sanctum', 'role:manajer,hr,admin,cabang'])->group(function () {
     Route::put('/ticketing/{ticket}/status', [TicketController::class, 'updateStatus']);
     Route::patch('/izin/{id}/status', [IzinController::class, 'updateStatus']);
 

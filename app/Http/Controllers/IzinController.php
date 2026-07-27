@@ -13,13 +13,24 @@ use App\Notifications\IzinBaruDiajukan;
 class IzinController extends Controller
 {
     // GET /api/izin — daftar pengajuan (role-aware) + filter
+// GET /api/izin — daftar pengajuan (role-aware) + filter
     public function index(Request $request)
     {
         $user = $request->user();
 
         $query = PengajuanIzin::with(['karyawan:id,name,email', 'karyawan.pekerja.departemen', 'karyawan.pekerja.jabatan', 'reviewer:id,name']);
 
-        $query = $this->scopeByRole($query, $user);
+        // BARU: kalau yang akses akun cabang, cuma tampilin pengajuan izin
+        // milik karyawan yang lokasi_kantor_id-nya sama dengan cabang tsb.
+        // Ditaruh terpisah dari scopeByRole() karena cabang bukan bagian dari
+        // hierarki role karyawan/manajer/hr/admin yang dipakai scopeByRole().
+        if ($user->role === 'cabang' && $user->lokasi_kantor_id) {
+            $query->whereHas('karyawan.pekerja', function ($q) use ($user) {
+                $q->where('lokasi_kantor_id', $user->lokasi_kantor_id);
+            });
+        } else {
+            $query = $this->scopeByRole($query, $user);
+        }
 
         if ($request->filled('status') && $request->status !== 'semua') {
             $query->where('status', $request->status);
