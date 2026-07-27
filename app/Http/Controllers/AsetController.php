@@ -147,8 +147,16 @@ class AsetController extends Controller
      */
     public function destroy(Aset $aset)
     {
-        if ($aset->foto) {
-            Storage::disk('public')->delete($aset->foto);
+        if ($aset->penanganan()->exists()) {
+            return response()->json([
+                'message' => 'Aset ini punya riwayat perbaikan/penanganan dan tidak bisa dihapus.',
+            ], 422);
+        }
+
+        if ($aset->pemakai()->exists()) {
+            return response()->json([
+                'message' => 'Aset ini punya riwayat peminjaman dan tidak bisa dihapus.',
+            ], 422);
         }
 
         $namaAset = $aset->kode_aset;
@@ -206,5 +214,22 @@ class AsetController extends Controller
                 'keterangan' => $item['keterangan'] ?? null,
             ]);
         }
+    }
+    public function jual(Aset $aset)
+    {
+        if ($aset->status !== 'rusak_berat') {
+            return response()->json([
+                'message' => 'Aset hanya bisa dijual jika statusnya Rusak Berat.',
+            ], 422);
+        }
+
+        $aset->update(['status' => 'dijual']);
+
+        return response()->json($aset->fresh()->load([
+            'jenis',
+            'supplier',
+            'kelengkapan.kelengkapanMaster',
+            'pemakaiSaatIni',
+        ]));
     }
 }
