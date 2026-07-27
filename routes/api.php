@@ -136,7 +136,7 @@ Route::middleware(['auth:sanctum', 'role:cabang,karyawan,manajer,hr,admin'])->gr
     });
 });
 
-Route::middleware(['auth:sanctum', 'role:manajer,hr,admin'])->group(function () {
+Route::middleware(['auth:sanctum', 'role:manajer,hr,admin,cabang'])->group(function () {
     Route::put('/ticketing/{ticket}/status', [TicketController::class, 'updateStatus']);
     Route::patch('/izin/{id}/status', [IzinController::class, 'updateStatus']);
 

@@ -13,9 +13,30 @@ class TicketController extends Controller
 {
     // GET /api/ticketing — laporan yang masih pending/diproses.
     // Karyawan cuma lihat laporan miliknya sendiri, staff (manajer/hr/admin) lihat semua.
+    // GET /api/ticketing — laporan yang masih pending/diproses.
+// Karyawan cuma lihat laporan miliknya sendiri, staff (manajer/hr/admin) lihat semua.
     public function index(Request $request)
     {
-        $tickets = $this->scopedQuery($request->user())
+        $user = $request->user();
+
+        // BARU: akun cabang gak masuk hierarki hasRoleAtLeast('manajer') (level-nya
+        // di bawah manajer), jadi kalau gak ditangani di sini dia bakal jatuh ke
+        // scopedQuery() default (Ticket::where('user_id', $user->id)) -- salah,
+        // karena cabang bukan pelapor tiket, dia cuma mau lihat tiket karyawan
+        // yang ada di cabangnya.
+        if ($user->role === 'cabang' && $user->lokasi_kantor_id) {
+            $tickets = Ticket::whereIn('status', Ticket::STATUS_AKTIF)
+                ->whereHas('pelapor.pekerja', function ($q) use ($user) {
+                    $q->where('lokasi_kantor_id', $user->lokasi_kantor_id);
+                })
+                ->with(['pelapor:id,name,role', 'penanggungJawab:id,name'])
+                ->latest()
+                ->get();
+
+            return response()->json($tickets);
+        }
+
+        $tickets = $this->scopedQuery($user)
             ->whereIn('status', Ticket::STATUS_AKTIF)
             ->with(['pelapor:id,name,role', 'penanggungJawab:id,name'])
             ->latest()

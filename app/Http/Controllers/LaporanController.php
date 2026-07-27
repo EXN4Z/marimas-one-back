@@ -5,13 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\Absensi;
 use App\Models\MutasiBarang;
 use App\Models\PengajuanIzin;
+use App\Models\Pekerja;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LaporanController extends Controller
 {
-    // GET /api/laporan/absensi?bulan=7&tahun=2026 — export CSV absensi bulanan.
-   // GET /api/laporan/absensi?bulan=&tahun= ATAU ?tanggal_mulai=&tanggal_selesai=&status=
     public function absensi(Request $request): StreamedResponse
     {
         $status = $request->get('status');
@@ -20,12 +20,19 @@ class LaporanController extends Controller
 
         $query = Absensi::with('pekerja.user', 'pekerja.departemen');
 
+        // BARU: kalau yang akses akun cabang, cuma tampilin absensi karyawan
+        // yang lokasi_kantor_id-nya sama dengan cabang tsb.
+        $user = Auth::user();
+        if ($user && $user->role === 'cabang' && $user->lokasi_kantor_id) {
+            $query->whereHas('pekerja', function ($q) use ($user) {
+                $q->where('lokasi_kantor_id', $user->lokasi_kantor_id);
+            });
+        }
+
         if ($tanggalMulai && $tanggalSelesai) {
-            // Mode rentang tanggal (dipakai chat AI: hari ini/kemarin/N hari lalu)
             $query->whereBetween('tanggal', [$tanggalMulai, $tanggalSelesai]);
             $labelFile = "{$tanggalMulai}_sd_{$tanggalSelesai}";
         } else {
-            // Mode bulan (dipakai halaman Laporan.tsx yang sudah ada)
             $bulan = (int) $request->get('bulan', now()->month);
             $tahun = (int) $request->get('tahun', now()->year);
             $query->whereMonth('tanggal', $bulan)->whereYear('tanggal', $tahun);
@@ -56,17 +63,25 @@ class LaporanController extends Controller
         ]));
     }
 
-    // GET /api/laporan/izin?bulan=7&tahun=2026 — export CSV pengajuan izin bulanan.
     public function izin(Request $request): StreamedResponse
     {
         $bulan = (int) $request->get('bulan', now()->month);
         $tahun = (int) $request->get('tahun', now()->year);
 
-        $data = PengajuanIzin::with('karyawan', 'reviewer')
+        $query = PengajuanIzin::with('karyawan', 'reviewer')
             ->whereMonth('tanggal_mulai', $bulan)
-            ->whereYear('tanggal_mulai', $tahun)
-            ->orderBy('tanggal_mulai')
-            ->get();
+            ->whereYear('tanggal_mulai', $tahun);
+
+        // BARU: scope ke cabang -- karyawan.pekerja.lokasi_kantor_id harus
+        // sama dengan lokasi_kantor_id akun cabang yang login.
+        $user = Auth::user();
+        if ($user && $user->role === 'cabang' && $user->lokasi_kantor_id) {
+            $query->whereHas('karyawan.pekerja', function ($q) use ($user) {
+                $q->where('lokasi_kantor_id', $user->lokasi_kantor_id);
+            });
+        }
+
+        $data = $query->orderBy('tanggal_mulai')->get();
 
         $filename = "laporan-izin-{$tahun}-{$bulan}.csv";
 
@@ -85,7 +100,6 @@ class LaporanController extends Controller
         ]));
     }
 
-    // GET /api/laporan/inventaris?bulan=7&tahun=2026 — export CSV mutasi barang bulanan.
     public function inventaris(Request $request): StreamedResponse
     {
         $bulan = (int) $request->get('bulan', now()->month);
@@ -114,12 +128,10 @@ class LaporanController extends Controller
         ]));
     }
 
-    // Helper: nge-stream data jadi file CSV yang bisa langsung dibuka di Excel.
     private function streamCsv(string $filename, array $header, $rows): StreamedResponse
     {
         return response()->streamDownload(function () use ($header, $rows) {
             $out = fopen('php://output', 'w');
-            // BOM biar karakter non-ASCII (misal nama pakai huruf khusus) kebaca bener di Excel.
             fwrite($out, "\xEF\xBB\xBF");
             fputcsv($out, $header);
             foreach ($rows as $row) {
