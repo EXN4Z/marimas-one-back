@@ -313,6 +313,33 @@ class AsetController extends Controller
     }
 
     /**
+     * POST /api/aset/{aset}/jual
+     * Admin: tandai aset sebagai dijual. Aset tetap tampil di tabel (buat arsip/riwayat),
+     * tapi semua aksi lain (pinjam, serah-terima, lapor kerusakan) otomatis nonaktif
+     * karena statusnya bukan lagi 'tersedia'/'dipakai'/'rusak'.
+     * Cuma boleh dari status 'tersedia' atau 'rusak' — kalau lagi dipinjam/ditangani
+     * orang, harus diselesaikan/dikembalikan dulu sebelum bisa dijual.
+     */
+    public function jual(Aset $aset)
+    {
+        if (!in_array($aset->status, ['tersedia', 'rusak'], true)) {
+            return response()->json([
+                'message' => 'Aset cuma bisa dijual kalau statusnya "Tersedia" atau "Rusak". Selesaikan dulu peminjaman/perbaikan yang masih berjalan.',
+            ], 422);
+        }
+
+        if ($aset->pemakaiPending()->exists()) {
+            return response()->json([
+                'message' => 'Masih ada pengajuan pinjam yang menunggu persetujuan untuk aset ini. Tolak/selesaikan dulu sebelum menjual.',
+            ], 422);
+        }
+
+        $aset->update(['status' => 'dijual']);
+
+        return response()->json($aset->fresh());
+    }
+
+    /**
      * Remove the specified resource from storage.
      */
     public function destroy(Aset $aset)
