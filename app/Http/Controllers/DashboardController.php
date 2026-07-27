@@ -355,14 +355,13 @@ class DashboardController extends Controller
             return $this->statsCardCabang($user);
         }
 
-        $pekerja = Pekerja::where('user_id', $user->id)->first(); // cari Pekerja yang sesuai
+        $pekerja = Pekerja::where('user_id', $user->id)->first();
 
-        // Jika pekerja tidak ditemukan, kembalikan nilai default agar tidak error
         if (! $pekerja) {
             return response()->json([
                 'kehadiran' => ['value' => 0, 'trend' => 'Belum ada data'],
                 'izin' => ['value' => 0, 'trend' => 'Belum ada data'],
-                'izinAktif' => ['value' => '-', 'trend' => 'Belum ada data'],
+                'izinAktif' => ['value' => 0, 'trend' => 'Belum ada data'],
                 'ticket' => ['value' => 0, 'trend' => 'Belum ada data'],
             ]);
         }
@@ -370,23 +369,10 @@ class DashboardController extends Controller
         $izin = PengajuanIzin::where('karyawan_id', $pekerja->id);
         $absensi = Absensi::where('karyawan_id', $pekerja->id);
         $ticket = Ticket::where('user_id', $user->id);
-        $value = '-';
-
-        $izinAktif = (clone $izin)
-            ->where('status', 'disetujui')
-            ->latest()
-            ->first();
-
-        if ($izinAktif) {
-            $mulai = Carbon::parse($izinAktif->tanggal_mulai);
-            $selesai = Carbon::parse($izinAktif->tanggal_selesai);
-            $hari = $mulai->diffInDays($selesai) + 1;
-            $value = $hari . ' hari';
-        }
 
         return response()->json([
             'kehadiran' => [
-                'value' => (clone $absensi)->where('status', 'tepat_waktu')->count(),
+                'value' => (clone $absensi)->whereIn('status', ['tepat_waktu', 'telat'])->count(),
                 'trend' => $this->getTrend((clone $absensi)->where('status', 'tepat_waktu')),
             ],
             'izin' => [
@@ -394,11 +380,15 @@ class DashboardController extends Controller
                 'trend' => $this->getTrend($izin),
             ],
             'izinAktif' => [
-                'value' => $value,
-                'trend' => $this->getTrend($izin)
+                // UBAH: sebelumnya format "X hari" dari izin disetujui terakhir.
+                // Sekarang TOTAL seluruh pengajuan izin milik karyawan ini (semua status).
+                'value' => (clone $izin)->count(),
+                'trend' => $this->getTrend($izin),
             ],
             'ticket' => [
-                'value' => (clone $ticket)->where('status', 'diproses')->count(),
+                // UBAH: sebelumnya cuma hitung status 'diproses'.
+                // Sekarang TOTAL seluruh ticket yang pernah diajukan karyawan ini (semua status).
+                'value' => (clone $ticket)->count(),
                 'trend' => $this->getTrend($ticket)
             ]
         ]);
@@ -421,7 +411,7 @@ class DashboardController extends Controller
         // "Kehadiran Bulan Ini" = total kehadiran (tepat_waktu) SEMUA karyawan
         // di cabang ini, bulan berjalan.
         $absensiBulanIni = Absensi::whereIn('karyawan_id', $pekerjaIds)
-            ->where('status', 'tepat_waktu')
+            ->whereIn('status', ['tepat_waktu', 'telat'])
             ->whereMonth('tanggal', now()->month)
             ->whereYear('tanggal', now()->year);
 
