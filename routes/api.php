@@ -81,13 +81,10 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
         Route::post('/daftar-wajah', [AbsensiController::class, 'daftarWajah']);
         Route::get('/saya', [AbsensiController::class, 'saya']);
         });
-    Route::prefix('dashboard')->group(function () {
-        Route::get('/kpd', [DashboardController::class, 'KaryawanPerDepart']);
-        Route::get('/izin-pending', [DashboardController::class, 'izinPending']);
-        Route::get('/stats-card', [DashboardController::class, 'statsCard']);
-        Route::get('/kehadiran-mingguan', [DashboardController::class, 'kehadiranMingguan']);
-        Route::get('/beban-kerja', [DashboardController::class, 'bebanKerja']);
-    });
+
+    // izin-pending sengaja TETAP di sini (bukan di grup gabungan cabang di
+    // bawah) -- ini list izin yang perlu di-review, cabang gak review izin.
+    Route::get('/dashboard/izin-pending', [DashboardController::class, 'izinPending']);
 
     Route::prefix('izin')->group(function () {
         Route::get('/', [IzinController::class, 'index']);
@@ -101,7 +98,6 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     });
 
     Route::get('/karyawan/kode/{kode}', [AbsensiController::class, 'getByKode']);
-    Route::get('/user', [AuthController::class, 'user']);
     Route::post('/chat', [ChatbotController::class, 'ask']);
     Route::get('/mutasi-barang', [MutasiBarangController::class, 'index']);
     Route::get('/barang', [BarangController::class, 'index']);
@@ -123,16 +119,32 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     });
 });
 
+// BARU: role 'cabang' butuh akses read-only ke stats-card, kehadiran-mingguan,
+// beban-kerja, dan kpd juga (dipakai DashboardCabang) -- tapi dia gak boleh
+// ikut ke grup 'karyawan,manajer,hr,admin' di atas soalnya grup itu juga
+// nge-cover endpoint create/update izin & ticketing milik pribadi karyawan
+// yang gak relevan buat akun cabang. Jadi endpoint dashboard read-only
+// dipisah sendiri biar akses cabang tetap ke-scope minimal.
+Route::middleware(['auth:sanctum', 'role:cabang,karyawan,manajer,hr,admin'])->group(function () {
+    Route::get('/user', [AuthController::class, 'user']);
+
+    Route::prefix('dashboard')->group(function () {
+        Route::get('/kpd', [DashboardController::class, 'KaryawanPerDepart']);
+        Route::get('/stats-card', [DashboardController::class, 'statsCard']);
+        Route::get('/kehadiran-mingguan', [DashboardController::class, 'kehadiranMingguan']);
+        Route::get('/beban-kerja', [DashboardController::class, 'bebanKerja']);
+    });
+});
+
 Route::middleware(['auth:sanctum', 'role:manajer,hr,admin'])->group(function () {
     Route::put('/ticketing/{ticket}/status', [TicketController::class, 'updateStatus']);
     Route::patch('/izin/{id}/status', [IzinController::class, 'updateStatus']);
 
+    // Section ini TETAP khusus admin/hr/manajer -- gak dipakai DashboardCabang
+    // (hero chart "Pengajuan Izin Tahun Ini" & Inventaris).
     Route::prefix('dashboard-analytics')->group(function () {
-        Route::get('/analisis-izin', [DashboardController::class, 'analisisIzin']);
-        Route::get('/top-karyawan', [DashboardController::class, 'topKaryawan']);
         Route::get('/mutasi-barang', [DashboardController::class, 'mutasiBarang']);
         Route::get('/total-barang', [DashboardController::class, 'totalBarang']);
-        Route::get('/top-kehadiran', [DashboardController::class, 'topKehadiran']);
         Route::get('/grafik-pengajuan', [DashboardController::class, 'grafikPengajuan']);
         Route::get('/total-keuangan', [DashboardController::class, 'totalKeuangan']);
         Route::get('/keuangan-per-bulan', [DashboardController::class, 'keuanganPerBulan']);
@@ -142,6 +154,16 @@ Route::middleware(['auth:sanctum', 'role:manajer,hr,admin'])->group(function () 
         Route::get('/absensi', [LaporanController::class, 'absensi']);
         Route::get('/izin', [LaporanController::class, 'izin']);
         Route::get('/inventaris', [LaporanController::class, 'inventaris']);
+    });
+});
+
+// BARU: 3 endpoint ini juga dipakai DashboardCabang -- datanya di-scope ke
+// lokasi_kantor_id akun cabang yang login (lihat DashboardController).
+Route::middleware(['auth:sanctum', 'role:cabang,manajer,hr,admin'])->group(function () {
+    Route::prefix('dashboard-analytics')->group(function () {
+        Route::get('/analisis-izin', [DashboardController::class, 'analisisIzin']);
+        Route::get('/top-karyawan', [DashboardController::class, 'topKaryawan']);
+        Route::get('/top-kehadiran', [DashboardController::class, 'topKehadiran']);
     });
 });
 

@@ -26,4 +26,8 @@ class LokasiKantor extends Model
     {
         return $this->hasMany(Pekerja::class, 'lokasi_kantor_id');
     }
+    public function users(): HasMany
+    {
+        return $this->hasMany(User::class, 'lokasi_kantor_id');
+    }
 }
