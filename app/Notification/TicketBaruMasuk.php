@@ -7,7 +7,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Notification;
 
-class TicketBaruMasuk extends Notification
+class TicketStatusUpdated extends Notification
 {
     use Queueable;
 
@@ -22,12 +22,12 @@ class TicketBaruMasuk extends Notification
 
     public function toDatabase($notifiable): array
     {
-        $pelapor = $this->ticket->pelapor->name ?? 'Karyawan';
-
         return [
-            'type' => 'ticket_baru',
+            'type' => 'ticket_status',
             'ticket_id' => $this->ticket->id,
-            'message' => "{$pelapor} membuat laporan baru: \"{$this->ticket->judul}\".",
+            'judul' => $this->ticket->judul,
+            'status' => $this->ticket->status,
+            'message' => "Laporan \"{$this->ticket->judul}\" statusnya diubah jadi {$this->ticket->status}.",
         ];
     }
 

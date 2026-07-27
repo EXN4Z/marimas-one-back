@@ -2,53 +2,39 @@
 
 namespace App\Notifications;
 
+use App\Models\Ticket;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Notification;
 
 class TicketStatusUpdated extends Notification
 {
     use Queueable;
 
-    /**
-     * Create a new notification instance.
-     */
-    public function __construct()
+    public function __construct(protected Ticket $ticket)
     {
-        //
     }
 
-    /**
-     * Get the notification's delivery channels.
-     *
-     * @return array<int, string>
-     */
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        return ['database', 'broadcast'];
     }
 
-    /**
-     * Get the mail representation of the notification.
-     */
-    public function toMail(object $notifiable): MailMessage
+    public function toDatabase($notifiable): array
     {
-        return (new MailMessage)
-            ->line('The introduction to the notification.')
-            ->action('Notification Action', url('/'))
-            ->line('Thank you for using our application!');
-    }
+        $pelapor = $this->ticket->pelapor->name ?? 'Karyawan';
 
-    /**
-     * Get the array representation of the notification.
-     *
-     * @return array<string, mixed>
-     */
-    public function toArray(object $notifiable): array
-    {
         return [
-            //
+            'type' => 'ticket_status',
+            'ticket_id' => $this->ticket->id,
+            'judul' => $this->ticket->judul,
+            'status' => $this->ticket->status,
+            'message' => "Laporan \"{$this->ticket->judul}\" statusnya diubah jadi {$this->ticket->status}.",
         ];
+    }
+
+    public function toBroadcast($notifiable): BroadcastMessage
+    {
+        return new BroadcastMessage($this->toDatabase($notifiable));
     }
 }
