@@ -256,14 +256,15 @@ class DashboardController extends Controller
         for ($i = 5; $i >= 0; $i--) {
             $bulan = Carbon::now()->subMonths($i);
 
-            // UBAH: dari PengajuanCuti ke PengajuanIzin
-            $jumlah = PengajuanIzin::whereMonth('tanggal_mulai', $bulan->month)
-                        ->whereYear('tanggal_mulai', $bulan->year)
-                        ->count();
+            $query = PengajuanIzin::whereMonth('tanggal_mulai', $bulan->month)
+                        ->whereYear('tanggal_mulai', $bulan->year);
+
+            // BARU: scope ke cabang kalau yang login akun cabang.
+            $this->scopeQueryKeCabang($query, 'karyawan.pekerja');
 
             $hasil[] = [
                 'bulan' => $bulan->translatedFormat('M'),
-                'pengajuan' => $jumlah,
+                'pengajuan' => $query->count(),
             ];
         }
 
