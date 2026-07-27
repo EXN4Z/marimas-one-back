@@ -198,6 +198,16 @@ class AsetPemakaiController extends Controller
             return response()->json(['message' => 'Request ini sudah diproses sebelumnya.'], 422);
         }
 
+        // Jaga-jaga: aset yang diminta bisa aja udah berubah status (mis. udah
+        // kelanjur dijual) sebelum request pinjam ini sempat diproses. Tolak
+        // approve-nya di sini biar status 'dijual'/lainnya gak ketiban balik
+        // jadi 'dipakai'.
+        if ($asetPemakai->aset?->status !== 'tersedia') {
+            return response()->json([
+                'message' => 'Aset ini sudah tidak berstatus tersedia (mungkin sudah dipakai/dijual duluan), request tidak bisa disetujui.',
+            ], 422);
+        }
+
         $validated = $request->validate([
             'nomor_penerimaan' => 'nullable|string',
             'tanggal_penerimaan' => 'nullable|date',

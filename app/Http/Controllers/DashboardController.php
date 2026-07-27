@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\Pekerja;
-use App\Models\MutasiBarang;
 use Carbon\Carbon;
 use App\Models\PengajuanIzin;
 use App\Models\Absensi;
@@ -17,63 +16,42 @@ use Illuminate\Database\Eloquent\Builder;
 class DashboardController extends Controller
 {
     // UBAH: dari analisisCuti() ke analisisIzin() -- fitur cuti dihapus, semua ditangani lewat izin
-    // BARU: kalau yang akses role 'cabang', data di-scope cuma ke izin milik
-    // karyawan yang lokasi_kantor_id-nya sama dengan lokasi_kantor_id akun
-    // cabang yang login (bukan izin dari SEMUA cabang).
-    public function analisisIzin()
-    {
-        $query = PengajuanIzin::query();
-        $this->scopeQueryKeCabang($query, 'karyawan.pekerja');
-
+    public function analisisIzin() {
         return response()->json([
-            'total' => (clone $query)->count(),
-            'pending' => (clone $query)->where('status', 'pending')->count(),
-            'disetujui' => (clone $query)->where('status', 'disetujui')->count(),
-            'ditolak' => (clone $query)->where('status', 'ditolak')->count(),
+            'total' => PengajuanIzin::count(),
+            'pending' => PengajuanIzin::where('status', 'pending')->count(),
+            'disetujui' => PengajuanIzin::where('status', 'disetujui')->count(),
+            'ditolak' => PengajuanIzin::where('status', 'ditolak')->count(),
         ]);
     }
-
     public function topKaryawan()
     {
         // UBAH: sumbernya sekarang pengajuan_izin, bukan pengajuan_cuti
-        $query = PengajuanIzin::select(
+        $topKaryawan = PengajuanIzin::select(
                 'users.name as nama',
                 DB::raw('COUNT(pengajuan_izin.id) as jumlah')
             )
             ->join('users', 'pengajuan_izin.karyawan_id', '=', 'users.id')
             ->groupBy('users.id', 'users.name')
             ->orderByDesc('jumlah')
-            ->limit(5);
+            ->limit(5)
+            ->get();
 
-        // BARU: scope ke cabang kalau yang login akun cabang.
-        $user = Auth::user();
-        if ($user && $user->role === 'cabang' && $user->lokasi_kantor_id) {
-            $query->join('pekerja', 'pekerja.user_id', '=', 'users.id')
-                ->where('pekerja.lokasi_kantor_id', $user->lokasi_kantor_id);
-        }
-
-        return response()->json($query->get());
+        return response()->json($topKaryawan);
     }
     public function KaryawanPerDepart()
     {
-        $user = Auth::user();
-
-        $query = Pekerja::join('departemen', 'pekerja.departemen_id', '=', 'departemen.id')
+        $karyawan = Pekerja::join('departemen', 'pekerja.departemen_id', '=', 'departemen.id')
             ->select(
                 'departemen.nama as departemen',
                 DB::raw('COUNT(pekerja.id) as jumlah')
-            );
+            )
+            ->groupBy('departemen.nama')
+            ->get();
 
-        // BARU: scope ke cabang kalau yang login akun cabang.
-        if ($user && $user->role === 'cabang' && $user->lokasi_kantor_id) {
-            $query->where('pekerja.lokasi_kantor_id', $user->lokasi_kantor_id);
-        }
+            $maxJumlah = $karyawan->max('jumlah') ?: 1; // fallback 1 biar ga divide by zero
 
-        $karyawan = $query->groupBy('departemen.nama')->get();
-
-        $maxJumlah = $karyawan->max('jumlah') ?: 1;
-
-        $karyawan = $karyawan->map(function ($item) use ($maxJumlah) {
+            $karyawan = $karyawan->map(function ($item) use ($maxJumlah) {
             $item->percent = round(($item->jumlah / $maxJumlah) * 100);
             return $item;
         });
@@ -88,26 +66,14 @@ class DashboardController extends Controller
         $startDate = Carbon::now()->subDays(6)->startOfDay();
         $endDate   = Carbon::now()->endOfDay();
 
-        $user = Auth::user();
-        $isCabang = $user && $user->role === 'cabang' && $user->lokasi_kantor_id;
+        $totalPekerja = Pekerja::count();
 
-        $pekerjaQuery = Pekerja::query();
-        $absensiQuery = Absensi::whereBetween('tanggal', [
+        // hadir = ada absensi hari itu dengan status tepat_waktu ATAU telat
+        $absensiPerHari = Absensi::whereBetween('tanggal', [
                 $startDate->toDateString(),
                 $endDate->toDateString(),
             ])
-            ->whereIn('status', ['tepat_waktu', 'telat']);
-
-        // BARU: scope total pekerja & absensi ke cabang kalau akun cabang yang login.
-        if ($isCabang) {
-            $pekerjaQuery->where('lokasi_kantor_id', $user->lokasi_kantor_id);
-            $pekerjaIds = (clone $pekerjaQuery)->pluck('id');
-            $absensiQuery->whereIn('karyawan_id', $pekerjaIds);
-        }
-
-        $totalPekerja = $pekerjaQuery->count();
-
-        $absensiPerHari = $absensiQuery
+            ->whereIn('status', ['tepat_waktu', 'telat'])
             ->select('tanggal', DB::raw('COUNT(DISTINCT karyawan_id) as jumlah'))
             ->groupBy('tanggal')
             ->pluck('jumlah', 'tanggal');
@@ -118,7 +84,7 @@ class DashboardController extends Controller
             $key = $tanggal->toDateString();
 
             $hasil[] = [
-                'day'     => $tanggal->translatedFormat('D'),
+                'day'     => $tanggal->translatedFormat('D'), // Sen, Sel, Rab, ...
                 'tanggal' => $key,
                 'hadir'   => (int) ($absensiPerHari[$key] ?? 0),
                 'target'  => $totalPekerja,
@@ -136,52 +102,35 @@ class DashboardController extends Controller
     public function bebanKerja()
     {
         $today = Carbon::today()->toDateString();
-        $user = Auth::user();
-        $isCabang = $user && $user->role === 'cabang' && $user->lokasi_kantor_id;
 
-        // BARU: hitung jumlah pekerja per departemen di-scope ke cabang.
-        $departemenQuery = Departemen::query();
-        if ($isCabang) {
-            $departemenQuery->withCount(['pekerja' => function ($q) use ($user) {
-                $q->where('lokasi_kantor_id', $user->lokasi_kantor_id);
-            }]);
-        } else {
-            $departemenQuery->withCount('pekerja');
-        }
-        $departemenList = $departemenQuery->get();
+        $departemenList = Departemen::withCount('pekerja')->get();
 
-        $absensiHariIniQuery = Absensi::where('tanggal', $today)
-            ->whereIn('status', ['tepat_waktu', 'telat']);
+        // id Pekerja (bukan users.id) yang sudah absen masuk hari ini
+        $pekerjaIdHadirHariIni = Absensi::where('tanggal', $today)
+            ->whereIn('status', ['tepat_waktu', 'telat'])
+            ->pluck('karyawan_id')
+            ->unique();
 
-        if ($isCabang) {
-            $pekerjaIdsCabang = Pekerja::where('lokasi_kantor_id', $user->lokasi_kantor_id)->pluck('id');
-            $absensiHariIniQuery->whereIn('karyawan_id', $pekerjaIdsCabang);
-        }
-
-        $pekerjaIdHadirHariIni = $absensiHariIniQuery->pluck('karyawan_id')->unique();
-
-        $hasil = $departemenList->map(function ($dept) use ($pekerjaIdHadirHariIni, $isCabang, $user) {
+        $hasil = $departemenList->map(function ($dept) use ($pekerjaIdHadirHariIni) {
             $total = $dept->pekerja_count;
 
-            $hadirQuery = Pekerja::where('departemen_id', $dept->id)
-                ->whereIn('id', $pekerjaIdHadirHariIni);
+            $hadir = Pekerja::where('departemen_id', $dept->id)
+                ->whereIn('id', $pekerjaIdHadirHariIni)
+                ->count();
 
-            if ($isCabang) {
-                $hadirQuery->where('lokasi_kantor_id', $user->lokasi_kantor_id);
-            }
-
-            $hadir = $hadirQuery->count();
             $tidakHadir = max($total - $hadir, 0);
 
-            $bebanPercent = $hadir > 0
-                ? round(($tidakHadir / $hadir) * 100)
-                : ($total > 0 ? 100 : 0);
+            if ($hadir > 0) {
+                $bebanPercent = round(($tidakHadir / $hadir) * 100);
+            } else {
+                $bebanPercent = $total > 0 ? 100 : 0; // belum ada yang absen sama sekali = kritis
+            }
 
             return [
-                'departemen'    => $dept->nama,
-                'total'         => $total,
-                'hadir'         => $hadir,
-                'tidak_hadir'   => $tidakHadir,
+                'departemen'   => $dept->nama,
+                'total'        => $total,
+                'hadir'        => $hadir,
+                'tidak_hadir'  => $tidakHadir,
                 'beban_percent' => (int) $bebanPercent,
             ];
         });
@@ -189,48 +138,9 @@ class DashboardController extends Controller
         return response()->json($hasil->sortByDesc('beban_percent')->values());
     }
 
-    public function mutasiBarang() 
-    {
-        Carbon::setLocale('id');
-        $hasil = [];
-
-        for ($i = 5; $i >= 0; $i--) {
-            $bulan = Carbon::now()->subMonths($i);
-
-            $masuk = MutasiBarang::where('tipe', 'masuk')
-                    ->whereMonth('created_at', $bulan->month)
-                    ->whereYear('created_at', $bulan->year)
-                    ->sum('jumlah');
-
-            $keluar = MutasiBarang::where('tipe', 'keluar')
-                    ->whereMonth('created_at', $bulan->month)
-                    ->whereYear('created_at', $bulan->year)
-                    ->sum('jumlah');
-
-            $hasil[] = [
-                'bulan' => $bulan->translatedFormat('M'),
-                'jumlah_masuk' => $masuk,
-                'jumlah_keluar' => $keluar,
-            ];
-        }
-
-        return response()->json($hasil);
-    }
-    public function totalBarang() {
-        $update_masuk = MutasiBarang::where('tipe', 'masuk')->max('updated_at');
-        $update_keluar = MutasiBarang::where('tipe', 'keluar')->max('updated_at');
-        $masuk = MutasiBarang::where('tipe', 'masuk')->sum('jumlah');
-        $keluar = MutasiBarang::where('tipe', 'keluar')->sum('jumlah');
-        return response()->json([
-            'jumlah_masuk' => $masuk,
-            'jumlah_keluar' => $keluar,
-            'update_masuk' => $update_masuk,
-            'update_keluar' => $update_keluar,
-        ]);
-    }
     public function topKehadiran()
     {
-        $query = Absensi::select(
+        $topKehadiran = Absensi::select(
                 'users.name as nama',
                 DB::raw('COUNT(absensis.id) as jumlah')
             )
@@ -239,15 +149,10 @@ class DashboardController extends Controller
             ->where('absensis.status', 'tepat_waktu')
             ->groupBy('users.id', 'users.name')
             ->orderByDesc('jumlah')
-            ->limit(5);
+            ->limit(5)
+            ->get();
 
-        // BARU: scope ke cabang kalau yang login akun cabang.
-        $user = Auth::user();
-        if ($user && $user->role === 'cabang' && $user->lokasi_kantor_id) {
-            $query->where('pekerja.lokasi_kantor_id', $user->lokasi_kantor_id);
-        }
-
-        return response()->json($query->get());
+        return response()->json($topKehadiran);
     }
     public function grafikPengajuan() {
         Carbon::setLocale('id');
@@ -270,80 +175,6 @@ class DashboardController extends Controller
 
         return response()->json($hasil);
     }
-    public function keuanganPerBulan() {
-        $totalPengeluaran = MutasiBarang::with('barang')
-                        ->where('tipe', 'keluar')
-                        ->get()
-                        ->sum(function ($item) {
-                            return $item->jumlah * $item->barang->harga;
-                        });
-        $totalPemasukan = MutasiBarang::with('barang')
-                        ->where('tipe', 'masuk')
-                        ->get()
-                        ->sum(function ($item) {
-                            return $item->jumlah * $item->barang->harga;
-                        });
-        return response()->json([
-            'totalPengeluaran' => $totalPengeluaran,
-            'totalPemasukan' => $totalPemasukan,
-        ]);
-    }
-    public function totalKeuangan() 
-    {
-        Carbon::setLocale('id');
-        $hasil = [];
-
-        for ($i = 5; $i >= 0; $i--) {
-            $bulan = Carbon::now()->subMonths($i);
-
-            $pengeluaran = MutasiBarang::with('barang')
-                ->where('tipe', 'masuk')
-                ->whereMonth('created_at', $bulan->month)
-                ->whereYear('created_at', $bulan->year)
-                ->get()
-                ->sum(fn ($item) => $item->jumlah * $item->barang->harga);
-
-            $pemasukan = MutasiBarang::with('barang')
-                ->where('tipe', 'keluar')
-                ->whereMonth('created_at', $bulan->month)
-                ->whereYear('created_at', $bulan->year)
-                ->get()
-                ->sum(fn ($item) => $item->jumlah * $item->barang->harga);
-
-            $hasil[] = [
-                'bulan' => $bulan->translatedFormat('M'),
-                'pemasukan' => $pemasukan,
-                'pengeluaran' => $pengeluaran,
-            ];
-        }
-
-        return response()->json($hasil);
-    }
-    public function debugKeuangan() {
-        $data = MutasiBarang::with('barang')->get()->map(function ($m) {
-            return [
-                'id' => $m->id,
-                'tipe' => $m->tipe,
-                'jumlah' => $m->jumlah,
-                'barang_id' => $m->barang_id,
-                'barang_ada' => $m->barang ? true : false,
-                'harga' => $m->barang->harga ?? 'BARANG NULL',
-                'created_at' => $m->created_at,
-            ];
-        });
-
-        return response()->json($data);
-    }
-
-    // UBAH: statsCard() sekarang punya 2 jalur.
-    // - role selain 'cabang': PERSIS seperti sebelumnya, data pribadi si user
-    //   yang login (dicari lewat Pekerja::where('user_id', ...)).
-    // - role 'cabang': akun cabang BUKAN baris di tabel pekerja (dia gak
-    //   punya data absensi/izin pribadi), jadi cabang dapet jalur terpisah:
-    //   agregat dari SEMUA karyawan yang lokasi_kantor_id-nya sama dengan
-    //   lokasi_kantor_id akun cabang tsb. Ini yang bikin "Kehadiran Bulan
-    //   Ini" dulu selalu 0 di akun cabang -- dia kena jalur pertama padahal
-    //   harusnya kena jalur kedua ini.
     public function statsCard()
     {
         $user = Auth::user();

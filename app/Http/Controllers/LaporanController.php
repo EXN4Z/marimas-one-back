@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Absensi;
-use App\Models\MutasiBarang;
 use App\Models\PengajuanIzin;
 use App\Models\Pekerja;
 use Illuminate\Http\Request;
@@ -100,6 +99,7 @@ class LaporanController extends Controller
         ]));
     }
 
+    // Helper: nge-stream data jadi file CSV yang bisa langsung dibuka di Excel.
     public function inventaris(Request $request): StreamedResponse
     {
         $bulan = (int) $request->get('bulan', now()->month);
