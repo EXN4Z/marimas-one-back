@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Absensi;
-use App\Models\MutasiBarang;
 use App\Models\PengajuanIzin;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -82,35 +81,6 @@ class LaporanController extends Controller
             $i->status,
             $i->reviewer->name ?? '-',
             $i->alasan,
-        ]));
-    }
-
-    // GET /api/laporan/inventaris?bulan=7&tahun=2026 — export CSV mutasi barang bulanan.
-    public function inventaris(Request $request): StreamedResponse
-    {
-        $bulan = (int) $request->get('bulan', now()->month);
-        $tahun = (int) $request->get('tahun', now()->year);
-
-        $data = MutasiBarang::with('barang', 'user')
-            ->whereMonth('created_at', $bulan)
-            ->whereYear('created_at', $tahun)
-            ->orderBy('created_at')
-            ->get();
-
-        $filename = "laporan-inventaris-{$tahun}-{$bulan}.csv";
-
-        return $this->streamCsv($filename, [
-            'Tanggal', 'Kode Barang', 'Nama Barang', 'Tipe', 'Jumlah', 'Stok Sebelum', 'Stok Sesudah', 'Oleh', 'Catatan',
-        ], $data->map(fn ($m) => [
-            $m->created_at->format('Y-m-d H:i'),
-            $m->barang->kode_barang ?? '-',
-            $m->barang->nama ?? '-',
-            $m->tipe,
-            $m->jumlah,
-            $m->stok_sebelum,
-            $m->stok_sesudah,
-            $m->user->name ?? '-',
-            $m->catatan ?? '-',
         ]));
     }
 

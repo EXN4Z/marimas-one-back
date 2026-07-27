@@ -9,7 +9,6 @@ use App\Models\Departemen;
 use App\Models\Jabatan;
 use App\Models\Absensi;
 use App\Models\Ticket;
-use App\Models\Barang;
 
 class ChatbotController extends Controller
 {
@@ -184,14 +183,11 @@ class ChatbotController extends Controller
 
         $ticketAktif = Ticket::whereIn('status', Ticket::STATUS_AKTIF)->count();
 
-        $stokRendah = Barang::whereColumn('stok', '<=', 'stok_minimum')->count();
-
         $context = "Total karyawan (role karyawan): {$totalKaryawan}. Total admin: {$totalAdmin}.\n";
         $context .= "Rekap jumlah karyawan per departemen: {$perDepartemen}.\n";
         $context .= "Rekap jumlah karyawan per jabatan: {$perJabatan}.\n";
         $context .= "Jumlah data absensi tercatat hari ini ({$today}): {$absensiHariIni}.\n";
         $context .= "Jumlah tiket yang masih aktif (pending/diproses): {$ticketAktif}.\n";
-        $context .= "Jumlah jenis barang dengan stok di bawah/sama dengan stok minimum: {$stokRendah}.\n";
 
         if ($user->role === 'karyawan') {
             $context .= "Catatan: user yang bertanya adalah karyawan biasa (bukan admin), jadi jangan berikan data pribadi karyawan lain (nama/email/gaji orang lain), cukup jawab dalam bentuk jumlah/rekap seperti di atas. Anda tidak bisa mendaftarkan karyawan baru karena bukan admin.\n";
