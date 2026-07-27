@@ -16,22 +16,33 @@ use Illuminate\Database\Eloquent\Builder;
 class DashboardController extends Controller
 {
     // UBAH: dari analisisCuti() ke analisisIzin() -- fitur cuti dihapus, semua ditangani lewat izin
-    public function analisisIzin() {
+    // UBAH: sekarang di-scope ke cabang kalau yang login akun cabang.
+    public function analisisIzin()
+    {
+        $query = PengajuanIzin::query();
+        $this->scopeQueryKeCabang($query, 'karyawan.pekerja');
+
         return response()->json([
-            'total' => PengajuanIzin::count(),
-            'pending' => PengajuanIzin::where('status', 'pending')->count(),
-            'disetujui' => PengajuanIzin::where('status', 'disetujui')->count(),
-            'ditolak' => PengajuanIzin::where('status', 'ditolak')->count(),
+            'total'     => (clone $query)->count(),
+            'pending'   => (clone $query)->where('status', 'pending')->count(),
+            'disetujui' => (clone $query)->where('status', 'disetujui')->count(),
+            'ditolak'   => (clone $query)->where('status', 'ditolak')->count(),
         ]);
     }
+
     public function topKaryawan()
     {
         // UBAH: sumbernya sekarang pengajuan_izin, bukan pengajuan_cuti
-        $topKaryawan = PengajuanIzin::select(
+        // UBAH: di-scope ke cabang.
+        $query = PengajuanIzin::select(
                 'users.name as nama',
                 DB::raw('COUNT(pengajuan_izin.id) as jumlah')
             )
-            ->join('users', 'pengajuan_izin.karyawan_id', '=', 'users.id')
+            ->join('users', 'pengajuan_izin.karyawan_id', '=', 'users.id');
+
+        $this->scopeQueryKeCabang($query, 'karyawan.pekerja');
+
+        $topKaryawan = $query
             ->groupBy('users.id', 'users.name')
             ->orderByDesc('jumlah')
             ->limit(5)
@@ -39,26 +50,34 @@ class DashboardController extends Controller
 
         return response()->json($topKaryawan);
     }
+
     public function KaryawanPerDepart()
     {
-        $karyawan = Pekerja::join('departemen', 'pekerja.departemen_id', '=', 'departemen.id')
+        // UBAH: di-scope ke cabang. Karena base query-nya langsung tabel
+        // pekerja (bukan lewat relasi), pakai relasiKePekerja = '' supaya
+        // helper langsung filter kolom pekerja.lokasi_kantor_id.
+        $query = Pekerja::join('departemen', 'pekerja.departemen_id', '=', 'departemen.id')
             ->select(
                 'departemen.nama as departemen',
                 DB::raw('COUNT(pekerja.id) as jumlah')
-            )
-            ->groupBy('departemen.nama')
-            ->get();
+            );
 
-            $maxJumlah = $karyawan->max('jumlah') ?: 1; // fallback 1 biar ga divide by zero
+        $this->scopeQueryKeCabang($query, '');
 
-            $karyawan = $karyawan->map(function ($item) use ($maxJumlah) {
+        $karyawan = $query->groupBy('departemen.nama')->get();
+
+        $maxJumlah = $karyawan->max('jumlah') ?: 1; // fallback 1 biar ga divide by zero
+
+        $karyawan = $karyawan->map(function ($item) use ($maxJumlah) {
             $item->percent = round(($item->jumlah / $maxJumlah) * 100);
             return $item;
         });
 
         return response()->json($karyawan);
     }
+
     // TAMBAH: kehadiran real 7 hari terakhir (bukan data contoh)
+    // UBAH: di-scope ke cabang (total pekerja & absensi cuma yang di lokasi kantor cabang itu).
     public function kehadiranMingguan()
     {
         Carbon::setLocale('id');
@@ -66,14 +85,20 @@ class DashboardController extends Controller
         $startDate = Carbon::now()->subDays(6)->startOfDay();
         $endDate   = Carbon::now()->endOfDay();
 
-        $totalPekerja = Pekerja::count();
+        $pekerjaQuery = Pekerja::query();
+        $this->scopeQueryKeCabang($pekerjaQuery, '');
+        $totalPekerja = $pekerjaQuery->count();
 
         // hadir = ada absensi hari itu dengan status tepat_waktu ATAU telat
-        $absensiPerHari = Absensi::whereBetween('tanggal', [
+        $absensiQuery = Absensi::whereBetween('tanggal', [
                 $startDate->toDateString(),
                 $endDate->toDateString(),
             ])
-            ->whereIn('status', ['tepat_waktu', 'telat'])
+            ->whereIn('status', ['tepat_waktu', 'telat']);
+
+        $this->scopeQueryKeCabang($absensiQuery, 'pekerja');
+
+        $absensiPerHari = $absensiQuery
             ->select('tanggal', DB::raw('COUNT(DISTINCT karyawan_id) as jumlah'))
             ->groupBy('tanggal')
             ->pluck('jumlah', 'tanggal');
@@ -99,24 +124,35 @@ class DashboardController extends Controller
     // beban_percent selalu 0% buat semua departemen tiap hari (keliatan statis).
     // Sekarang "hadir" dihitung dari absensi check-in beneran hari ini, jadi
     // angkanya ikut berubah sesuai siapa yang udah absen masuk.
+    // UBAH LAGI: sekarang di-scope ke cabang -- baik jumlah pekerja per
+    // departemen maupun status hadirnya cuma diitung dari pekerja di lokasi
+    // kantor cabang yang login.
     public function bebanKerja()
     {
         $today = Carbon::today()->toDateString();
 
-        $departemenList = Departemen::withCount('pekerja')->get();
+        $departemenList = Departemen::withCount(['pekerja' => function ($q) {
+                $this->scopeQueryKeCabang($q, '');
+            }])
+            ->get();
 
         // id Pekerja (bukan users.id) yang sudah absen masuk hari ini
-        $pekerjaIdHadirHariIni = Absensi::where('tanggal', $today)
-            ->whereIn('status', ['tepat_waktu', 'telat'])
-            ->pluck('karyawan_id')
-            ->unique();
+        $absensiQuery = Absensi::where('tanggal', $today)
+            ->whereIn('status', ['tepat_waktu', 'telat']);
+
+        $this->scopeQueryKeCabang($absensiQuery, 'pekerja');
+
+        $pekerjaIdHadirHariIni = $absensiQuery->pluck('karyawan_id')->unique();
 
         $hasil = $departemenList->map(function ($dept) use ($pekerjaIdHadirHariIni) {
             $total = $dept->pekerja_count;
 
-            $hadir = Pekerja::where('departemen_id', $dept->id)
-                ->whereIn('id', $pekerjaIdHadirHariIni)
-                ->count();
+            $hadirQuery = Pekerja::where('departemen_id', $dept->id)
+                ->whereIn('id', $pekerjaIdHadirHariIni);
+
+            $this->scopeQueryKeCabang($hadirQuery, '');
+
+            $hadir = $hadirQuery->count();
 
             $tidakHadir = max($total - $hadir, 0);
 
@@ -140,13 +176,18 @@ class DashboardController extends Controller
 
     public function topKehadiran()
     {
-        $topKehadiran = Absensi::select(
+        // UBAH: di-scope ke cabang.
+        $query = Absensi::select(
                 'users.name as nama',
                 DB::raw('COUNT(absensis.id) as jumlah')
             )
             ->join('pekerja', 'absensis.karyawan_id', '=', 'pekerja.id')
             ->join('users', 'pekerja.user_id', '=', 'users.id')
-            ->where('absensis.status', 'tepat_waktu')
+            ->where('absensis.status', 'tepat_waktu');
+
+        $this->scopeQueryKeCabang($query, 'pekerja');
+
+        $topKehadiran = $query
             ->groupBy('users.id', 'users.name')
             ->orderByDesc('jumlah')
             ->limit(5)
@@ -154,7 +195,9 @@ class DashboardController extends Controller
 
         return response()->json($topKehadiran);
     }
-    public function grafikPengajuan() {
+
+    public function grafikPengajuan()
+    {
         Carbon::setLocale('id');
         $hasil = [];
 
@@ -175,6 +218,7 @@ class DashboardController extends Controller
 
         return response()->json($hasil);
     }
+
     public function statsCard()
     {
         $user = Auth::user();
@@ -183,6 +227,8 @@ class DashboardController extends Controller
             return response()->json(['message' => 'Unauthenticated'], 401);
         }
 
+        // Akun cabang sudah punya jalur agregat sendiri (statsCardCabang),
+        // jadi tidak perlu scopeQueryKeCabang di sini.
         if ($user->role === 'cabang') {
             return $this->statsCardCabang($user);
         }
@@ -227,6 +273,8 @@ class DashboardController extends Controller
     }
 
     // BARU: versi statsCard khusus akun cabang -- agregat, bukan data pribadi.
+    // Method ini sudah scoped secara manual lewat $pekerjaIds (filter
+    // lokasi_kantor_id), jadi tidak pakai scopeQueryKeCabang lagi di sini.
     private function statsCardCabang($user)
     {
         if (! $user->lokasi_kantor_id) {
@@ -276,15 +324,29 @@ class DashboardController extends Controller
         ]);
     }
 
-    // BARU: helper buat nge-scope query manapun (PengajuanIzin, dst) ke
-    // lokasi_kantor_id akun cabang yang login, lewat relasi nested sampai ke
-    // tabel pekerja. Kalau yang login bukan role 'cabang' (atau lokasi_kantor_id
-    // belum diset), query dibiarin apa adanya (gak difilter).
+    // BARU: helper buat nge-scope query manapun (PengajuanIzin, Absensi, dst)
+    // ke lokasi_kantor_id akun cabang yang login.
+    //
+    // - $relasiKePekerja diisi nama relasi (bisa nested, misal 'karyawan.pekerja')
+    //   kalau base model query-nya BUKAN Pekerja -- helper akan whereHas ke
+    //   relasi itu lalu filter lokasi_kantor_id di ujungnya.
+    // - $relasiKePekerja diisi string kosong '' kalau base model query-nya
+    //   SUDAH Pekerja itu sendiri (misal Pekerja::query(), atau builder relasi
+    //   'pekerja' dari withCount/with) -- helper filter langsung kolom
+    //   pekerja.lokasi_kantor_id tanpa whereHas.
+    //
+    // Kalau yang login bukan role 'cabang' (atau lokasi_kantor_id belum
+    // diset), query dibiarin apa adanya (gak difilter).
     private function scopeQueryKeCabang(Builder $query, string $relasiKePekerja): void
     {
         $user = Auth::user();
 
         if (! $user || $user->role !== 'cabang' || ! $user->lokasi_kantor_id) {
+            return;
+        }
+
+        if ($relasiKePekerja === '') {
+            $query->where('pekerja.lokasi_kantor_id', $user->lokasi_kantor_id);
             return;
         }
 
@@ -301,5 +363,4 @@ class DashboardController extends Controller
             ? 'Update terakhir ' . Carbon::parse($updatedAt)->diffForHumans()
             : 'Belum ada data';
     }
-    
 }
