@@ -182,14 +182,17 @@ class DashboardController extends Controller
             return response()->json(['message' => 'Unauthenticated'], 401);
         }
 
-        $pekerja = Pekerja::where('user_id', $user->id)->first(); // cari Pekerja yang sesuai
+        if ($user->role === 'cabang') {
+            return $this->statsCardCabang($user);
+        }
 
-        // Jika pekerja tidak ditemukan, kembalikan nilai default agar tidak error
+        $pekerja = Pekerja::where('user_id', $user->id)->first();
+
         if (! $pekerja) {
             return response()->json([
                 'kehadiran' => ['value' => 0, 'trend' => 'Belum ada data'],
                 'izin' => ['value' => 0, 'trend' => 'Belum ada data'],
-                'izinAktif' => ['value' => '-', 'trend' => 'Belum ada data'],
+                'izinAktif' => ['value' => 0, 'trend' => 'Belum ada data'],
                 'ticket' => ['value' => 0, 'trend' => 'Belum ada data'],
             ]);
         }
@@ -197,23 +200,10 @@ class DashboardController extends Controller
         $izin = PengajuanIzin::where('karyawan_id', $pekerja->id);
         $absensi = Absensi::where('karyawan_id', $pekerja->id);
         $ticket = Ticket::where('user_id', $user->id);
-        $value = '-';
-
-        $izinAktif = (clone $izin)
-            ->where('status', 'disetujui')
-            ->latest()
-            ->first();
-
-        if ($izinAktif) {
-            $mulai = Carbon::parse($izinAktif->tanggal_mulai);
-            $selesai = Carbon::parse($izinAktif->tanggal_selesai);
-            $hari = $mulai->diffInDays($selesai) + 1;
-            $value = $hari . ' hari';
-        }
 
         return response()->json([
             'kehadiran' => [
-                'value' => (clone $absensi)->where('status', 'tepat_waktu')->count(),
+                'value' => (clone $absensi)->whereIn('status', ['tepat_waktu', 'telat'])->count(),
                 'trend' => $this->getTrend((clone $absensi)->where('status', 'tepat_waktu')),
             ],
             'izin' => [
@@ -221,15 +211,87 @@ class DashboardController extends Controller
                 'trend' => $this->getTrend($izin),
             ],
             'izinAktif' => [
-                'value' => $value,
-                'trend' => $this->getTrend($izin)
+                // UBAH: sebelumnya format "X hari" dari izin disetujui terakhir.
+                // Sekarang TOTAL seluruh pengajuan izin milik karyawan ini (semua status).
+                'value' => (clone $izin)->count(),
+                'trend' => $this->getTrend($izin),
             ],
             'ticket' => [
-                'value' => (clone $ticket)->where('status', 'diproses')->count(),
+                // UBAH: sebelumnya cuma hitung status 'diproses'.
+                // Sekarang TOTAL seluruh ticket yang pernah diajukan karyawan ini (semua status).
+                'value' => (clone $ticket)->count(),
                 'trend' => $this->getTrend($ticket)
             ]
         ]);
     }
+
+    // BARU: versi statsCard khusus akun cabang -- agregat, bukan data pribadi.
+    private function statsCardCabang($user)
+    {
+        if (! $user->lokasi_kantor_id) {
+            return response()->json([
+                'kehadiran' => ['value' => 0, 'trend' => 'Akun cabang ini belum diset lokasi kantornya'],
+                'izin' => ['value' => 0, 'trend' => 'Belum ada data'],
+                'izinAktif' => ['value' => 0, 'trend' => 'Belum ada data'],
+                'ticket' => ['value' => 0, 'trend' => 'Tidak berlaku untuk akun cabang'],
+            ]);
+        }
+
+        $pekerjaIds = Pekerja::where('lokasi_kantor_id', $user->lokasi_kantor_id)->pluck('id');
+
+        // "Kehadiran Bulan Ini" = total kehadiran (tepat_waktu) SEMUA karyawan
+        // di cabang ini, bulan berjalan.
+        $absensiBulanIni = Absensi::whereIn('karyawan_id', $pekerjaIds)
+            ->whereIn('status', ['tepat_waktu', 'telat'])
+            ->whereMonth('tanggal', now()->month)
+            ->whereYear('tanggal', now()->year);
+
+        $izinCabang = PengajuanIzin::whereIn('karyawan_id', function ($q) use ($pekerjaIds) {
+            $q->select('user_id')->from('pekerja')->whereIn('id', $pekerjaIds);
+        });
+
+        return response()->json([
+            'kehadiran' => [
+                'value' => (clone $absensiBulanIni)->count(),
+                'trend' => $this->getTrend($absensiBulanIni),
+            ],
+            'izin' => [
+                'value' => (clone $izinCabang)->where('status', 'pending')->count(),
+                'trend' => $this->getTrend($izinCabang),
+            ],
+            'izinAktif' => [
+                // Beda dari jalur pribadi (yang formatnya "X hari"): buat
+                // agregat banyak karyawan, "X hari" gak masuk akal, jadi
+                // ditampilin sebagai JUMLAH izin yang lagi disetujui/aktif.
+                'value' => (clone $izinCabang)->where('status', 'disetujui')->count(),
+                'trend' => $this->getTrend($izinCabang),
+            ],
+            'ticket' => [
+                // Ticket gak ada relasi ke lokasi_kantor sama sekali di model
+                // yang ada sekarang, jadi sengaja gak ditampilin per-cabang.
+                'value' => 0,
+                'trend' => 'Tidak berlaku untuk akun cabang',
+            ],
+        ]);
+    }
+
+    // BARU: helper buat nge-scope query manapun (PengajuanIzin, dst) ke
+    // lokasi_kantor_id akun cabang yang login, lewat relasi nested sampai ke
+    // tabel pekerja. Kalau yang login bukan role 'cabang' (atau lokasi_kantor_id
+    // belum diset), query dibiarin apa adanya (gak difilter).
+    private function scopeQueryKeCabang(Builder $query, string $relasiKePekerja): void
+    {
+        $user = Auth::user();
+
+        if (! $user || $user->role !== 'cabang' || ! $user->lokasi_kantor_id) {
+            return;
+        }
+
+        $query->whereHas($relasiKePekerja, function ($q) use ($user) {
+            $q->where('lokasi_kantor_id', $user->lokasi_kantor_id);
+        });
+    }
+
     private function getTrend(Builder $query): string
     {
         $updatedAt = (clone $query)->max('updated_at');
