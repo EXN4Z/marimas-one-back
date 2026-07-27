@@ -19,6 +19,9 @@ class User extends Authenticatable
         'phone',
         'password',
         'role',
+        // BARU: cuma dipakai buat akun role 'cabang', nunjuk ke lokasi_kantor
+        // mana yang dia urus. Null buat role lain.
+        'lokasi_kantor_id',
     ];
 
     protected $hidden = [
@@ -62,5 +65,11 @@ class User extends Authenticatable
     public function izin()
     {
         return $this->hasMany(PengajuanIzin::class, 'karyawan_id');
+    }
+
+    // BARU: lokasi kantor yang diurus akun ini — cuma relevan buat role 'cabang'.
+    public function lokasiKantor()
+    {
+        return $this->belongsTo(LokasiKantor::class, 'lokasi_kantor_id');
     }
 }
