@@ -1,32 +1,31 @@
 <?php
 
-use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\ChatbotController;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\UserController;
-use App\Http\Controllers\AbsensiController;
-use App\Http\Controllers\DepartemenController;
-use App\Http\Controllers\JabatanController;
-use App\Http\Controllers\TicketController;
+use App\Http\Controllers\Karyawan\UserController;
+use App\Http\Controllers\Absensi\AbsensiController;
+use App\Http\Controllers\Organisasi\DepartemenController;
+use App\Http\Controllers\Organisasi\JabatanController;
+use App\Http\Controllers\Ticketing\TicketController;
 use App\Http\Controllers\AuditLogController;
-use App\Http\Controllers\IzinController;
-use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Izin\IzinController;
+use App\Http\Controllers\Dashboard\DashboardController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
-use SebastianBergmann\CodeCoverage\Report\Html\Dashboard;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\AdminUserController;
+use App\Http\Controllers\Karyawan\AdminUserController;
 use App\Http\Controllers\AgendaController;
-use App\Http\Controllers\LaporanController;
+use App\Http\Controllers\Dashboard\LaporanController;
 use App\Http\Controllers\PayrollController;
-use App\Http\Controllers\SupplierController;
-use App\Http\Controllers\JenisAsetController;
-use App\Http\Controllers\KelengkapanMasterController;
-use App\Http\Controllers\AsetController;
-use App\Http\Controllers\AsetPemakaiController;
-use App\Http\Controllers\AsetPenggantianSparepartController;
-use App\Http\Controllers\AsetPenangananController;
-use App\Http\Controllers\CabangController;
+use App\Http\Controllers\Inventaris\SupplierController;
+use App\Http\Controllers\Inventaris\JenisAsetController;
+use App\Http\Controllers\Inventaris\KelengkapanMasterController;
+use App\Http\Controllers\Inventaris\AsetController;
+use App\Http\Controllers\Inventaris\AsetPemakaiController;
+use App\Http\Controllers\Inventaris\AsetPenggantianSparepartController;
+use App\Http\Controllers\Inventaris\AsetPenangananController;
+use App\Http\Controllers\Organisasi\CabangController;
 use App\Http\Controllers\PushSubscriptionController;
 
 
@@ -182,6 +181,11 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     Route::get('/jenis-aset', [JenisAsetController::class, 'index']);
     Route::get('/kelengkapan-master', [KelengkapanMasterController::class, 'index']);
     Route::get('/supplier', [SupplierController::class, 'index']);
+
+    // admin: riwayat GLOBAL semua aset. karyawan/manajer/hr: riwayat
+    // dibatasi cuma punya sendiri (dicek & difilter di dalam controller,
+    // BUKAN cuma di middleware — biar gak ada celah data orang lain bocor).
+    Route::get('/aset-pemakai/riwayat', [AsetPemakaiController::class, 'riwayat']);
 });
 
 // BARU: dipisah ke grup admin+hr — endpoint ini nampilin SEMUA laporan
@@ -199,7 +203,6 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/aset/{aset}/pemakai', [AsetPemakaiController::class, 'store']);
     Route::post('/aset-pemakai/{asetPemakai}/kembalikan', [AsetPemakaiController::class, 'kembalikan']);
     Route::get('/aset-pemakai/pending', [AsetPemakaiController::class, 'pending']); // admin: daftar request pinjam pending
-    Route::get('/aset-pemakai/riwayat', [AsetPemakaiController::class, 'riwayat']); // admin: riwayat global serah-terima + pengembalian aset
     Route::post('/aset-pemakai/{asetPemakai}/setujui', [AsetPemakaiController::class, 'setujui']); // admin: approve
     Route::post('/aset-pemakai/{asetPemakai}/tolak', [AsetPemakaiController::class, 'tolak']); // admin: reject
 

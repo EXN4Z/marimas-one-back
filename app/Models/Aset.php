@@ -70,6 +70,12 @@ class Aset extends Model
         return $this->hasMany(AsetPenggantianSparepart::class, 'aset_id')->latest('tanggal');
     }
 
+    // catatan penjualan/writeoff aset (kalau statusnya udah 'dijual')
+    public function writeoff()
+    {
+        return $this->hasOne(AsetWriteoff::class, 'aset_id');
+    }
+
     // laporan kerusakan yang belum ditangani (tanggal_selesai masih null)
     public function penangananAktif()
     {

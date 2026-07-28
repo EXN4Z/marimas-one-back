@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -11,10 +12,14 @@ return new class extends Migration
      * dihapus dari kode aplikasi. Migration ini menghapus tabel-tabel
      * fisiknya (beserta datanya) yang masih tersisa di database.
      *
-     * Urutan drop penting:
-     * 1. Lepas FK barang_id di tabel aset (kalau masih ada)
-     * 2. mutasi_barang & peminjaman (FK ke barang)
-     * 3. barang & kategori_barang
+     * FIX: sebelumnya drop tabel satu-satu pakai dropIfExists() dan gagal
+     * di Postgres — "cannot drop table barang because other objects depend
+     * on it" (mis. FK barang_units_barang_id_foreign di tabel barang_units,
+     * yang gak ke-drop duluan karena gak ada di daftar semula). Daripada
+     * nebak-nebak dan nge-list ulang satu-satu tabel dependen yang mungkin
+     * kelewat, pakai DROP ... CASCADE langsung: otomatis ikut nyabut semua
+     * FK/objek lain yang masih nempel ke tabel-tabel ini, gak peduli
+     * namanya apa.
      */
     public function up(): void
     {
@@ -25,10 +30,7 @@ return new class extends Migration
             });
         }
 
-        Schema::dropIfExists('mutasi_barang');
-        Schema::dropIfExists('peminjaman');
-        Schema::dropIfExists('barang');
-        Schema::dropIfExists('kategori_barang');
+        DB::statement('DROP TABLE IF EXISTS mutasi_barang, peminjaman, barang_units, barang, kategori_barang CASCADE');
     }
 
     public function down(): void

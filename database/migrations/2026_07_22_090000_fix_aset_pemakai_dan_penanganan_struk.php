@@ -15,12 +15,10 @@ return new class extends Migration
             $table->string('no_struk_pengembalian')->nullable()->after('nomor_pengembalian');
         });
 
-        // aset_penanganan sebelumnya nempel ke aset_peminjaman (sistem lama,
-        // gak kepake). Sistem aktif sekarang aset_pemakai, jadi pindah FK-nya.
+        // aset_penanganan sekarang nempel ke aset_pemakai (sistem lama pakai
+        // aset_peminjaman udah gak pernah dibuat sama sekali, jadi gak ada yang
+        // perlu di-drop di sini).
         Schema::table('aset_penanganan', function (Blueprint $table) {
-            $table->dropForeign(['aset_peminjaman_id']);
-            $table->dropColumn('aset_peminjaman_id');
-
             $table->foreignId('aset_pemakai_id')->nullable()->after('aset_id')
                 ->constrained('aset_pemakai')->nullOnDelete();
         });
@@ -42,8 +40,6 @@ return new class extends Migration
         Schema::table('aset_penanganan', function (Blueprint $table) {
             $table->dropForeign(['aset_pemakai_id']);
             $table->dropColumn('aset_pemakai_id');
-
-            $table->foreignId('aset_peminjaman_id')->nullable();
         });
 
         // aset_peminjaman / aset_perbaikan sengaja gak direstore di down():

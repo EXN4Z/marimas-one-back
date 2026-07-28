@@ -7,12 +7,26 @@ use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
+    /**
+     * Migration pembersihan sebelumnya (2026_07_21_034100) ternyata men-drop
+     * tabel 'aset' & 'supplier' versi BARU yang sudah berhasil dibuat di deploy
+     * sebelumnya (migration create-nya sudah tercatat "Ran" jadi gak dijalankan
+     * ulang). Akibatnya kedua tabel itu hilang permanen. Migration ini bikin
+     * ulang -- tapi HANYA kalau memang belum ada, jadi aman dijalankan di
+     * kondisi database apapun (baik yang kena masalah ini maupun yang bersih).
+     */
     public function up(): void
     {
-        // Migration 2026_07_21_034402_repair_aset_and_supplier_tables juga
-        // bisa membuat tabel ini (khusus buat database lama yang tabelnya
-        // sempat kehapus). Cek dulu biar gak nabrak "relation already exists"
-        // kalau repair migration itu udah jalan lebih dulu.
+        if (!Schema::hasTable('supplier')) {
+            Schema::create('supplier', function (Blueprint $table) {
+                $table->id();
+                $table->string('nama')->unique();
+                $table->string('alamat')->nullable();
+                $table->string('telepon')->nullable();
+                $table->timestamps();
+            });
+        }
+
         if (!Schema::hasTable('aset')) {
             Schema::create('aset', function (Blueprint $table) {
                 $table->id();
@@ -33,15 +47,13 @@ return new class extends Migration
                 $table->date('tanggal_pembelian')->nullable();
                 $table->string('no_surat_jalan')->nullable();
                 $table->string('no_good_receive')->nullable();
-                $table->string('status')->default('tersedia'); // tersedia, dipakai, rusak, diperbaiki
+                $table->string('status')->default('tersedia');
                 $table->timestamps();
             });
         }
 
-        // Auto-generate kode_aset format: IT-2026-00001, mirip pola generate_kode_barang.
-        // create-or-replace + drop-trigger-if-exists bikin blok ini aman
-        // dijalankan berkali-kali (misal trigger-nya udah dibuat duluan
-        // oleh repair migration).
+        // Trigger auto-generate kode_aset. create-or-replace + drop-if-exists
+        // jadi aman dijalankan berkali-kali.
         DB::unprepared(<<<'SQL'
             create or replace function generate_kode_aset()
             returns trigger as $$
@@ -83,8 +95,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::unprepared('drop trigger if exists trg_generate_kode_aset on aset');
-        DB::unprepared('drop function if exists generate_kode_aset');
-        Schema::dropIfExists('aset');
+        // Sengaja gak di-drop lagi di sini biar gak kejadian yang sama.
     }
 };

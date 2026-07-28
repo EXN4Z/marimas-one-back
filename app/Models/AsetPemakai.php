@@ -17,12 +17,25 @@ class AsetPemakai extends Model
         'nomor_penerimaan',
         'no_struk_penerimaan',
         'tanggal_penerimaan',
+        'diterima_at',
         'catatan_penerimaan',
         'nomor_pengembalian',
         'no_struk_pengembalian',
         'tanggal_pengembalian',
+        'dikembalikan_at',
         'catatan_pengembalian',
         'catatan_penolakan',
+    ];
+
+    // *_at (datetime lengkap jam-menit-detik) — dipakai buat riwayat aktivitas
+    // yang butuh waktu akurat. Beda sama tanggal_* (cuma tanggal, dipakai buat
+    // tampilan & bisnis logic lain) — lihat migration
+    // add_waktu_akurat_ke_aset_pemakai_dan_penanganan.
+    protected $casts = [
+        'tanggal_penerimaan' => 'date',
+        'tanggal_pengembalian' => 'date',
+        'diterima_at' => 'datetime',
+        'dikembalikan_at' => 'datetime',
     ];
     
     public function aset()
