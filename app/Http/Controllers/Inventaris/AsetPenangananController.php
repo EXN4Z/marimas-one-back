@@ -66,10 +66,18 @@ class AsetPenangananController extends Controller
         }
 
         // cek user emang lagi pegang aset ini via pemakaian aktif (status disetujui, belum dikembalikan)
+        // PENTING: akun cabang gak punya relasi pekerja (dia nempel langsung
+        // lewat user_id di aset_pemakai, bukan pekerja_id) -- kalau cuma cek
+        // whereHas('pekerja', ...) laporan cabang gak akan pernah ketemu
+        // pemakai-nya, jadinya aset_pemakai_id kesimpen null dan nama
+        // pelapornya ilang di riwayat. Makanya di sini dicek dua-duanya.
         $pemakai = AsetPemakai::where('aset_id', $validated['aset_id'])
             ->where('status', 'disetujui')
             ->whereNull('tanggal_pengembalian')
-            ->whereHas('pekerja', fn ($q) => $q->where('user_id', $user->id))
+            ->where(function ($q) use ($user) {
+                $q->whereHas('pekerja', fn ($qq) => $qq->where('user_id', $user->id))
+                    ->orWhere('user_id', $user->id);
+            })
             ->first();
 
         $penanganan = DB::transaction(function () use ($validated, $pemakai) {

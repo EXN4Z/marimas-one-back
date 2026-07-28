@@ -186,6 +186,12 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     // dibatasi cuma punya sendiri (dicek & difilter di dalam controller,
     // BUKAN cuma di middleware — biar gak ada celah data orang lain bocor).
     Route::get('/aset-pemakai/riwayat', [AsetPemakaiController::class, 'riwayat']);
+
+    // PINDAH ke sini (dari grup admin-only) — pemakai (karyawan/cabang) yang
+    // lagi pegang aset ini harus bisa ngembaliin sendiri, bukan cuma admin.
+    // Otorisasi detail (harus admin ATAU pemilik pemakaian ini) dicek di
+    // dalam AsetPemakaiController::kembalikan(), bukan cuma di middleware.
+    Route::post('/aset-pemakai/{asetPemakai}/kembalikan', [AsetPemakaiController::class, 'kembalikan']);
 });
 
 // BARU: dipisah ke grup admin+hr — endpoint ini nampilin SEMUA laporan
@@ -201,7 +207,6 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::delete('/aset/{aset}', [AsetController::class, 'destroy']);
 
     Route::post('/aset/{aset}/pemakai', [AsetPemakaiController::class, 'store']);
-    Route::post('/aset-pemakai/{asetPemakai}/kembalikan', [AsetPemakaiController::class, 'kembalikan']);
     Route::get('/aset-pemakai/pending', [AsetPemakaiController::class, 'pending']); // admin: daftar request pinjam pending
     Route::post('/aset-pemakai/{asetPemakai}/setujui', [AsetPemakaiController::class, 'setujui']); // admin: approve
     Route::post('/aset-pemakai/{asetPemakai}/tolak', [AsetPemakaiController::class, 'tolak']); // admin: reject

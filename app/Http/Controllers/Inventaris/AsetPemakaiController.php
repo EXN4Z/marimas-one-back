@@ -42,8 +42,19 @@ class AsetPemakaiController extends Controller
         $isAdmin = $user?->role === 'admin';
         $pekerjaId = $user?->pekerja?->id;
 
-        $limit = (int) $request->query('limit', 10);
-        $ambil = $limit * 2; // ambil lebih banyak dari tiap sumber biar aman pas digabung+dipotong
+        // Pagination: minimal 10 data per halaman (dipaksa di server biar gak
+        // ada yang kirim per_page kecil trus datanya keliatan bolong pas
+        // digabung dari beberapa sumber). Filter 'type' opsional, dipakai
+        // tab filter di frontend (Riwayat Aset) biar pagination-nya tetap
+        // konsisten pas lagi difilter (bukan filter di halaman yang sudah
+        // dipotong).
+        $page = max(1, (int) $request->query('page', 1));
+        $perPage = max(10, (int) $request->query('per_page', $request->query('limit', 10)));
+        $typeFilter = $request->query('type');
+
+        // Ambil cukup banyak dari tiap sumber biar aman pas digabung+diurutkan
+        // ulang di memori sebelum dipotong sesuai halaman yang diminta.
+        $ambil = max(500, $page * $perPage * 2);
 
         $events = collect();
 
@@ -170,12 +181,25 @@ class AsetPemakaiController extends Controller
                 });
         }
 
-        $riwayat = $events
+        $sorted = $events
             ->sortByDesc(fn ($ev) => $ev['waktu'] instanceof \Carbon\Carbon ? $ev['waktu'] : \Carbon\Carbon::parse($ev['waktu']))
-            ->values()
-            ->take($limit);
+            ->values();
 
-        return response()->json($riwayat);
+        if ($typeFilter) {
+            $sorted = $sorted->where('type', $typeFilter)->values();
+        }
+
+        $total = $sorted->count();
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        $data = $sorted->forPage($page, $perPage)->values();
+
+        return response()->json([
+            'data' => $data,
+            'current_page' => $page,
+            'last_page' => $lastPage,
+            'total' => $total,
+            'per_page' => $perPage,
+        ]);
     }
 
     /**
@@ -327,12 +351,24 @@ class AsetPemakaiController extends Controller
 
     /**
      * POST /api/aset-pemakai/{asetPemakai}/kembalikan
-     * Admin terima kembali aset dari pemakai. Wajib sertain no_struk_penerimaan
-     * (struk asli pas serah-terima) sebagai bukti pengembalian ini benar.
-     * Ditolak kalau masih ada laporan penanganan/perbaikan yang belum selesai.
+     * Admin terima kembali aset dari pemakai, ATAU pemakainya sendiri
+     * (karyawan/cabang yang lagi pegang aset ini) yang ngembaliin langsung.
+     * Wajib sertain no_struk_penerimaan (struk asli pas serah-terima) sebagai
+     * bukti pengembalian ini benar. Ditolak kalau masih ada laporan
+     * penanganan/perbaikan yang belum selesai.
      */
     public function kembalikan(Request $request, AsetPemakai $asetPemakai)
     {
+        $user = $request->user();
+        $isPemilikPemakaian = ($asetPemakai->pekerja?->user_id === $user->id)
+            || ($asetPemakai->user_id === $user->id);
+
+        abort_unless(
+            $user->hasRoleAtLeast('admin') || $isPemilikPemakaian,
+            403,
+            'Kamu tidak punya akses untuk mengembalikan aset ini.'
+        );
+
         $validated = $request->validate([
             'no_struk_penerimaan' => 'required|string',
             'nomor_pengembalian' => 'nullable|string',
