@@ -91,7 +91,11 @@ class AsetPemakaiController extends Controller
                 }
             });
 
-        $penangananQuery = AsetPenanganan::with('aset:id,kode_aset,merek,tipe');
+        $penangananQuery = AsetPenanganan::with([
+            'aset:id,kode_aset,merek,tipe',
+            'pemakai.pekerja.user:id,name',
+            'pemakai.user:id,name', // akun cabang gak punya pekerja, jadi user-nya harus di-load langsung
+        ]);
 
         if (!$isAdmin) {
             // laporan kerusakan gak punya user_id/pekerja_id langsung —
@@ -106,10 +110,16 @@ class AsetPemakaiController extends Controller
             ->limit($ambil)
             ->get()
             ->each(function ($pn) use (&$events) {
+                // nama pelapor: sama kayak event pinjam, ambil dari
+                // pemakai->pekerja->user atau pemakai->user. Kalau
+                // aset_pemakai_id null (lapor pas aset lagi nganggur/audit
+                // gudang), nama emang gak ada -- tampilin '-' di frontend.
+                $nama = $pn->pemakai?->pekerja?->user?->name ?? $pn->pemakai?->user?->name ?? null;
+
                 $events->push([
                     'type' => 'lapor_rusak',
                     'waktu' => $pn->lapor_at ?? $pn->tanggal_lapor,
-                    'nama' => null,
+                    'nama' => $nama,
                     'aset' => $pn->aset,
                     'keluhan' => $pn->keluhan,
                 ]);
@@ -117,7 +127,7 @@ class AsetPemakaiController extends Controller
                     $events->push([
                         'type' => 'mulai_perbaikan',
                         'waktu' => $pn->diterima_at ?? $pn->tanggal_diterima,
-                        'nama' => null,
+                        'nama' => $nama,
                         'aset' => $pn->aset,
                     ]);
                 }
@@ -125,7 +135,7 @@ class AsetPemakaiController extends Controller
                     $events->push([
                         'type' => 'selesai_perbaikan',
                         'waktu' => $pn->selesai_at ?? $pn->tanggal_selesai,
-                        'nama' => null,
+                        'nama' => $nama,
                         'aset' => $pn->aset,
                         'hasil' => $pn->hasil,
                     ]);
