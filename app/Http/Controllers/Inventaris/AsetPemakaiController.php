@@ -51,10 +51,18 @@ class AsetPemakaiController extends Controller
         $page = max(1, (int) $request->query('page', 1));
         $perPage = max(10, (int) $request->query('per_page', $request->query('limit', 10)));
         $typeFilter = $request->query('type');
+        // Search bebas: cocok ke kode aset, merek/tipe aset, ATAU nama
+        // peminjam/pelapor. Dilakukan di memori (bareng filter type) SETELAH
+        // events digabung, jadi tetap konsisten sama scoping kepemilikan di
+        // bawah (user cuma nyari dalam data dia sendiri, gak bisa nembus ke
+        // punya orang lain lewat search).
+        $search = trim((string) $request->query('search', ''));
 
         // Ambil cukup banyak dari tiap sumber biar aman pas digabung+diurutkan
-        // ulang di memori sebelum dipotong sesuai halaman yang diminta.
-        $ambil = max(500, $page * $perPage * 2);
+        // ulang di memori sebelum dipotong sesuai halaman yang diminta. Pas
+        // lagi search, ambil lebih banyak lagi -- kalau enggak, pencarian
+        // cuma nyisir data terbaru aja dan data lama yang cocok jadi ketutup.
+        $ambil = $search !== '' ? 2000 : max(500, $page * $perPage * 2);
 
         $events = collect();
 
@@ -187,6 +195,21 @@ class AsetPemakaiController extends Controller
 
         if ($typeFilter) {
             $sorted = $sorted->where('type', $typeFilter)->values();
+        }
+
+        if ($search !== '') {
+            $needle = mb_strtolower($search);
+            $sorted = $sorted->filter(function ($ev) use ($needle) {
+                $aset = $ev['aset'] ?? null;
+                $haystack = mb_strtolower(implode(' ', array_filter([
+                    $ev['nama'] ?? '',
+                    $aset?->kode_aset ?? '',
+                    $aset?->merek ?? '',
+                    $aset?->tipe ?? '',
+                ])));
+
+                return str_contains($haystack, $needle);
+            })->values();
         }
 
         $total = $sorted->count();
