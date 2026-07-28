@@ -189,7 +189,7 @@ class AsetController extends Controller
     }
     public function jual(Aset $aset)
     {
-        if ($aset->status !== 'rusak_berat') {
+        if ($aset->status !== 'rusak_berat' && $aset->status !== 'tersedia') {
             return response()->json([
                 'message' => 'Aset hanya bisa dijual jika statusnya Rusak Berat.',
             ], 422);
