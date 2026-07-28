@@ -12,10 +12,6 @@ return new class extends Migration
             $table->id();
             $table->foreignId('aset_id')->constrained('aset');
 
-            // nullable: laporan bisa muncul pas aset lagi nganggur (audit gudang),
-            // gak selalu ada peminjaman aktif yang nempel.
-            $table->foreignId('aset_peminjaman_id')->nullable()->constrained('aset_peminjaman')->nullOnDelete();
-
             $table->enum('jenis_kerusakan', ['software', 'hardware']);
             $table->text('keluhan');
 
