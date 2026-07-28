@@ -114,12 +114,20 @@ class AsetPemakaiController extends Controller
                 // pemakai->pekerja->user atau pemakai->user. Kalau
                 // aset_pemakai_id null (lapor pas aset lagi nganggur/audit
                 // gudang), nama emang gak ada -- tampilin '-' di frontend.
-                $nama = $pn->pemakai?->pekerja?->user?->name ?? $pn->pemakai?->user?->name ?? null;
+                //
+                // PENTING: nama ini cuma valid buat event 'lapor_rusak'
+                // (itu aksi si pemakai). 'mulai_perbaikan' & 'selesai_perbaikan'
+                // itu aksinya ADMIN (klik "Terima"/"Tandai Selesai"), bukan
+                // pemakai -- jadi jangan pakai nama pemakai di situ, biar gak
+                // kelihatan seolah pemakai yang benerin asetnya sendiri.
+                // (Belum ada kolom yang nyimpen admin mana yang ngerjain,
+                // makanya nama dikosongin aja dulu, bukan salah orang.)
+                $namaPelapor = $pn->pemakai?->pekerja?->user?->name ?? $pn->pemakai?->user?->name ?? null;
 
                 $events->push([
                     'type' => 'lapor_rusak',
                     'waktu' => $pn->lapor_at ?? $pn->tanggal_lapor,
-                    'nama' => $nama,
+                    'nama' => $namaPelapor,
                     'aset' => $pn->aset,
                     'keluhan' => $pn->keluhan,
                 ]);
@@ -127,7 +135,7 @@ class AsetPemakaiController extends Controller
                     $events->push([
                         'type' => 'mulai_perbaikan',
                         'waktu' => $pn->diterima_at ?? $pn->tanggal_diterima,
-                        'nama' => $nama,
+                        'nama' => null,
                         'aset' => $pn->aset,
                     ]);
                 }
@@ -135,7 +143,7 @@ class AsetPemakaiController extends Controller
                     $events->push([
                         'type' => 'selesai_perbaikan',
                         'waktu' => $pn->selesai_at ?? $pn->tanggal_selesai,
-                        'nama' => $nama,
+                        'nama' => null,
                         'aset' => $pn->aset,
                         'hasil' => $pn->hasil,
                     ]);
