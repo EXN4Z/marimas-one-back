@@ -1,6 +1,8 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Inventaris;
+
+use App\Http\Controllers\Controller;
 
 use App\Models\KelengkapanMaster;
 use Illuminate\Http\Request;

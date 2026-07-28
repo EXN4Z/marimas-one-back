@@ -1,6 +1,8 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Organisasi;
+
+use App\Http\Controllers\Controller;
 
 use App\Models\LokasiKantor;
 use Illuminate\Http\Request;

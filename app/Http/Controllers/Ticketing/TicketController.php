@@ -1,6 +1,8 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Ticketing;
+
+use App\Http\Controllers\Controller;
 
 use App\Models\Ticket;
 use App\Models\User;

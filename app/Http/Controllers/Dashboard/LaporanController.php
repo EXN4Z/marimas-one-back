@@ -1,6 +1,8 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Dashboard;
+
+use App\Http\Controllers\Controller;
 
 use App\Models\Absensi;
 use App\Models\PengajuanIzin;

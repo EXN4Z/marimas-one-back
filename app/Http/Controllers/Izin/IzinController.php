@@ -1,6 +1,8 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Izin;
+
+use App\Http\Controllers\Controller;
 
 use App\Models\PengajuanIzin;
 use App\Models\User;

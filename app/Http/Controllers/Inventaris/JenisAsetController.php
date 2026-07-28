@@ -1,6 +1,8 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Inventaris;
+
+use App\Http\Controllers\Controller;
 
 use App\Models\JenisAset;
 use Illuminate\Http\Request;

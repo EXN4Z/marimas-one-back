@@ -1,32 +1,31 @@
 <?php
 
-use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\ChatbotController;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\UserController;
-use App\Http\Controllers\AbsensiController;
-use App\Http\Controllers\DepartemenController;
-use App\Http\Controllers\JabatanController;
-use App\Http\Controllers\TicketController;
+use App\Http\Controllers\Karyawan\UserController;
+use App\Http\Controllers\Absensi\AbsensiController;
+use App\Http\Controllers\Organisasi\DepartemenController;
+use App\Http\Controllers\Organisasi\JabatanController;
+use App\Http\Controllers\Ticketing\TicketController;
 use App\Http\Controllers\AuditLogController;
-use App\Http\Controllers\IzinController;
-use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Izin\IzinController;
+use App\Http\Controllers\Dashboard\DashboardController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
-use SebastianBergmann\CodeCoverage\Report\Html\Dashboard;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\AdminUserController;
+use App\Http\Controllers\Karyawan\AdminUserController;
 use App\Http\Controllers\AgendaController;
-use App\Http\Controllers\LaporanController;
+use App\Http\Controllers\Dashboard\LaporanController;
 use App\Http\Controllers\PayrollController;
-use App\Http\Controllers\SupplierController;
-use App\Http\Controllers\JenisAsetController;
-use App\Http\Controllers\KelengkapanMasterController;
-use App\Http\Controllers\AsetController;
-use App\Http\Controllers\AsetPemakaiController;
-use App\Http\Controllers\AsetPenggantianSparepartController;
-use App\Http\Controllers\AsetPenangananController;
-use App\Http\Controllers\CabangController;
+use App\Http\Controllers\Inventaris\SupplierController;
+use App\Http\Controllers\Inventaris\JenisAsetController;
+use App\Http\Controllers\Inventaris\KelengkapanMasterController;
+use App\Http\Controllers\Inventaris\AsetController;
+use App\Http\Controllers\Inventaris\AsetPemakaiController;
+use App\Http\Controllers\Inventaris\AsetPenggantianSparepartController;
+use App\Http\Controllers\Inventaris\AsetPenangananController;
+use App\Http\Controllers\Organisasi\CabangController;
 use App\Http\Controllers\PushSubscriptionController;
 
 
