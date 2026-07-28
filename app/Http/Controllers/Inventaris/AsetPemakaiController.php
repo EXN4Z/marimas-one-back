@@ -8,6 +8,7 @@ use App\Http\Controllers\Concerns\GeneratesStrukNumber;
 use App\Models\Aset;
 use App\Models\AsetPemakai;
 use App\Models\AsetPenanganan;
+use App\Models\AsetWriteoff;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -18,62 +19,112 @@ class AsetPemakaiController extends Controller
 
     /**
      * GET /api/aset-pemakai/riwayat
-     * Riwayat global SEMUA aktivitas aset — bukan cuma pinjam/kembali, tapi juga
-     * lapor kerusakan + selesai perbaikan — digabung jadi satu feed, terbaru
-     * duluan. Buat panel riwayat di halaman Inventaris tab Aset. Jangan dicampur
-     * sama riwayat peminjaman barang (beda tabel/beda satuan).
+     * Admin: riwayat GLOBAL semua aktivitas aset — pinjam, kembali, lapor
+     * kerusakan, mulai perbaikan, selesai perbaikan, sampai dijual.
+     * Karyawan/manajer/hr: riwayat DIBATASI cuma yang berhubungan sama diri
+     * sendiri — pemakaian (pinjam/kembali) yang dia lakukan, plus laporan
+     * kerusakan yang nempel di pemakaian dia. Event 'dijual' gak pernah
+     * personal ke satu karyawan (itu keputusan admin di level aset), jadi
+     * cuma muncul buat admin.
+     *
+     * PENTING soal waktu: kolom tanggal_penerimaan/tanggal_pengembalian dan
+     * tanggal_lapor/tanggal_diterima/tanggal_selesai cuma nyimpen TANGGAL
+     * (jam-menit-detik selalu 00:00:00) — kalau dipakai langsung buat waktu
+     * relatif ("X jam lalu") hasilnya ngaco (ngitung dari tengah malam, bukan
+     * dari kejadian aslinya). Makanya di sini kita pakai kolom *_at
+     * (diterima_at, dikembalikan_at, lapor_at, dst — datetime lengkap) yang
+     * dicatat programnya sendiri, dengan fallback ke kolom tanggal_* lama
+     * buat data lama yang belum punya *_at.
      */
     public function riwayat(Request $request)
     {
+        $user = $request->user();
+        $isAdmin = $user?->role === 'admin';
+        $pekerjaId = $user?->pekerja?->id;
+
         $limit = (int) $request->query('limit', 10);
         $ambil = $limit * 2; // ambil lebih banyak dari tiap sumber biar aman pas digabung+dipotong
 
         $events = collect();
 
-        AsetPemakai::with([
+        // Filter kepemilikan dipakai berkali-kali di bawah — biar 1 sumber
+        // kebenaran soal "ini punya user ini apa bukan", gak diketik ulang
+        // beda-beda tiap query (rawan salah/kelewat kalau diketik manual).
+        $milikUser = function ($query) use ($user, $pekerjaId) {
+            $query->where(function ($q) use ($user, $pekerjaId) {
+                $q->where('user_id', $user->id);
+                if ($pekerjaId) {
+                    $q->orWhere('pekerja_id', $pekerjaId);
+                }
+            });
+        };
+
+        $pemakaiQuery = AsetPemakai::with([
             'aset:id,kode_aset,merek,tipe',
             'pekerja.user:id,name',
-            'user:id,name', // BARU — akun cabang gak punya pekerja, jadi user-nya harus di-load langsung
-        ])
-            ->where('status', 'disetujui')
+            'user:id,name', // akun cabang gak punya pekerja, jadi user-nya harus di-load langsung
+        ])->where('status', 'disetujui');
+
+        if (!$isAdmin) {
+            $milikUser($pemakaiQuery);
+        }
+
+        $pemakaiQuery
             ->latest('tanggal_penerimaan')
             ->limit($ambil)
             ->get()
             ->each(function ($p) use (&$events) {
-                // BARU — jatuh ke $p->user->name kalau pekerja-nya kosong (akun cabang)
                 $nama = $p->pekerja?->user?->name ?? $p->user?->name ?? '-';
                 $events->push([
                     'type' => 'pinjam',
-                    'waktu' => $p->tanggal_penerimaan,
+                    'waktu' => $p->diterima_at ?? $p->tanggal_penerimaan,
                     'nama' => $nama,
                     'aset' => $p->aset,
                 ]);
                 if ($p->tanggal_pengembalian) {
                     $events->push([
                         'type' => 'kembali',
-                        'waktu' => $p->tanggal_pengembalian,
+                        'waktu' => $p->dikembalikan_at ?? $p->tanggal_pengembalian,
                         'nama' => $nama,
                         'aset' => $p->aset,
                     ]);
                 }
             });
 
-        AsetPenanganan::with('aset:id,kode_aset,merek,tipe')
+        $penangananQuery = AsetPenanganan::with('aset:id,kode_aset,merek,tipe');
+
+        if (!$isAdmin) {
+            // laporan kerusakan gak punya user_id/pekerja_id langsung —
+            // nempel ke AsetPemakai lewat aset_pemakai_id, jadi filternya
+            // lewat relasi 'pemakai'. Laporan hasil audit gudang (pemakai
+            // null) otomatis kepotong karena whereHas butuh relasi itu ada.
+            $penangananQuery->whereHas('pemakai', $milikUser);
+        }
+
+        $penangananQuery
             ->latest('tanggal_lapor')
             ->limit($ambil)
             ->get()
             ->each(function ($pn) use (&$events) {
                 $events->push([
                     'type' => 'lapor_rusak',
-                    'waktu' => $pn->tanggal_lapor,
+                    'waktu' => $pn->lapor_at ?? $pn->tanggal_lapor,
                     'nama' => null,
                     'aset' => $pn->aset,
                     'keluhan' => $pn->keluhan,
                 ]);
+                if ($pn->tanggal_diterima) {
+                    $events->push([
+                        'type' => 'mulai_perbaikan',
+                        'waktu' => $pn->diterima_at ?? $pn->tanggal_diterima,
+                        'nama' => null,
+                        'aset' => $pn->aset,
+                    ]);
+                }
                 if ($pn->tanggal_selesai) {
                     $events->push([
                         'type' => 'selesai_perbaikan',
-                        'waktu' => $pn->tanggal_selesai,
+                        'waktu' => $pn->selesai_at ?? $pn->tanggal_selesai,
                         'nama' => null,
                         'aset' => $pn->aset,
                         'hasil' => $pn->hasil,
@@ -81,7 +132,30 @@ class AsetPemakaiController extends Controller
                 }
             });
 
-        $riwayat = $events->sortByDesc('waktu')->values()->take($limit);
+        // 'dijual' cuma buat admin — keputusan writeoff bukan aktivitas
+        // pribadi karyawan mana pun, gak relevan buat riwayat pribadinya.
+        if ($isAdmin) {
+            AsetWriteoff::with(['aset:id,kode_aset,merek,tipe', 'penyetuju:id,name'])
+                ->latest('tanggal_writeoff')
+                ->limit($ambil)
+                ->get()
+                ->each(function ($w) use (&$events) {
+                    $events->push([
+                        'type' => 'dijual',
+                        // created_at datetime lengkap — writeoff cuma dibuat sekali
+                        // (updateOrCreate), jadi aman dipakai apa adanya.
+                        'waktu' => $w->created_at ?? $w->tanggal_writeoff,
+                        'nama' => $w->penyetuju?->name,
+                        'aset' => $w->aset,
+                        'keluhan' => $w->alasan,
+                    ]);
+                });
+        }
+
+        $riwayat = $events
+            ->sortByDesc(fn ($ev) => $ev['waktu'] instanceof \Carbon\Carbon ? $ev['waktu'] : \Carbon\Carbon::parse($ev['waktu']))
+            ->values()
+            ->take($limit);
 
         return response()->json($riwayat);
     }
@@ -128,6 +202,7 @@ class AsetPemakaiController extends Controller
                 'nomor_penerimaan' => $validated['nomor_penerimaan'] ?? null,
                 'no_struk_penerimaan' => $noStruk,
                 'tanggal_penerimaan' => $validated['tanggal_penerimaan'],
+                'diterima_at' => now(),
                 'catatan_penerimaan' => $validated['catatan_penerimaan'] ?? null,
             ]);
 
@@ -223,6 +298,7 @@ class AsetPemakaiController extends Controller
                 'nomor_penerimaan' => $validated['nomor_penerimaan'] ?? $asetPemakai->nomor_penerimaan,
                 'no_struk_penerimaan' => $noStruk,
                 'tanggal_penerimaan' => $validated['tanggal_penerimaan'] ?? now()->toDateString(),
+                'diterima_at' => now(),
             ]);
 
             $asetPemakai->aset()->update(['status' => 'dipakai']);
@@ -283,6 +359,7 @@ class AsetPemakaiController extends Controller
                 'nomor_pengembalian' => $validated['nomor_pengembalian'] ?? $asetPemakai->nomor_pengembalian,
                 'no_struk_pengembalian' => $noStruk,
                 'tanggal_pengembalian' => $validated['tanggal_pengembalian'],
+                'dikembalikan_at' => now(),
                 'catatan_pengembalian' => $validated['catatan_pengembalian'] ?? $catatanDefault,
             ]);
 

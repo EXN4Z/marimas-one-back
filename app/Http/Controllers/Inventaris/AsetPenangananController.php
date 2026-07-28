@@ -80,6 +80,7 @@ class AsetPenangananController extends Controller
                 'jenis_kerusakan' => $validated['jenis_kerusakan'],
                 'keluhan' => $validated['keluhan'],
                 'tanggal_lapor' => now(),
+                'lapor_at' => now(),
             ]);
 
             // aset langsung ganti status "menunggu_perbaikan" biar kelihatan di tabel
@@ -120,7 +121,7 @@ class AsetPenangananController extends Controller
         }
 
         DB::transaction(function () use ($asetPenanganan) {
-            $asetPenanganan->update(['tanggal_diterima' => now()]);
+            $asetPenanganan->update(['tanggal_diterima' => now(), 'diterima_at' => now()]);
             Aset::whereKey($asetPenanganan->aset_id)->update(['status' => 'diperbaiki']);
         });
 
@@ -166,10 +167,18 @@ class AsetPenangananController extends Controller
                 $validated['no_struk'] = $this->generateNoStruk('PNG', 'aset_penanganan', 'no_struk');
             }
 
+            // waktu akurat buat riwayat — selesai_at dicatat terpisah dari
+            // tanggal_selesai (yang cuma tanggal) biar "X jam lalu" di panel
+            // riwayat gak ngitung dari tengah malam.
+            if ($validated['tanggal_selesai'] ?? null) {
+                $validated['selesai_at'] = now();
+            }
+
             // jaga-jaga: kalau admin langsung tandai selesai tanpa lewat tombol
             // "Terima" dulu, tetap isi tanggal_diterima biar datanya konsisten.
             if (($validated['tanggal_selesai'] ?? null) && !$asetPenanganan->tanggal_diterima) {
                 $validated['tanggal_diterima'] = now();
+                $validated['diterima_at'] = now();
             }
 
             $asetPenanganan->update($validated);

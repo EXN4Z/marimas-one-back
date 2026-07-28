@@ -10,14 +10,23 @@ class AsetPenanganan extends Model
 
     protected $fillable = [
         'aset_id', 'aset_pemakai_id', 'jenis_kerusakan', 'keluhan',
-        'tanggal_lapor', 'tanggal_diterima', 'tanggal_selesai', 'harga_jasa', 'biaya_komponen',
+        'tanggal_lapor', 'lapor_at',
+        'tanggal_diterima', 'diterima_at',
+        'tanggal_selesai', 'selesai_at',
+        'harga_jasa', 'biaya_komponen',
         'hasil', 'no_struk', 'catatan',
     ];
 
+    // *_at (datetime lengkap) dipakai buat riwayat aktivitas yang butuh waktu
+    // akurat — tanggal_* (cuma tanggal) tetap dipertahankan buat tampilan &
+    // perhitungan durasi_hari. Lihat migration add_waktu_akurat_ke_aset_pemakai_dan_penanganan.
     protected $casts = [
         'tanggal_lapor' => 'date',
         'tanggal_diterima' => 'date',
         'tanggal_selesai' => 'date',
+        'lapor_at' => 'datetime',
+        'diterima_at' => 'datetime',
+        'selesai_at' => 'datetime',
         'harga_jasa' => 'decimal:2',
         'biaya_komponen' => 'decimal:2',
     ];

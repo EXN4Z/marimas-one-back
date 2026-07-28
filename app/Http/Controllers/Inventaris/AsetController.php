@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 
 use App\Models\Aset;
 use App\Models\AsetKelengkapan;
+use App\Models\AsetWriteoff;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -27,6 +28,7 @@ class AsetController extends Controller
             'pemakaiPending.pekerja.user',
             'pemakaiPending.user',
             'penangananAktif',
+            'writeoff.penyetuju:id,name',
         ])
             ->latest()
             ->get();
@@ -53,6 +55,7 @@ class AsetController extends Controller
             'penanganan',
             'penggantianSparepart',
             'penangananAktif',
+            'writeoff.penyetuju:id,name',
         ]);
 
         return response()->json($aset);
@@ -189,7 +192,7 @@ class AsetController extends Controller
             ]);
         }
     }
-    public function jual(Aset $aset)
+    public function jual(Request $request, Aset $aset)
     {
         if ($aset->status !== 'rusak_berat') {
             return response()->json([
@@ -197,13 +200,36 @@ class AsetController extends Controller
             ], 422);
         }
 
-        $aset->update(['status' => 'dijual']);
+        $validated = $request->validate([
+            'alasan' => 'nullable|string',
+            'no_berita_acara' => 'nullable|string|max:255',
+            'catatan' => 'nullable|string',
+        ]);
+
+        DB::transaction(function () use ($aset, $request, $validated) {
+            $aset->update(['status' => 'dijual']);
+
+            // catat sebagai riwayat writeoff biar muncul akurat di panel
+            // "Riwayat Aset" (siapa yang nyetujui, kapan, kenapa) — bukan
+            // cuma ganti status tanpa jejak.
+            AsetWriteoff::updateOrCreate(
+                ['aset_id' => $aset->id],
+                [
+                    'disetujui_oleh' => $request->user()?->id,
+                    'alasan' => $validated['alasan'] ?? 'Rusak berat, tidak dapat diperbaiki lagi.',
+                    'no_berita_acara' => $validated['no_berita_acara'] ?? null,
+                    'tanggal_writeoff' => now()->toDateString(),
+                    'catatan' => $validated['catatan'] ?? null,
+                ]
+            );
+        });
 
         return response()->json($aset->fresh()->load([
             'jenis',
             'supplier',
             'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni',
+            'writeoff.penyetuju:id,name',
         ]));
     }
 }
