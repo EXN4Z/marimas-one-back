@@ -9,30 +9,39 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('aset', function (Blueprint $table) {
-            $table->id();
-            $table->string('kode_aset')->unique();
-            $table->foreignId('jenis_id')->nullable()
-                ->constrained('jenis_aset')
-                ->nullOnDelete();
-            $table->string('merek')->nullable();
-            $table->string('tipe')->nullable();
-            $table->string('warna')->nullable();
-            $table->string('serial_number')->nullable()->unique();
-            $table->string('perusahaan')->nullable();
-            $table->text('keterangan')->nullable();
-            $table->string('foto')->nullable();
-            $table->foreignId('supplier_id')->nullable()
-                ->constrained('supplier')
-                ->nullOnDelete();
-            $table->date('tanggal_pembelian')->nullable();
-            $table->string('no_surat_jalan')->nullable();
-            $table->string('no_good_receive')->nullable();
-            $table->string('status')->default('tersedia'); // tersedia, dipakai, rusak, diperbaiki
-            $table->timestamps();
-        });
+        // Migration 2026_07_21_034402_repair_aset_and_supplier_tables juga
+        // bisa membuat tabel ini (khusus buat database lama yang tabelnya
+        // sempat kehapus). Cek dulu biar gak nabrak "relation already exists"
+        // kalau repair migration itu udah jalan lebih dulu.
+        if (!Schema::hasTable('aset')) {
+            Schema::create('aset', function (Blueprint $table) {
+                $table->id();
+                $table->string('kode_aset')->unique();
+                $table->foreignId('jenis_id')->nullable()
+                    ->constrained('jenis_aset')
+                    ->nullOnDelete();
+                $table->string('merek')->nullable();
+                $table->string('tipe')->nullable();
+                $table->string('warna')->nullable();
+                $table->string('serial_number')->nullable()->unique();
+                $table->string('perusahaan')->nullable();
+                $table->text('keterangan')->nullable();
+                $table->string('foto')->nullable();
+                $table->foreignId('supplier_id')->nullable()
+                    ->constrained('supplier')
+                    ->nullOnDelete();
+                $table->date('tanggal_pembelian')->nullable();
+                $table->string('no_surat_jalan')->nullable();
+                $table->string('no_good_receive')->nullable();
+                $table->string('status')->default('tersedia'); // tersedia, dipakai, rusak, diperbaiki
+                $table->timestamps();
+            });
+        }
 
-        // Auto-generate kode_aset format: IT-2026-00001, mirip pola generate_kode_barang
+        // Auto-generate kode_aset format: IT-2026-00001, mirip pola generate_kode_barang.
+        // create-or-replace + drop-trigger-if-exists bikin blok ini aman
+        // dijalankan berkali-kali (misal trigger-nya udah dibuat duluan
+        // oleh repair migration).
         DB::unprepared(<<<'SQL'
             create or replace function generate_kode_aset()
             returns trigger as $$
@@ -62,6 +71,8 @@ return new class extends Migration
               return new;
             end;
             $$ language plpgsql;
+
+            drop trigger if exists trg_generate_kode_aset on aset;
 
             create trigger trg_generate_kode_aset
             before insert on aset
