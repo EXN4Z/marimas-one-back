@@ -23,7 +23,10 @@ class IzinStatusUpdated extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database', 'broadcast', WebPushChannel::class];
+        // WebPushChannel dimatikan sementara: VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY
+        // belum di-setup di Railway, jadi channel ini selalu throw.
+        // Aktifkan lagi setelah VAPID key beres: tambahkan WebPushChannel::class.
+        return ['database', 'broadcast'];
     }
 
     public function toDatabase($notifiable): array

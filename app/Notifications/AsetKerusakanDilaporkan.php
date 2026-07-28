@@ -19,7 +19,11 @@ class AsetKerusakanDilaporkan extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database', 'broadcast', WebPushChannel::class];
+        // WebPushChannel dimatikan sementara: VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY
+        // belum di-setup di Railway, jadi channel ini selalu throw dan bikin
+        // notif database/broadcast ke penerima lain ikut gak terkirim.
+        // Aktifkan lagi setelah VAPID key beres: tambahkan WebPushChannel::class.
+        return ['database', 'broadcast'];
     }
 
     protected function namaPelapor(): string
