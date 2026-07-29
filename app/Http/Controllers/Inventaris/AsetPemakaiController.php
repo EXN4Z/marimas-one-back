@@ -11,11 +11,57 @@ use App\Models\AsetPenanganan;
 use App\Models\AsetWriteoff;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class AsetPemakaiController extends Controller
 {
     use GeneratesStrukNumber;
+
+    /**
+     * Disk tempat foto bukti serah-terima disimpan. Dipisah jadi konstanta
+     * biar gampang diubah/di-swap tanpa nyari-nyari string 'public' di
+     * banyak tempat.
+     *
+     * TETAP pakai disk 'public' (bukan S3) -- keputusan sadar, bukan lupa
+     * diganti. Supaya file-nya nggak hilang lagi tiap redeploy/restart di
+     * Railway (masalah sebelumnya), foldernya (storage/app/public, atau
+     * seluruh storage/) di-mount ke Railway Volume supaya persisten. Detail
+     * setup Volume-nya di luar file ini (Railway dashboard).
+     *
+     * SYARAT biar ini beneran persisten & bisa diakses publik:
+     * 1. Railway Volume terpasang & di-mount ke path yang mencakup
+     *    storage/app/public (mis. mount ke /app/storage).
+     * 2. `php artisan storage:link` dijalankan tiap kali container baru naik
+     *    (taruh di start command / release command Railway), karena symlink
+     *    public/storage ikut hilang tiap image di-rebuild -- volume cuma
+     *    nyelametin ISI foldernya, symlink-nya sendiri harus dibuat ulang.
+     * 3. Service Railway TETAP 1 replica. Volume Railway nempel ke 1
+     *    instance, jadi kalau di-scale ke >1 replica, upload yang masuk ke
+     *    replica A nggak akan kebaca dari replica B (foto keliatan ilang2an
+     *    lagi, sekarang penyebabnya beda: bukan ephemeral, tapi split
+     *    antar-replica). Kalau nanti butuh scale >1, baru wajib pindah ke S3.
+     */
+    private const DISK_FOTO_BUKTI = 'public';
+
+    /**
+     * Simpan array file upload ke disk (default: 'public', lihat
+     * DISK_FOTO_BUKTI di atas) dan kembalikan array path-nya. Dipakai bareng
+     * buat foto_penerimaan (store) & foto_pengembalian (kembalikan) --
+     * keduanya sama-sama "bukti serah terima" dalam bentuk array foto,
+     * maksimal 3, disimpan sebagai JSON di kolom terkait.
+     */
+    private function simpanFotoBukti(Request $request, string $field, string $folder): array
+    {
+        $disk = config('filesystems.disk_aset', self::DISK_FOTO_BUKTI);
+
+        $paths = [];
+        foreach ($request->file($field, []) as $file) {
+            $paths[] = $file->store($folder, $disk);
+        }
+
+        return $paths;
+    }
 
     /**
      * GET /api/aset-pemakai/riwayat
@@ -231,6 +277,12 @@ class AsetPemakaiController extends Controller
      * alur request/approve). Kirim salah satu: pekerja_id (karyawan) atau
      * user_id (akun cabang) — nggak boleh dua-duanya, nggak boleh kosong dua-duanya.
      * Aset harus 'tersedia'. Struk penerimaan digenerate otomatis.
+     *
+     * Wajib sertakan foto_penerimaan (array file, 1-3 foto) sebagai bukti
+     * fisik serah-terima. Disimpan sebagai array path JSON, BUKAN kolom
+     * foto_1/foto_2/foto_3 terpisah. Filenya disimpan ke disk 'public' yang
+     * di-mount ke Railway Volume (lihat catatan di simpanFotoBukti()) supaya
+     * persisten antar-redeploy.
      */
     public function store(Request $request, Aset $aset)
     {
@@ -252,10 +304,14 @@ class AsetPemakaiController extends Controller
             ],
             'tanggal_penerimaan' => 'required|date',
             'catatan_penerimaan' => 'nullable|string',
+            'foto_penerimaan' => 'required|array|min:1|max:3',
+            'foto_penerimaan.*' => 'image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
         $pemakai = DB::transaction(function () use ($aset, $request, $validated) {
             $noStruk = $this->generateNoStruk('STJ', 'aset_pemakai', 'no_struk_penerimaan');
+
+            $fotoPaths = $this->simpanFotoBukti($request, 'foto_penerimaan', 'aset-pemakai/penerimaan');
 
             $pemakai = AsetPemakai::create([
                 'aset_id' => $aset->id,
@@ -266,6 +322,8 @@ class AsetPemakaiController extends Controller
                 'no_struk_penerimaan' => $noStruk,
                 'tanggal_penerimaan' => $validated['tanggal_penerimaan'],
                 'diterima_at' => now(),
+                'catatan_penerimaan' => $validated['catatan_penerimaan'] ?? null,
+                'foto_penerimaan' => $fotoPaths,
             ]);
 
             $aset->update(['status' => 'dipakai']);
@@ -283,6 +341,11 @@ class AsetPemakaiController extends Controller
      * Wajib sertain no_struk_penerimaan (struk asli pas serah-terima) sebagai
      * bukti pengembalian ini benar. Ditolak kalau masih ada laporan
      * penanganan/perbaikan yang belum selesai.
+     *
+     * Wajib sertakan foto_pengembalian (array file, 1-3 foto) sebagai bukti
+     * kondisi fisik aset saat dikembalikan. Filenya disimpan ke disk
+     * 'public' yang di-mount ke Railway Volume (lihat catatan di
+     * simpanFotoBukti()) supaya persisten antar-redeploy.
      */
     public function kembalikan(Request $request, AsetPemakai $asetPemakai)
     {
@@ -300,6 +363,8 @@ class AsetPemakaiController extends Controller
             'no_struk_penerimaan' => 'required|string',
             'tanggal_pengembalian' => 'required|date',
             'catatan_pengembalian' => 'nullable|string',
+            'foto_pengembalian' => 'required|array|min:1|max:3',
+            'foto_pengembalian.*' => 'image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
         if ($asetPemakai->status !== 'disetujui') {
@@ -324,7 +389,7 @@ class AsetPemakaiController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($asetPemakai, $validated) {
+        DB::transaction(function () use ($asetPemakai, $request, $validated) {
             $noStruk = $this->generateNoStruk('KBL', 'aset_pemakai', 'no_struk_pengembalian');
 
             // kalau aset ini pernah rusak berat & udah ditandai selesai perbaikan
@@ -335,11 +400,14 @@ class AsetPemakaiController extends Controller
                 ? 'Dikembalikan dalam kondisi rusak berat (tidak bisa diperbaiki).'
                 : $asetPemakai->catatan_pengembalian;
 
+            $fotoPaths = $this->simpanFotoBukti($request, 'foto_pengembalian', 'aset-pemakai/pengembalian');
+
             $asetPemakai->update([
                 'no_struk_pengembalian' => $noStruk,
                 'tanggal_pengembalian' => $validated['tanggal_pengembalian'],
                 'dikembalikan_at' => now(),
                 'catatan_pengembalian' => $validated['catatan_pengembalian'] ?? $catatanDefault,
+                'foto_pengembalian' => $fotoPaths,
             ]);
 
             // jangan paksa balik 'tersedia' kalau asetnya lagi rusak_berat --

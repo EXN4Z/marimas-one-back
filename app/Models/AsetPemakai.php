@@ -17,11 +17,13 @@ class AsetPemakai extends Model
         'nomor_penerimaan',
         'no_struk_penerimaan',
         'tanggal_penerimaan',
+        'foto_penerimaan',
         'diterima_at',
         'catatan_penerimaan',
         'nomor_pengembalian',
         'no_struk_pengembalian',
         'tanggal_pengembalian',
+        'foto_pengembalian',
         'dikembalikan_at',
         'catatan_pengembalian',
         'catatan_penolakan',
@@ -36,6 +38,8 @@ class AsetPemakai extends Model
         'tanggal_pengembalian' => 'date',
         'diterima_at' => 'datetime',
         'dikembalikan_at' => 'datetime',
+        'foto_penerimaan' => 'array',
+        'foto pengembalian' => 'array',
     ];
     
     public function aset()
