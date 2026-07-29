@@ -250,7 +250,6 @@ class AsetPemakaiController extends Controller
                     }
                 },
             ],
-            'nomor_penerimaan' => 'nullable|string',
             'tanggal_penerimaan' => 'required|date',
             'catatan_penerimaan' => 'nullable|string',
         ]);
@@ -264,7 +263,6 @@ class AsetPemakaiController extends Controller
                 'user_id' => $validated['user_id'] ?? null,
                 'status' => 'disetujui',
                 'requested_by_user_id' => $request->user()?->id,
-                'nomor_penerimaan' => $validated['nomor_penerimaan'] ?? null,
                 'no_struk_penerimaan' => $noStruk,
                 'tanggal_penerimaan' => $validated['tanggal_penerimaan'],
                 'diterima_at' => now(),
@@ -301,7 +299,6 @@ class AsetPemakaiController extends Controller
 
         $validated = $request->validate([
             'no_struk_penerimaan' => 'required|string',
-            'nomor_pengembalian' => 'nullable|string',
             'tanggal_pengembalian' => 'required|date',
             'catatan_pengembalian' => 'nullable|string',
         ]);
@@ -340,7 +337,6 @@ class AsetPemakaiController extends Controller
                 : $asetPemakai->catatan_pengembalian;
 
             $asetPemakai->update([
-                'nomor_pengembalian' => $validated['nomor_pengembalian'] ?? $asetPemakai->nomor_pengembalian,
                 'no_struk_pengembalian' => $noStruk,
                 'tanggal_pengembalian' => $validated['tanggal_pengembalian'],
                 'dikembalikan_at' => now(),
