@@ -17,7 +17,6 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Karyawan\AdminUserController;
 use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\Dashboard\LaporanController;
-use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\Inventaris\SupplierController;
 use App\Http\Controllers\Inventaris\JenisAsetController;
 use App\Http\Controllers\Inventaris\KelengkapanMasterController;
@@ -33,6 +32,10 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
 Route::post('/resend-otp', [AuthController::class, 'resendOtp']);
 Route::post('/login', [AuthController::class, 'login']);
+
+// TODO: route debug ini gak ada middleware auth sama sekali, publik.
+// Kalau ini sisa development, hapus. Kalau masih dipakai, minimal
+// kasih ['auth:sanctum', 'role:admin'].
 Route::get('/debug-keuangan', [DashboardController::class, 'debugKeuangan']);
 
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
@@ -101,9 +104,6 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
         Route::post('/', [TicketController::class, 'store']);
         Route::get('/{ticket}', [TicketController::class, 'show']);
     });
-    Route::prefix('agenda')->group(function () {
-        
-    });
 });
 
 // BARU: role 'cabang' butuh akses read-only ke stats-card, kehadiran-mingguan,
@@ -147,17 +147,11 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::put('/karyawan/{user}', [UserController::class, 'update']);
     Route::delete('/karyawan/{user}', [UserController::class, 'destroy']);
     Route::post('/karyawan', [UserController::class, 'store']);
-
 });
 
 Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
     Route::apiResource('departemen', DepartemenController::class)->except(['show']);
     Route::apiResource('jabatan', JabatanController::class)->except(['show']);
-
-    Route::prefix('payroll')->group(function () {
-        Route::get('/', [PayrollController::class, 'index']);
-        Route::get('/export', [PayrollController::class, 'export']);
-    });
 
     Route::post('/agenda', [AgendaController::class, 'store']);
     Route::delete('/agenda/{agenda}', [AgendaController::class, 'destroy']);
