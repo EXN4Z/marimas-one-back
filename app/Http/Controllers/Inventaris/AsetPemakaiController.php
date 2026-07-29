@@ -266,7 +266,6 @@ class AsetPemakaiController extends Controller
                 'no_struk_penerimaan' => $noStruk,
                 'tanggal_penerimaan' => $validated['tanggal_penerimaan'],
                 'diterima_at' => now(),
-                'catatan_penerimaan' => $validated['catatan_penerimaan'] ?? null,
             ]);
 
             $aset->update(['status' => 'dipakai']);
