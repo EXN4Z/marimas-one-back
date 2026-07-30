@@ -18,6 +18,8 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Storage;
 
+use function Laravel\Prompts\error;
+
 class AsetPenangananController extends Controller
 {
     use GeneratesStrukNumber;
@@ -40,6 +42,10 @@ class AsetPenangananController extends Controller
             'jenis_kerusakan' => 'required|in:software,hardware',
             'keluhan' => 'required|string',
             'foto' => 'required|image|mimes:jpg,jpeg,png,webp|max:1024',
+        ], [
+            'foto.required' => 'foto harus diisi',
+            'foto.max' => 'Size foto maksimal 1MB',
+            'foto.mimes' => 'foto harus berupa jpg,jpeg,png,webp',
         ]);
 
         $user = $request->user();
@@ -97,6 +103,7 @@ class AsetPenangananController extends Controller
 
             Aset::whereKey($validated['aset_id'])->update(['status' => 'menunggu_perbaikan']);
 
+            
             return $penanganan;
         });
 
