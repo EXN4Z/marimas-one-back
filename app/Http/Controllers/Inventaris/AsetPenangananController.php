@@ -16,7 +16,6 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Support\Facades\Storage;
 
 class AsetPenangananController extends Controller
 {
@@ -39,7 +38,6 @@ class AsetPenangananController extends Controller
             'aset_id' => 'required|exists:aset,id',
             'jenis_kerusakan' => 'required|in:software,hardware',
             'keluhan' => 'required|string',
-            'foto' => 'required|image|mimes:jpg,jpeg,png,webp|max:1024',
         ]);
 
         $user = $request->user();
@@ -66,9 +64,7 @@ class AsetPenangananController extends Controller
                 'aset_id' => 'Aset ini sudah ada laporan kerusakan yang masih diproses. Tunggu sampai selesai sebelum lapor lagi.',
             ]);
         }
-        if ($request->hasFile('foto')) {
-            $validated['foto'] = $request->file('foto')->store('aset-penanganan', 'public');
-        }
+
         // cek user emang lagi pegang aset ini via pemakaian aktif (status disetujui, belum dikembalikan)
         // PENTING: akun cabang gak punya relasi pekerja (dia nempel langsung
         // lewat user_id di aset_pemakai, bukan pekerja_id) -- kalau cuma cek
@@ -85,16 +81,18 @@ class AsetPenangananController extends Controller
             ->first();
 
         $penanganan = DB::transaction(function () use ($validated, $pemakai) {
+            // nullable: laporan kerusakan bisa juga muncul pas aset lagi nganggur (audit gudang)
             $penanganan = AsetPenanganan::create([
                 'aset_id' => $validated['aset_id'],
                 'aset_pemakai_id' => $pemakai->id ?? null,
                 'jenis_kerusakan' => $validated['jenis_kerusakan'],
                 'keluhan' => $validated['keluhan'],
-                'foto' => $validated['foto'] ?? null, // BARU
                 'tanggal_lapor' => now(),
                 'lapor_at' => now(),
             ]);
 
+            // aset langsung ganti status "menunggu_perbaikan" biar kelihatan di tabel
+            // (dan biar tombol "Lapor Kerusakan" ilang, gak bisa dobel lapor)
             Aset::whereKey($validated['aset_id'])->update(['status' => 'menunggu_perbaikan']);
 
             return $penanganan;
@@ -208,6 +206,21 @@ class AsetPenangananController extends Controller
 
                 if ($hasilAkhir === 'rusak_berat') {
                     Aset::whereKey($asetPenanganan->aset_id)->update(['status' => 'rusak_berat']);
+
+                    // BARU: rusak berat = aset gak dipakai siapa-siapa lagi.
+                    // Tutup paksa record aset_pemakai yang masih aktif (belum
+                    // dikembalikan) biar "Dipakai Oleh" & riwayat peminjaman
+                    // ikut konsisten -- bukan cuma status asetnya doang yang
+                    // berubah sementara data peminjaman masih nganggep "masih
+                    // dipakai" karena tanggal_pengembalian belum keisi.
+                    AsetPemakai::where('aset_id', $asetPenanganan->aset_id)
+                        ->where('status', 'disetujui')
+                        ->whereNull('tanggal_pengembalian')
+                        ->update([
+                            'tanggal_pengembalian' => now(),
+                            'dikembalikan_at' => now(),
+                            'catatan_pengembalian' => 'Dikembalikan otomatis — aset dinyatakan rusak berat.',
+                        ]);
                 } else {
                     $masihDipakai = AsetPemakai::where('aset_id', $asetPenanganan->aset_id)
                         ->where('status', 'disetujui')
@@ -225,11 +238,6 @@ class AsetPenangananController extends Controller
 
     public function destroy(AsetPenanganan $asetPenanganan)
     {
-        // BARU: bersihin file foto dari storage juga, jangan cuma hapus row-nya
-        if ($asetPenanganan->foto) {
-            Storage::disk('public')->delete($asetPenanganan->foto);
-        }
-
         $asetPenanganan->delete();
 
         return response()->json(['message' => 'Laporan penanganan berhasil dihapus.']);

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 
 use App\Models\Aset;
 use App\Models\AsetKelengkapan;
+use App\Models\AsetPemakai;
 use App\Models\AsetWriteoff;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -209,6 +210,19 @@ class AsetController extends Controller
 
         DB::transaction(function () use ($aset, $request, $validated) {
             $aset->update(['status' => 'dijual']);
+
+            // jaga-jaga: kalau masih ada record aset_pemakai yang "nyangkut"
+            // aktif (data lama sebelum ada auto-kembalikan di rusak_berat),
+            // tutup paksa di sini juga biar "Dipakai Oleh" gak nunjuk ke
+            // orang yang udah gak pegang aset ini lagi.
+            AsetPemakai::where('aset_id', $aset->id)
+                ->where('status', 'disetujui')
+                ->whereNull('tanggal_pengembalian')
+                ->update([
+                    'tanggal_pengembalian' => now(),
+                    'dikembalikan_at' => now(),
+                    'catatan_pengembalian' => 'Dikembalikan otomatis — aset dijual.',
+                ]);
 
             // catat sebagai riwayat writeoff biar muncul akurat di panel
             // "Riwayat Aset" (siapa yang nyetujui, kapan, kenapa) — bukan
