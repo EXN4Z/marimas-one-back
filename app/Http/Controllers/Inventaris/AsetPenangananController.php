@@ -78,6 +78,7 @@ class AsetPenangananController extends Controller
         // whereHas('pekerja', ...) laporan cabang gak akan pernah ketemu
         // pemakai-nya, jadinya aset_pemakai_id kesimpen null dan nama
         // pelapornya ilang di riwayat. Makanya di sini dicek dua-duanya.
+        
         $pemakai = AsetPemakai::where('aset_id', $validated['aset_id'])
             ->where('status', 'disetujui')
             ->whereNull('tanggal_pengembalian')
@@ -87,13 +88,15 @@ class AsetPenangananController extends Controller
             })
             ->first();
 
-        $penanganan = DB::transaction(function () use ($validated, $pemakai) {
+        $penanganan = DB::transaction(function () use ($validated, $pemakai, $request) {
+            $fotoPath = $request->file('foto')->store('aset-penanganan', 'public');
             // nullable: laporan kerusakan bisa juga muncul pas aset lagi nganggur (audit gudang)
             $penanganan = AsetPenanganan::create([
                 'aset_id' => $validated['aset_id'],
                 'aset_pemakai_id' => $pemakai->id ?? null,
                 'jenis_kerusakan' => $validated['jenis_kerusakan'],
                 'keluhan' => $validated['keluhan'],
+                'foto' => $fotoPath,
                 'tanggal_lapor' => now(),
                 'lapor_at' => now(),
             ]);
