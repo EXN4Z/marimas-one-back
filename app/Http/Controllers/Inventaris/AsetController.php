@@ -122,19 +122,30 @@ class AsetController extends Controller
 
     /**
      * DELETE /api/aset/{aset}
+     * ?force=1 lewatin guard riwayat — dipakai admin buat bersihin data
+     * lama/test yang gak bisa kehapus normal krn udah punya riwayat
+     * pemakai/penanganan. Aman: aset_pemakai, aset_perbaikan,
+     * aset_kelengkapan, aset_penggantian_sparepart semua cascadeOnDelete
+     * di FK-nya, jadi riwayat ikut kehapus bersih, gak nyisa orphan row.
      */
-    public function destroy(Aset $aset)
+    public function destroy(Request $request, Aset $aset)
     {
-        if ($aset->penanganan()->exists()) {
-            return response()->json([
-                'message' => 'Aset ini punya riwayat perbaikan/penanganan dan tidak bisa dihapus.',
-            ], 422);
-        }
+        $force = $request->boolean('force');
 
-        if ($aset->pemakai()->exists()) {
-            return response()->json([
-                'message' => 'Aset ini punya riwayat peminjaman dan tidak bisa dihapus.',
-            ], 422);
+        if (!$force) {
+            if ($aset->penanganan()->exists()) {
+                return response()->json([
+                    'message' => 'Aset ini punya riwayat perbaikan/penanganan dan tidak bisa dihapus.',
+                    'force_available' => true,
+                ], 422);
+            }
+
+            if ($aset->pemakai()->exists()) {
+                return response()->json([
+                    'message' => 'Aset ini punya riwayat peminjaman dan tidak bisa dihapus.',
+                    'force_available' => true,
+                ], 422);
+            }
         }
 
         $namaAset = $aset->kode_aset;
