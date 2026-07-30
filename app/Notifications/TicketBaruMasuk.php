@@ -30,6 +30,7 @@ class TicketBaruMasuk extends Notification
             'judul' => $this->ticket->judul,
             'kategori' => $this->ticket->kategori,
             'message' => "{$namaPelapor} membuat laporan baru: {$this->ticket->judul}.",
+            'url' => "/ticketing?ticket={$this->ticket->id}",
         ];
     }
 

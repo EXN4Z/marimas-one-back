@@ -30,6 +30,7 @@ class TicketStatusUpdated extends Notification
             'judul' => $this->ticket->judul,
             'status' => $this->ticket->status,
             'message' => "Laporan \"{$this->ticket->judul}\" statusnya diubah jadi {$this->ticket->status}.",
+            'url' => "/ticketing?ticket={$this->ticket->id}",
         ];
     }
 

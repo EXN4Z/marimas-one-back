@@ -37,6 +37,7 @@ class IzinStatusUpdated extends Notification
             'nomor_izin' => $this->izin->nomor_izin,
             'status' => $this->izin->status,
             'message' => "Pengajuan izin {$this->izin->nomor_izin} telah {$this->izin->status}.",
+            'url' => '/izin',
         ];
     }
 

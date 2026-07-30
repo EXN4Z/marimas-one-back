@@ -30,6 +30,7 @@ class AbsensiBaruDicatat extends Notification
             'absensi_id' => $this->absensi->id,
             'status' => $this->absensi->status,
             'message' => "{$namaKaryawan} absen masuk ({$statusLabel}).",
+            'url' => '/absensi',
         ];
     }
 

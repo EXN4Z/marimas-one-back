@@ -38,6 +38,7 @@ class IzinBaruDiajukan extends Notification
             'izin_id' => $this->izin->id,
             'nomor_izin' => $this->izin->nomor_izin,
             'message' => "{$this->namaKaryawan()} mengajukan izin baru ({$this->izin->nomor_izin}), menunggu persetujuan.",
+            'url' => '/izin',
         ];
     }
 

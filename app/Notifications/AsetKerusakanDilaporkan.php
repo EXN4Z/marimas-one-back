@@ -51,6 +51,7 @@ class AsetKerusakanDilaporkan extends Notification
             'aset_id' => $this->penanganan->aset_id,
             'jenis_kerusakan' => $this->penanganan->jenis_kerusakan,
             'message' => "{$this->namaPelapor()} melaporkan kerusakan {$this->penanganan->jenis_kerusakan} pada {$this->namaAset()}.",
+            'url' => '/inventaris?tab=penanganan',
         ];
     }
 
