@@ -39,7 +39,7 @@ class AsetPemakai extends Model
         'diterima_at' => 'datetime',
         'dikembalikan_at' => 'datetime',
         'foto_penerimaan' => 'array',
-        'foto pengembalian' => 'array',
+        'foto_pengembalian' => 'array',
     ];
     
     public function aset()
