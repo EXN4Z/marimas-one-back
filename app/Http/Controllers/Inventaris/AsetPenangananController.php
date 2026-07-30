@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
+use function Laravel\Prompts\error;
+
 class AsetPenangananController extends Controller
 {
     use GeneratesStrukNumber;
@@ -38,6 +40,14 @@ class AsetPenangananController extends Controller
             'aset_id' => 'required|exists:aset,id',
             'jenis_kerusakan' => 'required|in:software,hardware',
             'keluhan' => 'required|string',
+<<<<<<< HEAD
+=======
+            'foto' => 'required|image|mimes:jpg,jpeg,png,webp|max:1024',
+        ], [
+            'foto.required' => 'foto harus diisi',
+            'foto.max' => 'Size foto maksimal 1MB',
+            'foto.mimes' => 'foto harus berupa jpg,jpeg,png,webp',
+>>>>>>> f4aa28596357c0b88f4f2b7c13b54c3376f65f92
         ]);
 
         $user = $request->user();
@@ -95,6 +105,7 @@ class AsetPenangananController extends Controller
             // (dan biar tombol "Lapor Kerusakan" ilang, gak bisa dobel lapor)
             Aset::whereKey($validated['aset_id'])->update(['status' => 'menunggu_perbaikan']);
 
+            
             return $penanganan;
         });
 
