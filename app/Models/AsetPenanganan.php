@@ -9,7 +9,7 @@ class AsetPenanganan extends Model
     protected $table = 'aset_penanganan';
 
     protected $fillable = [
-        'aset_id', 'aset_pemakai_id', 'jenis_kerusakan', 'keluhan',
+        'aset_id', 'aset_pemakai_id', 'jenis_kerusakan', 'keluhan', 'foto', 
         'tanggal_lapor', 'lapor_at',
         'tanggal_diterima', 'diterima_at',
         'tanggal_selesai', 'selesai_at',
