@@ -194,7 +194,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/aset', [AsetController::class, 'store']);
     Route::post('/aset/{aset}', [AsetController::class, 'update']); // pakai POST + _method=PUT dari frontend krn ada file upload
     Route::delete('/aset/{aset}', [AsetController::class, 'destroy']);
-
+    Route::get('/aset-pemakai/foto', [AsetPemakaiController::class, 'foto']);
     Route::post('/aset/{aset}/pemakai', [AsetPemakaiController::class, 'store']);
 
     Route::delete('/aset-penanganan/{asetPenanganan}', [AsetPenangananController::class, 'destroy']);

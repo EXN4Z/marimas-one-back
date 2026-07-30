@@ -284,6 +284,40 @@ class AsetPemakaiController extends Controller
      * di-mount ke Railway Volume (lihat catatan di simpanFotoBukti()) supaya
      * persisten antar-redeploy.
      */
+    // GET /aset-pemakai/foto — list semua record serah-terima/pengembalian yang punya foto,
+// buat halaman galeri. Admin lihat semua; role lain cuma punya sendiri.
+    public function foto(Request $request)
+    {
+        $user = $request->user();
+        $isAdmin = $user->role === 'admin';
+
+        $query = AsetPemakai::with(['aset.jenis', 'pekerja.user', 'user'])
+            ->where(function ($q) {
+                $q->whereNotNull('foto_penerimaan')
+                ->orWhereNotNull('foto_pengembalian');
+            })
+            ->orderByDesc('created_at');
+
+        if (!$isAdmin) {
+            $query->where(function ($q) use ($user) {
+                $q->whereHas('pekerja', fn ($qq) => $qq->where('user_id', $user->id))
+                ->orWhere('user_id', $user->id);
+            });
+        }
+
+        if ($search = $request->input('search')) {
+            $query->whereHas('aset', function ($q) use ($search) {
+                $q->where('kode_aset', 'like', "%{$search}%")
+                ->orWhere('merek', 'like', "%{$search}%")
+                ->orWhere('tipe', 'like', "%{$search}%");
+            });
+        }
+
+        $perPage = max(10, (int) $request->input('per_page', 12));
+        $data = $query->paginate($perPage);
+
+        return response()->json($data);
+    }
     public function store(Request $request, Aset $aset)
     {
         if ($aset->status !== 'tersedia') {
