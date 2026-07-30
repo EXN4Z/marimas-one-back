@@ -24,7 +24,7 @@ class AsetPenangananController extends Controller
     // admin only (dicek di route middleware, lihat bawah)
     public function index()
     {
-        $data = AsetPenanganan::with(['aset.jenis', 'pemakai.pekerja.user'])
+        $data = AsetPenanganan::with(['aset.jenis', 'pemakai.pekerja.user', 'pemakai.user'])
             ->orderByDesc('tanggal_lapor')
             ->get();
 
@@ -104,7 +104,7 @@ class AsetPenangananController extends Controller
         try {
             Notification::send(
                 User::whereIn('role', ['manajer', 'hr', 'admin'])->get(),
-                new AsetKerusakanDilaporkan($penanganan->load(['aset.jenis', 'pemakai.pekerja.user']))
+                new AsetKerusakanDilaporkan($penanganan->load(['aset.jenis', 'pemakai.pekerja.user', 'pemakai.user']))
             );
         } catch (\Throwable $e) {
             Log::error('Gagal mengirim notifikasi laporan kerusakan aset', [
@@ -114,7 +114,7 @@ class AsetPenangananController extends Controller
             ]);
         }
 
-        return response()->json($penanganan->load(['aset.jenis', 'pemakai.pekerja.user']), 201);
+        return response()->json($penanganan->load(['aset.jenis', 'pemakai.pekerja.user', 'pemakai.user']), 201);
     }
 
     // admin: terima & mulai tangani laporan -> aset jadi "diperbaiki" (sedang diperbaiki)
@@ -133,7 +133,7 @@ class AsetPenangananController extends Controller
             Aset::whereKey($asetPenanganan->aset_id)->update(['status' => 'diperbaiki']);
         });
 
-        return response()->json($asetPenanganan->fresh()->load(['aset.jenis', 'pemakai.pekerja.user']));
+        return response()->json($asetPenanganan->fresh()->load(['aset.jenis', 'pemakai.pekerja.user', 'pemakai.user']));
     }
 
     // admin: tandai penanganan selesai + isi hasil/biaya, generate no_struk (dicek di route middleware, lihat bawah)
@@ -218,7 +218,7 @@ class AsetPenangananController extends Controller
             }
         });
 
-        return response()->json($asetPenanganan->fresh()->load(['aset.jenis', 'pemakai.pekerja.user']));
+        return response()->json($asetPenanganan->fresh()->load(['aset.jenis', 'pemakai.pekerja.user', 'pemakai.user']));
     }
 
     public function destroy(AsetPenanganan $asetPenanganan)
