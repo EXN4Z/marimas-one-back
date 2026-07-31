@@ -26,7 +26,7 @@ use App\Http\Controllers\Inventaris\AsetPenggantianSparepartController;
 use App\Http\Controllers\Inventaris\AsetPenangananController;
 use App\Http\Controllers\Organisasi\CabangController;
 use App\Http\Controllers\PushSubscriptionController;
-
+use Illuminate\Support\Facades\DB;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
@@ -205,4 +205,33 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::apiResource('jenis-aset', JenisAsetController::class)->except(['index', 'show']);
     Route::apiResource('kelengkapan-master', KelengkapanMasterController::class)->except(['index', 'show']);
     Route::apiResource('supplier', SupplierController::class)->except(['index', 'show']);
+});
+Route::get('/debug-webpush-test', function () {
+    $auth = [
+        'VAPID' => [
+            'subject' => config('webpush.vapid.subject'),
+            'publicKey' => config('webpush.vapid.public_key'),
+            'privateKey' => config('webpush.vapid.private_key'),
+        ],
+    ];
+    $webPush = new \Minishlink\WebPush\WebPush($auth);
+    $sub = DB::table('push_subscriptions')->where('subscribable_id', 1)->latest('created_at')->first();
+    $subscription = \Minishlink\WebPush\Subscription::create([
+        'endpoint' => $sub->endpoint,
+        'publicKey' => $sub->public_key,
+        'authToken' => $sub->auth_token,
+        'contentEncoding' => $sub->content_encoding ?? 'aesgcm',
+    ]);
+    $report = $webPush->sendOneNotification(
+        $subscription,
+        json_encode(['title' => 'Test', 'body' => 'Halo dari route'])
+    );
+
+    return response()->json([
+        'uri' => (string) $report->getRequest()->getUri(),
+        'success' => $report->isSuccess(),
+        'reason' => $report->getReason(),
+        'status_code' => $report->getResponse()?->getStatusCode(),
+        'body' => (string) $report->getResponse()?->getBody(),
+    ]);
 });
