@@ -215,7 +215,11 @@ Route::get('/debug-webpush-test', function () {
         ],
     ];
     $webPush = new \Minishlink\WebPush\WebPush($auth);
-    $sub = DB::table('push_subscriptions')->where('subscribable_id', 1)->latest('created_at')->first();
+    $sub = DB::table('push_subscriptions')->where('subscribable_id', 1)
+        ->where('subscribable_id', 1)
+        ->where('endpoint', 'like', '%notify.windows.com%')
+        ->latest('created_at')
+        ->first();
     $subscription = \Minishlink\WebPush\Subscription::create([
         'endpoint' => $sub->endpoint,
         'publicKey' => $sub->public_key,
