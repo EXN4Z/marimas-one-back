@@ -235,6 +235,15 @@ class DashboardController extends Controller
             return $this->statsCardCabang($user);
         }
 
+        // BARU: akun admin/hr/manajer umumnya TIDAK punya baris Pekerja
+        // sendiri (mereka bukan karyawan operasional yang absen/ambil izin),
+        // jadi query "data pribadi" di bawah selalu balikin null -> 0 semua.
+        // Untuk role 'admin' secara khusus, tampilkan agregat SELURUH
+        // perusahaan (mirip statsCardCabang tapi tanpa filter lokasi kantor).
+        if ($user->role === 'admin') {
+            return $this->statsCardAdmin();
+        }
+
         $pekerja = Pekerja::where('user_id', $user->id)->first();
 
         if (! $pekerja) {
@@ -271,6 +280,49 @@ class DashboardController extends Controller
                 'value' => (clone $ticket)->count(),
                 'trend' => $this->getTrend($ticket)
             ]
+        ]);
+    }
+
+    // BARU: versi statsCard khusus akun admin -- agregat SELURUH perusahaan,
+    // tanpa filter lokasi kantor (beda dari statsCardCabang yang di-scope
+    // ke satu lokasi_kantor_id -- admin sengaja TIDAK di-scope ke lokasi
+    // karena akun admin biasanya lokasi_kantor_id-nya null / tidak terikat
+    // satu cabang tertentu). Dipanggil karena admin biasanya tidak punya
+    // baris Pekerja sendiri, jadi jalur data-pribadi di atas tidak relevan
+    // untuknya.
+    // UBAH: kehadiran dihitung per BULAN INI (bukan hari ini), konsisten
+    // sama cara statsCardCabang menghitung "Kehadiran Bulan Ini".
+    private function statsCardAdmin()
+    {
+        // "Kehadiran Bulan Ini" = total kehadiran (tepat_waktu/telat) SEMUA
+        // karyawan, seluruh perusahaan, bulan berjalan.
+        $absensiBulanIni = Absensi::whereIn('status', ['tepat_waktu', 'telat'])
+            ->whereMonth('tanggal', now()->month)
+            ->whereYear('tanggal', now()->year);
+
+        $izin = PengajuanIzin::query();
+        $ticket = Ticket::query();
+
+        return response()->json([
+            'kehadiran' => [
+                'value' => (clone $absensiBulanIni)->count(),
+                'trend' => $this->getTrend($absensiBulanIni),
+            ],
+            'izin' => [
+                'value' => (clone $izin)->where('status', 'pending')->count(),
+                'trend' => $this->getTrend($izin),
+            ],
+            'izinAktif' => [
+                // Sama seperti statsCardCabang: buat agregat banyak
+                // karyawan, "X hari" gak masuk akal, jadi ditampilin
+                // sebagai JUMLAH izin yang lagi disetujui/aktif.
+                'value' => (clone $izin)->where('status', 'disetujui')->count(),
+                'trend' => $this->getTrend($izin),
+            ],
+            'ticket' => [
+                'value' => (clone $ticket)->count(),
+                'trend' => $this->getTrend($ticket),
+            ],
         ]);
     }
 
