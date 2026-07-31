@@ -340,6 +340,8 @@ class AsetPemakaiController extends Controller
             'catatan_penerimaan' => 'nullable|string',
             'foto_penerimaan' => 'required|array|min:1|max:3',
             'foto_penerimaan.*' => 'image|mimes:jpg,jpeg,png,webp|max:1024',
+        ], [
+            'foto_penerimaan.*.max' => 'Maksimal size foto adalah 1MB',
         ]);
 
         $pemakai = DB::transaction(function () use ($aset, $request, $validated) {
@@ -399,6 +401,8 @@ class AsetPemakaiController extends Controller
             'catatan_pengembalian' => 'nullable|string',
             'foto_pengembalian' => 'required|array|min:1|max:3',
             'foto_pengembalian.*' => 'image|mimes:jpg,jpeg,png,webp|max:1024',
+        ], [
+            'foto_pengembalian.*.max' => 'Maksimal size foto adalah 1MB',
         ]);
 
         if ($asetPemakai->status !== 'disetujui') {
