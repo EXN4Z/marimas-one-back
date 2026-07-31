@@ -224,7 +224,7 @@ Route::get('/debug-webpush-test', function () {
         'endpoint' => $sub->endpoint,
         'publicKey' => $sub->public_key,
         'authToken' => $sub->auth_token,
-        'contentEncoding' => $sub->content_encoding ?? 'aesgcm',
+        'contentEncoding' => $sub->content_encoding ?? 'aes128gcm',
     ]);
     $report = $webPush->sendOneNotification(
         $subscription,
