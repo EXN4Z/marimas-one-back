@@ -23,7 +23,7 @@ class AsetKerusakanDilaporkan extends Notification
         // belum di-setup di Railway, jadi channel ini selalu throw dan bikin
         // notif database/broadcast ke penerima lain ikut gak terkirim.
         // Aktifkan lagi setelah VAPID key beres: tambahkan WebPushChannel::class.
-        return ['database', 'broadcast'];
+        return ['database', 'broadcast', WebPushChannel::class];
     }
 
     protected function namaPelapor(): string
