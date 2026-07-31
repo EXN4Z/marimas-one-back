@@ -339,7 +339,7 @@ class AsetPemakaiController extends Controller
             'tanggal_penerimaan' => 'required|date',
             'catatan_penerimaan' => 'nullable|string',
             'foto_penerimaan' => 'required|array|min:1|max:3',
-            'foto_penerimaan.*' => 'image|mimes:jpg,jpeg,png,webp|max:5120',
+            'foto_penerimaan.*' => 'image|mimes:jpg,jpeg,png,webp|max:1024',
         ]);
 
         $pemakai = DB::transaction(function () use ($aset, $request, $validated) {
@@ -398,7 +398,7 @@ class AsetPemakaiController extends Controller
             'tanggal_pengembalian' => 'required|date',
             'catatan_pengembalian' => 'nullable|string',
             'foto_pengembalian' => 'required|array|min:1|max:3',
-            'foto_pengembalian.*' => 'image|mimes:jpg,jpeg,png,webp|max:5120',
+            'foto_pengembalian.*' => 'image|mimes:jpg,jpeg,png,webp|max:1024',
         ]);
 
         if ($asetPemakai->status !== 'disetujui') {
