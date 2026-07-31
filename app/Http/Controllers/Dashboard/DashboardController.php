@@ -204,7 +204,7 @@ class DashboardController extends Controller
         $hasil = [];
 
         for ($i = 5; $i >= 0; $i--) {
-            $bulan = Carbon::now()->subMonths($i);
+            $bulan = Carbon::now()->startOfMonth()->subMonths($i);
 
             $query = PengajuanIzin::whereMonth('tanggal_mulai', $bulan->month)
                         ->whereYear('tanggal_mulai', $bulan->year);
