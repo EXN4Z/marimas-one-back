@@ -199,6 +199,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/aset/{aset}/pemakai', [AsetPemakaiController::class, 'store']);
 
     Route::delete('/aset-penanganan/{asetPenanganan}', [AsetPenangananController::class, 'destroy']);
+    Route::delete('/aset-pemakai/{asetPemakai}', [AsetPemakaiController::class, 'destroy']);
     Route::post('/aset/{aset}/jual', [AsetController::class, 'jual']);
     Route::post('/aset/{aset}/penggantian-sparepart', [AsetPenggantianSparepartController::class, 'store']);
     Route::delete('/aset-penggantian-sparepart/{asetPenggantianSparepart}', [AsetPenggantianSparepartController::class, 'destroy']);

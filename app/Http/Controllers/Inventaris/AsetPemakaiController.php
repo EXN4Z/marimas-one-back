@@ -471,4 +471,36 @@ class AsetPemakaiController extends Controller
 
         return response()->json($asetPemakai->fresh()->load('pekerja.user', 'user', 'aset'));
     }
+
+    /**
+     * DELETE /api/aset-pemakai/{asetPemakai}
+     * Admin: hapus satu entri riwayat pemakaian. Ditolak kalau entri ini
+     * punya laporan penanganan/perbaikan yang nempel (aset_pemakai_id) --
+     * sama kayak guard di AsetController::destroy(), biar riwayat perbaikan
+     * gak jadi yatim piatu tanpa konteks siapa yang lagi pegang aset waktu
+     * itu. Kalau entri yang dihapus ini pemakaian yang masih aktif (belum
+     * dikembalikan), status asetnya dikembalikan ke 'tersedia' dulu (kecuali
+     * lagi rusak_berat -- tetap gak boleh dipinjemin lagi).
+     */
+    public function destroy(AsetPemakai $asetPemakai)
+    {
+        if (AsetPenanganan::where('aset_pemakai_id', $asetPemakai->id)->exists()) {
+            return response()->json([
+                'message' => 'Riwayat pemakaian ini punya laporan perbaikan terkait dan tidak bisa dihapus.',
+            ], 422);
+        }
+
+        $masihDipakai = $asetPemakai->status === 'disetujui' && !$asetPemakai->tanggal_pengembalian;
+
+        DB::transaction(function () use ($asetPemakai, $masihDipakai) {
+            if ($masihDipakai) {
+                $asetPemakai->aset()
+                    ->where('status', '!=', 'rusak_berat')
+                    ->update(['status' => 'tersedia']);
+            }
+            $asetPemakai->delete();
+        });
+
+        return response()->json(['message' => 'Riwayat pemakaian berhasil dihapus.']);
+    }
 }
