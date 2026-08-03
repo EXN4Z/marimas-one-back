@@ -188,6 +188,7 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
 // karyawan/manajer biasa (data pribadi karyawan lain).
 Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
     Route::get('/aset-penanganan', [AsetPenangananController::class, 'index']);
+    Route::get('/aset-penanganan/foto', [AsetPenangananController::class, 'foto']); // tab "Rusak" di halaman Foto Aset
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
