@@ -190,6 +190,7 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
 // karyawan/manajer biasa (data pribadi karyawan lain).
 Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
     Route::get('/aset-penanganan', [AsetPenangananController::class, 'index']);
+    Route::get('/aset-penanganan/foto', [AsetPenangananController::class, 'foto']); // tab "Rusak" di halaman Foto Aset
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
@@ -200,6 +201,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/aset/{aset}/pemakai', [AsetPemakaiController::class, 'store']);
 
     Route::delete('/aset-penanganan/{asetPenanganan}', [AsetPenangananController::class, 'destroy']);
+    Route::delete('/aset-pemakai/{asetPemakai}', [AsetPemakaiController::class, 'destroy']);
     Route::post('/aset/{aset}/jual', [AsetController::class, 'jual']);
     Route::post('/aset/{aset}/penggantian-sparepart', [AsetPenggantianSparepartController::class, 'store']);
     Route::delete('/aset-penggantian-sparepart/{asetPenggantianSparepart}', [AsetPenggantianSparepartController::class, 'destroy']);
