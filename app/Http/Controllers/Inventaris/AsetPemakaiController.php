@@ -291,11 +291,24 @@ class AsetPemakaiController extends Controller
         $user = $request->user();
         $isAdmin = $user->role === 'admin';
 
+        // type dipakai buat pisahin tab "Peminjaman" vs "Pengembalian" di
+        // halaman Foto Aset -- masing-masing punya pagination sendiri jadi
+        // gak nyampur kayak dulu (satu entri bisa punya dua-duanya sekaligus).
+        $type = $request->input('type');
+
         $query = AsetPemakai::with(['aset.jenis', 'pekerja.user', 'user'])
-            ->where(function ($q) {
-                $q->whereNotNull('foto_penerimaan')
-                ->orWhereNotNull('foto_pengembalian');
-            })
+            ->when(
+                $type === 'peminjaman',
+                fn ($q) => $q->whereNotNull('foto_penerimaan'),
+                fn ($q) => $q->when(
+                    $type === 'pengembalian',
+                    fn ($q2) => $q2->whereNotNull('foto_pengembalian'),
+                    fn ($q2) => $q2->where(function ($qq) {
+                        $qq->whereNotNull('foto_penerimaan')
+                            ->orWhereNotNull('foto_pengembalian');
+                    })
+                )
+            )
             ->orderByDesc('created_at');
 
         if (!$isAdmin) {

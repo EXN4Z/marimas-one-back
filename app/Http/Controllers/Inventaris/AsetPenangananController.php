@@ -33,6 +33,30 @@ class AsetPenangananController extends Controller
         return response()->json($data);
     }
 
+    // Tab "Rusak" di halaman Foto Aset — versi paginated & bisa dicari,
+    // beda dari index() di atas yang narik SEMUA data buat halaman
+    // penanganan/riwayat. foto di sini masih 1 file per laporan (bukan
+    // array kayak foto_penerimaan/foto_pengembalian di AsetPemakai).
+    public function foto(Request $request)
+    {
+        $query = AsetPenanganan::with(['aset.jenis', 'pemakai.pekerja.user', 'pemakai.user'])
+            ->whereNotNull('foto')
+            ->orderByDesc('tanggal_lapor');
+
+        if ($search = $request->input('search')) {
+            $query->whereHas('aset', function ($q) use ($search) {
+                $q->where('kode_aset', 'like', "%{$search}%")
+                    ->orWhere('merek', 'like', "%{$search}%")
+                    ->orWhere('tipe', 'like', "%{$search}%");
+            });
+        }
+
+        $perPage = max(10, (int) $request->input('per_page', 12));
+        $data = $query->paginate($perPage);
+
+        return response()->json($data);
+    }
+
     // peminjam lapor kerusakan aset yang sedang dia pakai
     public function store(Request $request)
     {
