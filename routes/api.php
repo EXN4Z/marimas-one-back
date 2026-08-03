@@ -27,6 +27,7 @@ use App\Http\Controllers\Inventaris\AsetPenangananController;
 use App\Http\Controllers\Organisasi\CabangController;
 use App\Http\Controllers\PushSubscriptionController;
 use Illuminate\Support\Facades\DB;
+use App\Http\Controllers\ImportController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
@@ -161,7 +162,8 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/audit-log', [AuditLogController::class, 'index']);
     Route::get('/audit-log/trash', [AuditLogController::class, 'trash']);
     Route::post('/aset-penanganan/{asetPenanganan}/terima', [AsetPenangananController::class, 'terima']); // admin: terima & mulai tangani laporan
-    Route::post('/aset-penanganan/{asetPenanganan}', [AsetPenangananController::class, 'update']); // pakai POST + _method=PUT biar konsisten sama pola aset/{aset}
+    Route::post('/aset-penanganan/{asetPenanganan}', [AsetPenangananController::class, 'update']);
+    Route::post('/import-aset', [ImportController::class, 'import']); // pakai POST + _method=PUT biar konsisten sama pola aset/{aset}
 });
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
