@@ -9,6 +9,7 @@
         "php": "^8.3",
         "ext-bcmath": "*",
         "ext-gd": "*",
+        "ext-zip": "*",
         "doctrine/dbal": "^4.4",
         "laravel-notification-channels/webpush": "^11.0",
         "laravel/framework": "^13.8",
