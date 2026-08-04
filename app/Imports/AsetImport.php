@@ -8,31 +8,66 @@ use App\Models\Supplier;
 use App\Models\KelengkapanMaster;
 use App\Models\AsetKelengkapan;
 use Maatwebsite\Excel\Concerns\ToCollection;
-use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
-class AsetImport implements ToCollection, WithHeadingRow
+/**
+ * PENTING soal struktur file: file export "Data Aset" sekarang punya
+ * baris banner judul + subjudul info filter di bagian atas SEBELUM baris
+ * header kolom asli ("Jenis Aset", "Merek", dst). Jumlah baris banner ini
+ * bisa berubah kapan saja kalau desain export-nya diubah lagi.
+ *
+ * Makanya di sini SENGAJA tidak pakai WithHeadingRow (yang butuh nomor
+ * baris header di-hardcode). Sebagai gantinya, class ini scan beberapa
+ * baris pertama sendiri untuk MENEMUKAN baris mana yang berisi header
+ * kolom asli — dicek dari keberadaan kolom "serial_number" (kolom yang
+ * pasti selalu ada & unik, jadi penanda paling aman). Apapun jumlah baris
+ * banner di atasnya, kode ini tetap jalan tanpa perlu diubah manual lagi.
+ */
+class AsetImport implements ToCollection
 {
     protected $rowCount = 0;
     protected $errors = [];
 
+    /** Maksimal berapa baris awal yang discan buat nyari baris header */
+    private const MAX_BARIS_DISCAN = 10;
+
     public function collection(Collection $rows)
     {
-        if ($rows->isNotEmpty()) {
-        Log::info('Header Excel terbaca:', array_keys($rows->first()->toArray()));
+        $indexHeader = $this->cariBarisHeader($rows);
+
+        if ($indexHeader === null) {
+            $this->errors[] = 'Tidak menemukan baris header (kolom "Serial Number") di ' . self::MAX_BARIS_DISCAN . ' baris pertama. Pastikan file masih punya kolom Serial Number.';
+            return;
         }
-        foreach ($rows as $index => $rawRow) {
+
+        $headers = $rows[$indexHeader]
+            ->map(fn ($h) => $this->normalisasiHeader((string) $h))
+            ->toArray();
+
+        Log::info('Header Excel terbaca:', $headers);
+
+        // Baris data dimulai tepat setelah baris header
+        $dataRows = $rows->slice($indexHeader + 1);
+
+        foreach ($dataRows as $index => $rawRow) {
             try {
-                // BARU: normalisasi key tiap baris sebelum dipakai. Ini penting
-                // karena header di file Excel sering ditulis dengan spasi
-                // (mis. "No Good Receive", "Nama Kelengkapan") padahal kode
-                // di bawah butuh key snake_case ("no_good_receive", dst).
-                // Dengan ini, apapun variasi spasi/kapitalisasi header-nya,
-                // hasilnya selalu konsisten.
-                $row = collect($rawRow->toArray())
-                    ->mapWithKeys(fn ($value, $key) => [$this->normalisasiHeader((string) $key) => $value])
-                    ->toArray();
+                $rowArray = $rawRow->toArray();
+
+                // Lewati baris yang benar-benar kosong semua (mis. baris pemisah/kosong di akhir file)
+                if (count(array_filter($rowArray, fn ($v) => $v !== null && $v !== '')) === 0) {
+                    continue;
+                }
+
+                // Gabungkan header hasil scan dengan isi baris data ini
+                $row = array_combine(
+                    $headers,
+                    array_pad($rowArray, count($headers), null)
+                );
+
+                if (empty($row['serial_number'])) {
+                    continue;
+                }
 
                 // 1. Lookup / auto-create Jenis Aset
                 $jenis = JenisAset::firstOrCreate(
@@ -41,7 +76,7 @@ class AsetImport implements ToCollection, WithHeadingRow
 
                 // 2. Lookup / auto-create Supplier
                 $supplier = Supplier::firstOrCreate(
-                    ['nama' => trim($row['supplier'])]
+                    ['nama' => trim($row['supplier'] ?? '')]
                 );
 
                 // 3. Simpan / update data Aset
@@ -51,14 +86,14 @@ class AsetImport implements ToCollection, WithHeadingRow
                     [
                         'jenis_id'          => $jenis->id,
                         'supplier_id'       => $supplier->id,
-                        'merek'             => $row['merek'],
-                        'tipe'              => $row['tipe'],
-                        'warna'             => $row['warna'],
-                        'tanggal_garansi'   => $this->parseTanggal($row['tanggal_garansi']),
-                        'tanggal_pembelian' => $this->parseTanggal($row['tanggal_pembelian']),
-                        'perusahaan'        => $row['perusahaan'],
-                        'no_surat_jalan'    => $row['no_surat_jalan'],
-                        'no_good_receive'   => $row['no_good_receive'],
+                        'merek'             => $row['merek'] ?? null,
+                        'tipe'              => $row['tipe'] ?? null,
+                        'warna'             => $row['warna'] ?? null,
+                        'tanggal_garansi'   => $this->parseTanggal($row['tanggal_garansi'] ?? null),
+                        'tanggal_pembelian' => $this->parseTanggal($row['tanggal_pembelian'] ?? null),
+                        'perusahaan'        => $row['perusahaan'] ?? null,
+                        'no_surat_jalan'    => $row['no_surat_jalan'] ?? null,
+                        'no_good_receive'   => $row['no_good_receive'] ?? null,
                         'status'            => $this->normalisasiStatus($row['status'] ?? null),
                     ]
                 );
@@ -106,9 +141,30 @@ class AsetImport implements ToCollection, WithHeadingRow
 
                 $this->rowCount++;
             } catch (\Exception $e) {
-                $this->errors[] = "Baris " . ($index + 2) . ": " . $e->getMessage();
+                $this->errors[] = 'Baris data ke-' . ($index + 1) . ': ' . $e->getMessage();
             }
         }
+    }
+
+    /**
+     * Scan MAX_BARIS_DISCAN baris pertama, cari baris yang salah satu
+     * selnya (setelah dinormalisasi) persis "serial_number". Baris itulah
+     * yang dianggap baris header kolom asli. Return null kalau nggak
+     * ketemu sampai batas baris yang discan.
+     */
+    private function cariBarisHeader(Collection $rows): ?int
+    {
+        $batas = min(self::MAX_BARIS_DISCAN, $rows->count());
+
+        for ($i = 0; $i < $batas; $i++) {
+            $selDinormalisasi = $rows[$i]->map(fn ($v) => $this->normalisasiHeader((string) $v));
+
+            if ($selDinormalisasi->contains('serial_number')) {
+                return $i;
+            }
+        }
+
+        return null;
     }
 
     /**
