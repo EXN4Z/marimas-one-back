@@ -36,7 +36,7 @@ class AsetImport implements ToCollection, WithHeadingRow
 
                 // 1. Lookup / auto-create Jenis Aset
                 $jenis = JenisAset::firstOrCreate(
-                    ['nama' => trim($row['jenis'] ?? $row['jenis_aset'])]
+                    ['nama' => trim($row['jenis_aset'] ?? $row['jenis'] ?? '')]
                 );
 
                 // 2. Lookup / auto-create Supplier
@@ -59,14 +59,22 @@ class AsetImport implements ToCollection, WithHeadingRow
                         'perusahaan'        => $row['perusahaan'],
                         'no_surat_jalan'    => $row['no_surat_jalan'],
                         'no_good_receive'   => $row['no_good_receive'],
-                        'status'            => $row['status'] ?? 'aktif',
+                        'status'            => $this->normalisasiStatus($row['status'] ?? null),
                     ]
                 );
 
                 // 4. Lookup / auto-create Kelengkapan Master
-                if (!empty($row['nama_kelengkapan'])) {
+                //    PENTING: key aslinya di Excel cuma "kelengkapan" dan "keterangan"
+                //    (dikonfirmasi dari Log::info header di atas), bukan
+                //    "nama_kelengkapan"/"keterangan_kelengkapan" seperti sebelumnya.
+                //    Karena satu serial_number bisa muncul di beberapa baris
+                //    (satu baris = satu kelengkapan, mis. baris utk "Charger",
+                //    baris lain utk "Tas"), ini otomatis ke-handle karena
+                //    loop jalan per baris dan updateOrCreate di atas cuma
+                //    nge-update data Aset-nya, bukan bikin duplikat.
+                if (!empty($row['kelengkapan'])) {
                     $kelengkapanMaster = KelengkapanMaster::firstOrCreate(
-                        ['nama' => trim($row['nama_kelengkapan'])]
+                        ['nama' => trim($row['kelengkapan'])]
                     );
 
                     // 5. Simpan relasi ke aset_kelengkapan
@@ -76,7 +84,7 @@ class AsetImport implements ToCollection, WithHeadingRow
                     AsetKelengkapan::create([
                         'aset_id'               => $aset->id,
                         'kelengkapan_master_id' => $kelengkapanMaster->id,
-                        'keterangan'            => $row['keterangan_kelengkapan'] ?? null,
+                        'keterangan'            => $row['keterangan'] ?? null,
                     ]);
                 }
 
@@ -101,6 +109,36 @@ class AsetImport implements ToCollection, WithHeadingRow
         $header = preg_replace('/[^a-z0-9_]/', '', $header); // buang karakter selain huruf/angka/underscore
         $header = trim($header, '_'); // buang underscore nyasar di awal/akhir
         return $header;
+    }
+
+    /**
+     * Mapping label status di Excel (apapun kapitalisasi/spasinya) ke value
+     * enum yang dipakai di database. Kalau user isi "Tersedia", "TERSEDIA",
+     * atau "tersedia", hasilnya tetap konsisten 'tersedia'.
+     *
+     * Daftar mapping ini ngikutin STATUS_LABEL yang dipakai di fitur export
+     * (AsetExportModal.tsx) — kalau di sana nambah status baru, tambahin juga di sini.
+     */
+    private function normalisasiStatus(?string $value): string
+    {
+        if (empty($value)) {
+            return 'tersedia';
+        }
+
+        $value = strtolower(trim($value));
+        $value = preg_replace('/[\s\-]+/', '_', $value);
+
+        $mapLabel = [
+            'tersedia'             => 'tersedia',
+            'dipakai'              => 'dipakai',
+            'menunggu_perbaikan'   => 'menunggu_perbaikan',
+            'diperbaiki'           => 'diperbaiki',
+            'sedang_diperbaiki'    => 'diperbaiki',
+            'rusak_berat'          => 'rusak_berat',
+            'dijual'               => 'dijual',
+        ];
+
+        return $mapLabel[$value] ?? 'tersedia';
     }
 
     private function parseTanggal($value)
