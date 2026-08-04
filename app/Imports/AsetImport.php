@@ -64,28 +64,44 @@ class AsetImport implements ToCollection, WithHeadingRow
                 );
 
                 // 4. Lookup / auto-create Kelengkapan Master
-                //    PENTING: key aslinya di Excel cuma "kelengkapan" dan "keterangan"
-                //    (dikonfirmasi dari Log::info header di atas), bukan
-                //    "nama_kelengkapan"/"keterangan_kelengkapan" seperti sebelumnya.
-                //    Karena satu serial_number bisa muncul di beberapa baris
-                //    (satu baris = satu kelengkapan, mis. baris utk "Charger",
-                //    baris lain utk "Tas"), ini otomatis ke-handle karena
-                //    loop jalan per baris dan updateOrCreate di atas cuma
-                //    nge-update data Aset-nya, bukan bikin duplikat.
+                //    PENTING: satu SEL Excel bisa berisi beberapa kelengkapan
+                //    sekaligus, dipisah koma (mis. "Charger, Tas"). Kalau
+                //    langsung disimpan apa adanya, itu jadi 1 nama master
+                //    yang salah ("Charger, Tas" dianggap 1 barang). Jadi di
+                //    sini kita pecah dulu berdasarkan koma, baru tiap item
+                //    dibikinkan master + relasinya masing-masing.
+                //
+                //    "keterangan" diasumsikan berpasangan urut dengan
+                //    "kelengkapan" (item ke-1 keterangan ke-1, dst). Kalau
+                //    jumlahnya nggak match, keterangan yang sama dipakai
+                //    buat semua item (fallback aman, tidak salah pasangan).
                 if (!empty($row['kelengkapan'])) {
-                    $kelengkapanMaster = KelengkapanMaster::firstOrCreate(
-                        ['nama' => trim($row['kelengkapan'])]
-                    );
+                    $daftarKelengkapan = array_filter(array_map('trim', explode(',', $row['kelengkapan'])));
+                    $daftarKeterangan = !empty($row['keterangan'])
+                        ? array_map('trim', explode(',', $row['keterangan']))
+                        : [];
 
-                    // 5. Simpan relasi ke aset_kelengkapan
-                    //    catatan: satu aset bisa punya beberapa baris kelengkapan yang sama,
-                    //    jadi di sini pakai create biasa (bukan updateOrCreate),
-                    //    kecuali kamu mau tiap aset+kelengkapan itu unik (lihat catatan di bawah)
-                    AsetKelengkapan::create([
-                        'aset_id'               => $aset->id,
-                        'kelengkapan_master_id' => $kelengkapanMaster->id,
-                        'keterangan'            => $row['keterangan'] ?? null,
-                    ]);
+                    $keteranganBerpasangan = count($daftarKeterangan) === count($daftarKelengkapan);
+
+                    foreach (array_values($daftarKelengkapan) as $i => $namaKelengkapan) {
+                        $kelengkapanMaster = KelengkapanMaster::firstOrCreate(
+                            ['nama' => $namaKelengkapan]
+                        );
+
+                        $keteranganItem = $keteranganBerpasangan
+                            ? ($daftarKeterangan[$i] ?? null)
+                            : ($row['keterangan'] ?? null);
+
+                        // 5. Simpan relasi ke aset_kelengkapan
+                        //    catatan: satu aset bisa punya beberapa baris kelengkapan yang sama,
+                        //    jadi di sini pakai create biasa (bukan updateOrCreate),
+                        //    kecuali kamu mau tiap aset+kelengkapan itu unik (lihat catatan di bawah)
+                        AsetKelengkapan::create([
+                            'aset_id'               => $aset->id,
+                            'kelengkapan_master_id' => $kelengkapanMaster->id,
+                            'keterangan'            => $keteranganItem,
+                        ]);
+                    }
                 }
 
                 $this->rowCount++;
