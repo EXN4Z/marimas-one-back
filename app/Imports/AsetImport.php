@@ -22,8 +22,18 @@ class AsetImport implements ToCollection, WithHeadingRow
         if ($rows->isNotEmpty()) {
         Log::info('Header Excel terbaca:', array_keys($rows->first()->toArray()));
         }
-        foreach ($rows as $index => $row) {
+        foreach ($rows as $index => $rawRow) {
             try {
+                // BARU: normalisasi key tiap baris sebelum dipakai. Ini penting
+                // karena header di file Excel sering ditulis dengan spasi
+                // (mis. "No Good Receive", "Nama Kelengkapan") padahal kode
+                // di bawah butuh key snake_case ("no_good_receive", dst).
+                // Dengan ini, apapun variasi spasi/kapitalisasi header-nya,
+                // hasilnya selalu konsisten.
+                $row = collect($rawRow->toArray())
+                    ->mapWithKeys(fn ($value, $key) => [$this->normalisasiHeader((string) $key) => $value])
+                    ->toArray();
+
                 // 1. Lookup / auto-create Jenis Aset
                 $jenis = JenisAset::firstOrCreate(
                     ['nama' => trim($row['jenis'])]
@@ -75,6 +85,22 @@ class AsetImport implements ToCollection, WithHeadingRow
                 $this->errors[] = "Baris " . ($index + 2) . ": " . $e->getMessage();
             }
         }
+    }
+
+    /**
+     * Ubah nama kolom jadi format snake_case yang konsisten.
+     * Contoh: "No Good Receive" -> "no_good_receive"
+     *         "Nama  Kelengkapan" -> "nama_kelengkapan" (spasi ganda pun aman)
+     *         "No. Surat Jalan"  -> "no_surat_jalan"
+     */
+    private function normalisasiHeader(string $header): string
+    {
+        $header = trim($header);
+        $header = strtolower($header);
+        $header = preg_replace('/[\s\-]+/', '_', $header); // spasi/strip berturutan -> 1 underscore
+        $header = preg_replace('/[^a-z0-9_]/', '', $header); // buang karakter selain huruf/angka/underscore
+        $header = trim($header, '_'); // buang underscore nyasar di awal/akhir
+        return $header;
     }
 
     private function parseTanggal($value)
