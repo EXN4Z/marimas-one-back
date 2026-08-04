@@ -36,7 +36,7 @@ class AsetImport implements ToCollection, WithHeadingRow
 
                 // 1. Lookup / auto-create Jenis Aset
                 $jenis = JenisAset::firstOrCreate(
-                    ['nama' => trim($row['jenis'])]
+                    ['nama' => trim($row['jenis'] ?? $row['jenis_aset'])]
                 );
 
                 // 2. Lookup / auto-create Supplier
