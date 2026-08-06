@@ -13,14 +13,7 @@ class LokasiKantor extends Model
         'nama',
         'alamat',
         'telepon',
-        'latitude',
-        'longitude',
         'link'
-    ];
-
-    protected $casts = [
-        'latitude' => 'decimal:7',
-        'longitude' => 'decimal:7',
     ];
 
     public function pekerja(): HasMany
