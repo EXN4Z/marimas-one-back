@@ -36,6 +36,9 @@ class CabangController extends Controller
             'telepon' => 'nullable|string|max:30',
             'latitude' => 'required|numeric|between:-90,90',
             'longitude' => 'required|numeric|between:-180,180',
+            'link' => 'required|string|max:255',
+        ], [
+            'link.required' => 'Kolom link wajib diisi.',
         ]);
 
         $cabang = LokasiKantor::create($validated);

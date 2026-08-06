@@ -15,6 +15,7 @@ class LokasiKantor extends Model
         'telepon',
         'latitude',
         'longitude',
+        'link'
     ];
 
     protected $casts = [
