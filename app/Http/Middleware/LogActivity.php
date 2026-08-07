@@ -16,6 +16,12 @@ class LogActivity
         'api/logout',
     ];
 
+    // Cuma method yang benar-benar mengubah data yang dicatat. GET (buka
+    // halaman/liat data/pindah tab) sengaja gak dicatat -- dulu tiap
+    // navigasi/fetch list ikut nyatet, jadi log kebanjiran "melihat data"
+    // dan menutupi aktivitas ubah data yang justru penting.
+    protected array $loggedMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
+
     public function handle(Request $request, Closure $next)
     {
         $response = $next($request);
@@ -27,6 +33,10 @@ class LogActivity
 
     protected function log(Request $request): void
     {
+        if (!in_array($request->method(), $this->loggedMethods, true)) {
+            return;
+        }
+
         foreach ($this->excluded as $pattern) {
             if ($request->is($pattern)) {
                 return;
@@ -49,7 +59,6 @@ class LogActivity
         $path = $request->path();
 
         return match ($method) {
-            'GET' => "{$nama} melihat data di /{$path}",
             'POST' => "{$nama} membuat data baru di /{$path}",
             'PUT', 'PATCH' => "{$nama} mengubah data di /{$path}",
             'DELETE' => "{$nama} menghapus data di /{$path}",
