@@ -9,11 +9,14 @@ use Illuminate\Support\Carbon;
 class AuditPurge extends Command
 {
     protected $signature = 'audit:purge';
-    protected $description = 'Hapus permanen audit log yang sudah di trash lebih dari 7 hari';
+    protected $description = 'Hapus permanen audit log yang sudah di trash lebih dari 90 hari';
 
     public function handle(): void
     {
-        $batas = Carbon::now()->subDays(7);
+        // Sebelumnya 7 hari (total retention ~8 hari). Dinaikin ke 90 hari
+        // di trash (total retention ~120 hari / 4 bulan) supaya masih bisa
+        // ditelusuri kalau ada kejadian yang baru ketauan belakangan.
+        $batas = Carbon::now()->subDays(90);
 
         $count = AuditLog::onlyTrashed()
             ->where('deleted_at', '<', $batas)
