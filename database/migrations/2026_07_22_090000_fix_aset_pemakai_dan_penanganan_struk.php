@@ -15,14 +15,6 @@ return new class extends Migration
             $table->string('no_struk_pengembalian')->nullable()->after('nomor_pengembalian');
         });
 
-        // aset_penanganan sekarang nempel ke aset_pemakai (sistem lama pakai
-        // aset_peminjaman udah gak pernah dibuat sama sekali, jadi gak ada yang
-        // perlu di-drop di sini).
-        Schema::table('aset_penanganan', function (Blueprint $table) {
-            $table->foreignId('aset_pemakai_id')->nullable()->after('aset_id')
-                ->constrained('aset_pemakai')->nullOnDelete();
-        });
-
         // aset_peminjaman(_kelengkapan) & aset_perbaikan: sistem lama yang udah
         // digantiin aset_pemakai + aset_penanganan, gak ada di routes/model
         // manapun lagi. Bersihin biar gak dobel & bingung.
@@ -35,11 +27,6 @@ return new class extends Migration
     {
         Schema::table('aset_pemakai', function (Blueprint $table) {
             $table->dropColumn(['no_struk_penerimaan', 'no_struk_pengembalian']);
-        });
-
-        Schema::table('aset_penanganan', function (Blueprint $table) {
-            $table->dropForeign(['aset_pemakai_id']);
-            $table->dropColumn('aset_pemakai_id');
         });
 
         // aset_peminjaman / aset_perbaikan sengaja gak direstore di down():
