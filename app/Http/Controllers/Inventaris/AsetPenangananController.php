@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\Rule;
+use App\Notifications\AsetKerusakanSelesai;
 use Illuminate\Validation\ValidationException;
 
 use function Laravel\Prompts\error;
@@ -172,6 +173,7 @@ class AsetPenangananController extends Controller
     }
 
     // admin: tandai penanganan selesai + isi hasil/biaya, generate no_struk (dicek di route middleware, lihat bawah)
+// admin: tandai penanganan selesai + isi hasil/biaya, generate no_struk (dicek di route middleware, lihat bawah)
     public function update(Request $request, AsetPenanganan $asetPenanganan)
     {
         $validated = $request->validate([
@@ -203,6 +205,10 @@ class AsetPenangananController extends Controller
         if (!$request->has('tanggal_selesai')) {
             $validated['tanggal_selesai'] = now();
         }
+
+        // simpan status sebelumnya, biar kita tau ini transisi PERTAMA kali
+        // ke "selesai" (bukan admin cuma edit catatan setelahnya)
+        $sudahSelesaiSebelumnya = (bool) $asetPenanganan->tanggal_selesai;
 
         DB::transaction(function () use ($asetPenanganan, $validated) {
             // struk cuma digenerate sekali, pas pertama kali ditandai selesai
@@ -268,6 +274,32 @@ class AsetPenangananController extends Controller
             }
         });
 
+        $asetPenanganan->refresh();
+
+        // TAMBAH: notif ke pelapor begitu penanganan pertama kali ditandai selesai
+        // (baik diperbaiki maupun rusak_berat -- keduanya "selesai ditangani")
+        if (($validated['tanggal_selesai'] ?? null) && !$sudahSelesaiSebelumnya) {
+            try {
+                // fallback: akun cabang gak punya relasi pekerja (nempel
+                // langsung lewat user_id di aset_pemakai), jadi kalau
+                // pemakai->pekerja->user null, coba pemakai->user
+                $pelapor = $asetPenanganan->pemakai?->pekerja?->user
+                    ?? $asetPenanganan->pemakai?->user;
+
+                if ($pelapor) {
+                    $pelapor->notify(new AsetKerusakanSelesai(
+                        $asetPenanganan->load(['aset.jenis', 'pemakai.pekerja.user', 'pemakai.user'])
+                    ));
+                }
+            } catch (\Throwable $e) {
+                Log::error('Gagal mengirim notifikasi penanganan aset selesai', [
+                    'aset_penanganan_id' => $asetPenanganan->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+            }
+        }
+
         return response()->json($asetPenanganan->fresh()->load(['aset.jenis', 'pemakai.pekerja.user', 'pemakai.user']));
     }
 
@@ -277,4 +309,5 @@ class AsetPenangananController extends Controller
 
         return response()->json(['message' => 'Laporan penanganan berhasil dihapus.']);
     }
+    // contoh di controller/service saat status diubah ke "selesai"
 }

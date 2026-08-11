@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 
 use App\Models\Departemen;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class DepartemenController extends Controller
 {
@@ -25,21 +26,21 @@ class DepartemenController extends Controller
         return response()->json($departemen, 201);
     }
 
-    public function update(Request $request, Departemen $departemen)
+    public function update(Request $request, Departemen $departeman)
     {
         $validated = $request->validate([
-            'nama' => 'required|string|unique:departemen,nama,' . $departemen->id,
+            'nama' => 'required|string|unique:departemen,nama,' . $departeman->id,
         ]);
 
-        $departemen->update($validated);
+        $departeman->update($validated);
 
-        return response()->json($departemen);
+        return response()->json($departeman);
     }
 
-    public function destroy(Departemen $departemen)
+    public function destroy(Departemen $departeman)
     {
-        $departemen->delete();
+        $departeman->delete();
 
-        return response()->json(['message' => "Departemen {$departemen->nama} berhasil dihapus."]);
+        return response()->json(['message' => "Departemen {$departeman->nama} berhasil dihapus."]);
     }
 }

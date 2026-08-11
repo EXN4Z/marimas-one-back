@@ -16,11 +16,23 @@ class AsetController extends Controller
 {
     /**
      * GET /api/aset
-     * Daftar semua aset. Eager-load relasi yang dipakai di tabel list Inventaris.
+     * Admin: daftar SEMUA aset (perilaku lama, gak berubah).
+     * Non-admin (karyawan/cabang/manajer/hr): dibatasi cuma aset yang
+     * statusnya 'tersedia' (biar tau apa yang bisa dipinjam) PLUS aset yang
+     * pernah/sedang ada hubungan pemakaian sama akun dia sendiri (lewat
+     * user_id atau pekerja_id di tabel aset_pemakai) -- sama persis pola
+     * kepemilikan yang dipakai di AsetPemakaiController::riwayat(). Aset
+     * yang lagi dipegang/riwayatnya cuma nempel ke orang lain TIDAK ikut
+     * dikirim ke non-admin sama sekali, jadi bukan cuma disembunyiin di
+     * tampilan React -- datanya memang gak nyampe ke browser mereka.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $aset = Aset::with([
+        $user = $request->user();
+        $isAdmin = $user?->role === 'admin';
+        $pekerjaId = $user?->pekerja?->id;
+
+        $query = Aset::with([
             'jenis',
             'supplier',
             'kelengkapan.kelengkapanMaster',
@@ -30,19 +42,50 @@ class AsetController extends Controller
             'pemakaiPending.user',
             'penangananAktif',
             'writeoff.penyetuju:id,name',
-        ])
-            ->latest()
-            ->get();
+        ])->latest();
 
-        return response()->json($aset);
+        if (!$isAdmin) {
+            $query->where(function ($q) use ($user, $pekerjaId) {
+                $q->where('status', 'tersedia')
+                    ->orWhereHas('pemakai', function ($sub) use ($user, $pekerjaId) {
+                        $sub->where('user_id', $user->id);
+                        if ($pekerjaId) {
+                            $sub->orWhere('pekerja_id', $pekerjaId);
+                        }
+                    });
+            });
+        }
+
+        return response()->json($query->get());
     }
 
     /**
      * GET /api/aset/{aset}
      * Detail satu aset, termasuk riwayat lengkap (pemakai & penanganan) buat halaman detail.
+     * Non-admin cuma boleh buka detail aset yang 'tersedia' atau yang
+     * pernah/sedang berhubungan pemakaian sama dia sendiri -- sama scoping-nya
+     * kayak index(). Ini WAJIB dicek di sini juga (bukan cuma index()), soalnya
+     * endpoint ini bisa dipanggil langsung lewat ID tanpa lewat daftar/tabel.
      */
-    public function show(Aset $aset)
+    public function show(Request $request, Aset $aset)
     {
+        $user = $request->user();
+        $isAdmin = $user?->role === 'admin';
+
+        if (!$isAdmin) {
+            $pekerjaId = $user?->pekerja?->id;
+            $terkaitUser = $aset->pemakai()
+                ->where(function ($q) use ($user, $pekerjaId) {
+                    $q->where('user_id', $user->id);
+                    if ($pekerjaId) {
+                        $q->orWhere('pekerja_id', $pekerjaId);
+                    }
+                })
+                ->exists();
+
+            abort_unless($aset->status === 'tersedia' || $terkaitUser, 403, 'Kamu tidak punya akses untuk melihat detail aset ini.');
+        }
+
         $aset->load([
             'jenis',
             'supplier',
@@ -54,7 +97,6 @@ class AsetController extends Controller
             'pemakai.pekerja.user',
             'pemakai.user',
             'penanganan',
-            'penggantianSparepart',
             'penangananAktif',
             'writeoff.penyetuju:id,name',
         ]);
@@ -125,8 +167,8 @@ class AsetController extends Controller
      * ?force=1 lewatin guard riwayat — dipakai admin buat bersihin data
      * lama/test yang gak bisa kehapus normal krn udah punya riwayat
      * pemakai/penanganan. Aman: aset_pemakai, aset_perbaikan,
-     * aset_kelengkapan, aset_penggantian_sparepart semua cascadeOnDelete
-     * di FK-nya, jadi riwayat ikut kehapus bersih, gak nyisa orphan row.
+     * aset_kelengkapan semua cascadeOnDelete di FK-nya, jadi riwayat
+     * ikut kehapus bersih, gak nyisa orphan row.
      */
     public function destroy(Request $request, Aset $aset)
     {

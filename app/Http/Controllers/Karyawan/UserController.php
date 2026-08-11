@@ -63,7 +63,6 @@ class UserController extends Controller
             // UBAH: wajib diisi kalau role cabang, biar gak lolos dengan null lagi.
             'lokasi_kantor_id' => 'required_if:role,cabang|nullable|exists:lokasi_kantor,id',
             'tanggal_masuk' => 'nullable|date',
-            'kuota_izin_tahunan' => 'nullable|integer|min:0|max:365',
         ]);
 
         $plainPassword = Str::random(8);
@@ -93,7 +92,6 @@ class UserController extends Controller
                     'qr_code' => Str::uuid()->toString(),
                     'lokasi_kantor_id' => $validated['lokasi_kantor_id'] ?? null,
                     'tanggal_masuk' => $validated['tanggal_masuk'] ?? null,
-                    'kuota_izin_tahunan' => $validated['kuota_izin_tahunan'] ?? 12,
                 ]);
             }
 
@@ -122,7 +120,6 @@ class UserController extends Controller
             'jabatan_id' => 'nullable|exists:jabatan,id',
             'lokasi_kantor_id' => 'required_if:role,cabang|nullable|exists:lokasi_kantor,id',
             'tanggal_masuk' => 'nullable|date',
-            'kuota_izin_tahunan' => 'nullable|integer|min:0|max:365',
         ]);
 
         $user->update(collect($validated)->only(['name', 'email', 'phone', 'role'])->toArray());
@@ -138,7 +135,7 @@ class UserController extends Controller
             $user->pekerja()?->delete();
         } elseif ($user->pekerja) {
             $user->pekerja->update(
-                collect($validated)->only(['nip', 'departemen_id', 'jabatan_id', 'tanggal_masuk', 'kuota_izin_tahunan', 'lokasi_kantor_id'])->toArray()
+                collect($validated)->only(['nip', 'departemen_id', 'jabatan_id', 'tanggal_masuk', 'lokasi_kantor_id'])->toArray()
             );
         } else {
             Pekerja::create([
@@ -149,7 +146,6 @@ class UserController extends Controller
                 'qr_code' => Str::uuid()->toString(),
                 'lokasi_kantor_id' => $validated['lokasi_kantor_id'] ?? null,
                 'tanggal_masuk' => $validated['tanggal_masuk'] ?? null,
-                'kuota_izin_tahunan' => $validated['kuota_izin_tahunan'] ?? 12,
             ]);
         }
 

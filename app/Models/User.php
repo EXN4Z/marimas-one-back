@@ -62,10 +62,6 @@ class User extends Authenticatable
     {
         return $this->hasOne(Pekerja::class, 'user_id');
     }
-    public function izin()
-    {
-        return $this->hasMany(PengajuanIzin::class, 'karyawan_id');
-    }
 
     // BARU: lokasi kantor yang diurus akun ini — cuma relevan buat role 'cabang'.
     public function lokasiKantor()
