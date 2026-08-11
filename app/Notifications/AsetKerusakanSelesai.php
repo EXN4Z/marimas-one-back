@@ -22,7 +22,7 @@ class AsetKerusakanSelesai extends Notification
         // WebPushChannel dimatikan sementara: VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY
         // belum di-setup di Railway. Aktifkan lagi setelah VAPID key beres:
         // tambahkan WebPushChannel::class.
-        return ['database', 'broadcast'];
+        return ['database', 'broadcast', WebPushChannel::class];
     }
 
     protected function namaAset(): string
