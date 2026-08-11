@@ -14,4 +14,9 @@ class Departemen extends Model
     {
         return $this->hasMany(Pekerja::class, 'departemen_id');
     }
+
+    public function aset()
+    {
+        return $this->hasMany(Aset::class, 'departemen_id');
+    }
 }
