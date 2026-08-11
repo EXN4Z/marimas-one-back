@@ -9,15 +9,14 @@ use Illuminate\Support\Carbon;
 class AuditCleanup extends Command
 {
     protected $signature = 'audit:cleanup';
-    protected $description = 'Pindahkan audit log yang sudah lebih dari 30 hari ke trash (soft delete)';
+    protected $description = 'Pindahkan audit log yang sudah lebih dari 1 minggu ke trash (soft delete)';
 
     public function handle(): void
     {
-        // Sebelumnya 24 jam -- kelewat pendek buat kebutuhan investigasi
-        // aktivitas admin (misal nelusurin siapa yang pinjemin/hapus aset
-        // beberapa minggu lalu). Dinaikin ke 30 hari, standar retention log
-        // internal yang umum dipakai buat tool non-compliance seperti ini.
-        $batas = Carbon::now()->subDays(30);
+        // Audit log yang umurnya lebih dari 1 minggu (7 hari) sejak dibuat
+        // dipindahkan ke trash. Masih bisa dipulihkan/dilihat lewat halaman
+        // trash sampai akhirnya dihapus permanen oleh audit:purge.
+        $batas = Carbon::now()->subDays(7);
 
         $count = AuditLog::whereNull('deleted_at')
             ->where('created_at', '<', $batas)
