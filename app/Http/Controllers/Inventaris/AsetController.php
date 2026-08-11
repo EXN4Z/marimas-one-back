@@ -34,6 +34,7 @@ class AsetController extends Controller
 
         $query = Aset::with([
             'jenis',
+            'departemen',
             'supplier',
             'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni.pekerja.user',
@@ -88,6 +89,7 @@ class AsetController extends Controller
 
         $aset->load([
             'jenis',
+            'departemen',
             'supplier',
             'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni.pekerja.user',
@@ -126,7 +128,7 @@ class AsetController extends Controller
         });
 
         return response()->json(
-            $aset->load('jenis', 'supplier', 'kelengkapan.kelengkapanMaster'),
+            $aset->load('jenis', 'departemen', 'supplier', 'kelengkapan.kelengkapanMaster'),
             201
         );
     }
@@ -158,7 +160,7 @@ class AsetController extends Controller
         });
 
         return response()->json(
-            $aset->fresh()->load('jenis', 'supplier', 'kelengkapan.kelengkapanMaster')
+            $aset->fresh()->load('jenis', 'departemen', 'supplier', 'kelengkapan.kelengkapanMaster')
         );
     }
 
@@ -204,6 +206,7 @@ class AsetController extends Controller
     {
         return $request->validate([
             'jenis_id' => 'nullable|exists:jenis_aset,id',
+            'departemen_id' => 'nullable|exists:departemen,id',
             'merek' => 'nullable|string|max:255',
             'tipe' => 'nullable|string|max:255',
             'warna' => 'nullable|string|max:255',
@@ -215,6 +218,7 @@ class AsetController extends Controller
                     ? 'unique:aset,serial_number,' . $aset->id
                     : 'unique:aset,serial_number',
             ],
+            'jumlah' => 'nullable|integer|min:1',
             'tanggal_garansi' => 'nullable|date',
             'perusahaan' => 'nullable|string|max:255',
             'keterangan' => 'nullable|string',
@@ -294,6 +298,7 @@ class AsetController extends Controller
 
         return response()->json($aset->fresh()->load([
             'jenis',
+            'departemen',
             'supplier',
             'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni',
