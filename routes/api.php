@@ -91,7 +91,15 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 });
 
 Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
-    Route::apiResource('departemen', DepartemenController::class)->except(['show']);
+    // NOTE: 'departemen' berakhiran "-men", dan Laravel/Symfony inflector
+    // salah nyangka ini kata Inggris jamak (men -> man), jadi otomatis
+    // bikin nama parameter route "deparTEMAN" alih-alih "departemen".
+    // Akibatnya route-model-binding gagal cocokin ke $departemen di
+    // controller (Edit/Delete jadi gak berfungsi). Fix: kunci eksplisit
+    // nama parameternya biar gak lewat proses singularize otomatis.
+    Route::apiResource('departemen', DepartemenController::class)
+        ->except(['show'])
+        ->parameters(['departemen' => 'departemen']);
     Route::apiResource('jabatan', JabatanController::class)->except(['show']);
 });
 
