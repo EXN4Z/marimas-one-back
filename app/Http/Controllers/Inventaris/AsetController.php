@@ -215,6 +215,7 @@ class AsetController extends Controller
                     ? 'unique:aset,serial_number,' . $aset->id
                     : 'unique:aset,serial_number',
             ],
+            'jumlah' => 'nullable|integer|min:1',
             'tanggal_garansi' => 'nullable|date',
             'perusahaan' => 'nullable|string|max:255',
             'keterangan' => 'nullable|string',

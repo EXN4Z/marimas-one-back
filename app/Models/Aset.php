@@ -14,6 +14,7 @@ class Aset extends Model
         'tipe',
         'warna',
         'serial_number',
+        'jumlah',
         'tanggal_garansi',
         'perusahaan',
         'keterangan',

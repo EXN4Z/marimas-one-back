@@ -88,6 +88,7 @@ class AsetImport implements ToCollection
                         'supplier_id'       => $supplier->id,
                         'merek'             => $row['merek'] ?? null,
                         'tipe'              => $row['tipe'] ?? null,
+                        'jumlah'            => !empty($row['jumlah']) ? (int) $row['jumlah'] : 1,
                         'warna'             => $row['warna'] ?? null,
                         'tanggal_garansi'   => $this->parseTanggal($row['tanggal_garansi'] ?? null),
                         'tanggal_pembelian' => $this->parseTanggal($row['tanggal_pembelian'] ?? null),
