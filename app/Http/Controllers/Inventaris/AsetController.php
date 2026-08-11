@@ -97,7 +97,6 @@ class AsetController extends Controller
             'pemakai.pekerja.user',
             'pemakai.user',
             'penanganan',
-            'penggantianSparepart',
             'penangananAktif',
             'writeoff.penyetuju:id,name',
         ]);
@@ -168,8 +167,8 @@ class AsetController extends Controller
      * ?force=1 lewatin guard riwayat — dipakai admin buat bersihin data
      * lama/test yang gak bisa kehapus normal krn udah punya riwayat
      * pemakai/penanganan. Aman: aset_pemakai, aset_perbaikan,
-     * aset_kelengkapan, aset_penggantian_sparepart semua cascadeOnDelete
-     * di FK-nya, jadi riwayat ikut kehapus bersih, gak nyisa orphan row.
+     * aset_kelengkapan semua cascadeOnDelete di FK-nya, jadi riwayat
+     * ikut kehapus bersih, gak nyisa orphan row.
      */
     public function destroy(Request $request, Aset $aset)
     {
