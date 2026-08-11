@@ -10,6 +10,7 @@ class Aset extends Model
 
     protected $fillable = [
         'jenis_id',
+        'departemen_id',
         'merek',
         'tipe',
         'warna',
@@ -28,6 +29,11 @@ class Aset extends Model
     public function jenis()
     {
         return $this->belongsTo(JenisAset::class, 'jenis_id');
+    }
+
+    public function departemen()
+    {
+        return $this->belongsTo(Departemen::class, 'departemen_id');
     }
 
     public function supplier()
@@ -64,11 +70,6 @@ class Aset extends Model
     public function penanganan()
     {
         return $this->hasMany(AsetPenanganan::class, 'aset_id')->latest('tanggal_lapor');
-    }
-
-    public function penggantianSparepart()
-    {
-        return $this->hasMany(AsetPenggantianSparepart::class, 'aset_id')->latest('tanggal');
     }
 
     // catatan penjualan/writeoff aset (kalau statusnya udah 'dijual')

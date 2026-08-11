@@ -34,6 +34,7 @@ class AsetController extends Controller
 
         $query = Aset::with([
             'jenis',
+            'departemen',
             'supplier',
             'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni.pekerja.user',
@@ -88,6 +89,7 @@ class AsetController extends Controller
 
         $aset->load([
             'jenis',
+            'departemen',
             'supplier',
             'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni.pekerja.user',
@@ -97,7 +99,6 @@ class AsetController extends Controller
             'pemakai.pekerja.user',
             'pemakai.user',
             'penanganan',
-            'penggantianSparepart',
             'penangananAktif',
             'writeoff.penyetuju:id,name',
         ]);
@@ -127,7 +128,7 @@ class AsetController extends Controller
         });
 
         return response()->json(
-            $aset->load('jenis', 'supplier', 'kelengkapan.kelengkapanMaster'),
+            $aset->load('jenis', 'departemen', 'supplier', 'kelengkapan.kelengkapanMaster'),
             201
         );
     }
@@ -159,7 +160,7 @@ class AsetController extends Controller
         });
 
         return response()->json(
-            $aset->fresh()->load('jenis', 'supplier', 'kelengkapan.kelengkapanMaster')
+            $aset->fresh()->load('jenis', 'departemen', 'supplier', 'kelengkapan.kelengkapanMaster')
         );
     }
 
@@ -168,8 +169,8 @@ class AsetController extends Controller
      * ?force=1 lewatin guard riwayat — dipakai admin buat bersihin data
      * lama/test yang gak bisa kehapus normal krn udah punya riwayat
      * pemakai/penanganan. Aman: aset_pemakai, aset_perbaikan,
-     * aset_kelengkapan, aset_penggantian_sparepart semua cascadeOnDelete
-     * di FK-nya, jadi riwayat ikut kehapus bersih, gak nyisa orphan row.
+     * aset_kelengkapan semua cascadeOnDelete di FK-nya, jadi riwayat
+     * ikut kehapus bersih, gak nyisa orphan row.
      */
     public function destroy(Request $request, Aset $aset)
     {
@@ -205,6 +206,7 @@ class AsetController extends Controller
     {
         return $request->validate([
             'jenis_id' => 'nullable|exists:jenis_aset,id',
+            'departemen_id' => 'nullable|exists:departemen,id',
             'merek' => 'nullable|string|max:255',
             'tipe' => 'nullable|string|max:255',
             'warna' => 'nullable|string|max:255',
@@ -295,6 +297,7 @@ class AsetController extends Controller
 
         return response()->json($aset->fresh()->load([
             'jenis',
+            'departemen',
             'supplier',
             'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni',
