@@ -4,10 +4,7 @@ namespace App\Imports;
 
 use App\Models\Aset;
 use App\Models\AsetKelengkapan;
-<<<<<<< HEAD
 use App\Models\Departemen;
-=======
->>>>>>> 6f0d377c7e8888b690e2773dc6602d6c88b657ce
 use App\Models\JenisAset;
 use App\Models\KelengkapanMaster;
 use App\Models\Supplier;
@@ -125,7 +122,6 @@ class AsetBuktiImport implements ToCollection
                     continue;
                 }
 
-<<<<<<< HEAD
                 // Tabel `aset` tidak punya kolom teks "departemen" -- yang
                 // ada cuma `departemen_id` (foreign key ke tabel
                 // `departemen`). Sama seperti Supplier di bawah, nama
@@ -138,19 +134,13 @@ class AsetBuktiImport implements ToCollection
                     $departemenId = Departemen::firstOrCreate(['nama' => $namaDepartemen])->id;
                 }
 
-=======
->>>>>>> 6f0d377c7e8888b690e2773dc6602d6c88b657ce
                 // Info bukti yang sama dipakai berulang untuk tiap barang
                 // di baris ini (bukan per-barang, tapi per-bukti/transaksi)
                 $infoBukti = [
                     'no_bukti'       => $row['no_bukti'],
                     'tanggal'        => $this->parseTanggal($row['tanggal'] ?? null),
                     'perusahaan'     => $row['perusahaan'] ?? null,
-<<<<<<< HEAD
                     'departemen_id'  => $departemenId,
-=======
-                    'departemen'     => $row['departemen'] ?? null,
->>>>>>> 6f0d377c7e8888b690e2773dc6602d6c88b657ce
                     'nik'            => $row['nik'] ?? null,
                     'penerima'       => $row['penerima'] ?? null,
                     'diterima_oleh'  => $row['diterima_oleh'] ?? null,
