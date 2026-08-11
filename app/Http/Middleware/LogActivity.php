@@ -103,7 +103,6 @@ class LogActivity
             $uri === 'aset-penanganan/{asetPenanganan}' && in_array($method, ['POST', 'PUT', 'PATCH'], true) => "{$nama} memperbarui status penanganan aset" . ($request->input('hasil') ? " (hasil: {$request->input('hasil')})" : ''),
             $uri === 'aset-penanganan/{asetPenanganan}' && $method === 'DELETE' => "{$nama} menghapus laporan penanganan aset",
             $uri === 'aset/{aset}/jual' => "{$nama} menjual/writeoff aset" . ($kodeAset ? " {$kodeAset}" : ''),
-            $uri === 'aset/{aset}/penggantian-sparepart' => "{$nama} mencatat penggantian sparepart aset" . ($kodeAset ? " {$kodeAset}" : ''),
             default => null,
         };
     }

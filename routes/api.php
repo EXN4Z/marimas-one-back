@@ -16,7 +16,6 @@ use App\Http\Controllers\Inventaris\JenisAsetController;
 use App\Http\Controllers\Inventaris\KelengkapanMasterController;
 use App\Http\Controllers\Inventaris\AsetController;
 use App\Http\Controllers\Inventaris\AsetPemakaiController;
-use App\Http\Controllers\Inventaris\AsetPenggantianSparepartController;
 use App\Http\Controllers\Inventaris\AsetPenangananController;
 use App\Http\Controllers\Organisasi\CabangController;
 use App\Http\Controllers\PushSubscriptionController;
@@ -91,15 +90,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 });
 
 Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
-    // NOTE: 'departemen' berakhiran "-men", dan Laravel/Symfony inflector
-    // salah nyangka ini kata Inggris jamak (men -> man), jadi otomatis
-    // bikin nama parameter route "deparTEMAN" alih-alih "departemen".
-    // Akibatnya route-model-binding gagal cocokin ke $departemen di
-    // controller (Edit/Delete jadi gak berfungsi). Fix: kunci eksplisit
-    // nama parameternya biar gak lewat proses singularize otomatis.
-    Route::apiResource('departemen', DepartemenController::class)
-        ->except(['show'])
-        ->parameters(['departemen' => 'departemen']);
+    Route::apiResource('departemen', DepartemenController::class)->except(['show']);
     Route::apiResource('jabatan', JabatanController::class)->except(['show']);
 });
 
@@ -148,8 +139,6 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::delete('/aset-penanganan/{asetPenanganan}', [AsetPenangananController::class, 'destroy']);
     Route::delete('/aset-pemakai/{asetPemakai}', [AsetPemakaiController::class, 'destroy']);
     Route::post('/aset/{aset}/jual', [AsetController::class, 'jual']);
-    Route::post('/aset/{aset}/penggantian-sparepart', [AsetPenggantianSparepartController::class, 'store']);
-    Route::delete('/aset-penggantian-sparepart/{asetPenggantianSparepart}', [AsetPenggantianSparepartController::class, 'destroy']);
 
     Route::apiResource('jenis-aset', JenisAsetController::class)->except(['index', 'show']);
     Route::apiResource('kelengkapan-master', KelengkapanMasterController::class)->except(['index', 'show']);
