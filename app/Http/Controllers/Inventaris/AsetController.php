@@ -15,6 +15,8 @@ class AsetController extends Controller
 {
     /**
      * GET /api/aset
+     * GET /api/aset?kategori=aset_utama   -- tab "Aset Utama" di Inventaris
+     * GET /api/aset?kategori=kelengkapan  -- tab "Kelengkapan" di Inventaris
      * Admin: daftar SEMUA aset (perilaku lama, gak berubah).
      * Non-admin (karyawan/cabang/manajer/hr): dibatasi cuma aset yang
      * statusnya 'tersedia' (biar tau apa yang bisa dipinjam) PLUS aset yang
@@ -24,6 +26,8 @@ class AsetController extends Controller
      * yang lagi dipegang/riwayatnya cuma nempel ke orang lain TIDAK ikut
      * dikirim ke non-admin sama sekali, jadi bukan cuma disembunyiin di
      * tampilan React -- datanya memang gak nyampe ke browser mereka.
+     * Filter ?kategori= dijalankan lewat whereHas('jenis', ...) -- kategori
+     * kelengkapan/aset_utama itu atribut jenis_aset, bukan kolom di aset.
      */
     public function index(Request $request)
     {
@@ -42,6 +46,13 @@ class AsetController extends Controller
             'penangananAktif',
             'writeoff.penyetuju:id,name',
         ])->latest();
+
+        if ($request->filled('kategori')) {
+            $kategori = $request->string('kategori');
+            $query->whereHas('jenis', function ($q) use ($kategori) {
+                $q->where('kategori', $kategori);
+            });
+        }
 
         if (!$isAdmin) {
             $query->where(function ($q) use ($user, $pekerjaId) {

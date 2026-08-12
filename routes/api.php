@@ -105,7 +105,6 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     Route::get('/aset', [AsetController::class, 'index']);
     Route::get('/aset/{aset}', [AsetController::class, 'show']);
     Route::get('/jenis-aset', [JenisAsetController::class, 'index']);
-    Route::get('/kelengkapan-master', [KelengkapanMasterController::class, 'index']);
     Route::get('/supplier', [SupplierController::class, 'index']);
 
     // admin: riwayat GLOBAL semua aset. karyawan/manajer/hr: riwayat
@@ -140,7 +139,6 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/aset/{aset}/jual', [AsetController::class, 'jual']);
 
     Route::apiResource('jenis-aset', JenisAsetController::class)->except(['index', 'show']);
-    Route::apiResource('kelengkapan-master', KelengkapanMasterController::class)->except(['index', 'show']);
     Route::apiResource('supplier', SupplierController::class)->except(['index', 'show']);
 });
 Route::get('/debug-webpush-test', function () {
