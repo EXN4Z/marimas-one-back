@@ -15,6 +15,7 @@ class Aset extends Model
         'tipe',
         'warna',
         'serial_number',
+        'jumlah',
         'tanggal_garansi',
         'perusahaan',
         'keterangan',
@@ -24,6 +25,15 @@ class Aset extends Model
         'no_surat_jalan',
         'no_good_receive',
         'status',
+        // Kolom bukti serah terima/peminjaman (dari import AsetBuktiImport)
+        'no_bukti',
+        'tanggal',
+        'nik',
+        'penerima',
+        'diterima_oleh',
+        'diketahui',
+        'dibuat_oleh',
+        'diketahui_hrd',
     ];
 
     public function jenis()

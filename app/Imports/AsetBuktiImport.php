@@ -179,6 +179,7 @@ class AsetBuktiImport implements ToCollection
                     $keteranganAsli = $row["keterangan_{$n}"] ?? null;
                     $hasilParse = $this->parseKeterangan($keteranganAsli);
 
+<<<<<<< HEAD
                     // Kalau baris bukti ini punya "penerima" terisi, artinya
                     // aset ini emang udah diserahkan ke orang tsb -- statusnya
                     // seharusnya 'dipakai', BUKAN 'tersedia'. Kalau kolom
@@ -186,6 +187,8 @@ class AsetBuktiImport implements ToCollection
                     // ada yang nerima), baru statusnya 'tersedia' seperti biasa.
                     $adaPenerima = trim((string) ($infoBukti['penerima'] ?? '')) !== '';
 
+=======
+>>>>>>> 8cbebc99f492f583d75dfe9d2a3914b03430550d
                     $aset = Aset::create(array_merge($infoBukti, [
                         'jenis_id'      => $jenis->id,
                         'supplier_id'   => $supplierId,
@@ -193,7 +196,11 @@ class AsetBuktiImport implements ToCollection
                         'keterangan'    => $keteranganAsli,
                         'serial_number' => $hasilParse['serial_number'],
                         'warna'         => $hasilParse['warna'],
+<<<<<<< HEAD
                         'status'        => $adaPenerima ? 'dipakai' : 'tersedia',
+=======
+                        'status'        => 'tersedia',
+>>>>>>> 8cbebc99f492f583d75dfe9d2a3914b03430550d
                     ]));
 
                     foreach ($hasilParse['kelengkapan'] as $namaKelengkapan) {
