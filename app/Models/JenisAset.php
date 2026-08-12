@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class JenisAset extends Model
 {
     protected $table = 'jenis_aset';
+
     protected $fillable = ['nama', 'kategori_id'];
 
     // Tetap muncul sebagai "kategori": "aset_utama"/"kelengkapan" di JSON,
@@ -15,14 +16,11 @@ class JenisAset extends Model
     // nggak perlu ikut diubah walau datanya sekarang di tabel `kategori`
     // terpisah. Nilainya diambil dari kategori.kode lewat relasi di bawah.
     protected $appends = ['kategori'];
-    protected $fillable = ['nama', 'kategori'];
-
 
     public function aset()
     {
         return $this->hasMany(Aset::class, 'jenis_id');
     }
-
 
     // Relasi ke tabel kategori (terpisah). Nama method sengaja bukan
     // `kategori()` biar nggak tabrakan sama accessor getKategoriAttribute()
@@ -41,16 +39,11 @@ class JenisAset extends Model
     // checklist kelengkapan di form peminjaman (pilih jenis kelengkapan).
     public function scopeAsetUtama($query)
     {
-
         return $query->whereHas('kategoriData', fn ($q) => $q->where('kode', 'aset_utama'));
-
-        return $query->where('kategori', 'aset_utama');
-
     }
 
     public function scopeKelengkapan($query)
     {
-
         return $query->whereHas('kategoriData', fn ($q) => $q->where('kode', 'kelengkapan'));
     }
 
@@ -59,8 +52,5 @@ class JenisAset extends Model
     public function scopeKategoriKode($query, string $kode)
     {
         return $query->whereHas('kategoriData', fn ($q) => $q->where('kode', $kode));
-
-        return $query->where('kategori', 'kelengkapan');
-
     }
 }

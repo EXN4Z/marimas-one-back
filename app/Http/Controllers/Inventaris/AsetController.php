@@ -48,9 +48,9 @@ class AsetController extends Controller
         ])->latest();
 
         if ($request->filled('kategori')) {
-            $kategori = $request->string('kategori');
+            $kategori = (string) $request->string('kategori');
             $query->whereHas('jenis', function ($q) use ($kategori) {
-                $q->where('kategori', $kategori);
+                $q->kategoriKode($kategori);
             });
         }
 
