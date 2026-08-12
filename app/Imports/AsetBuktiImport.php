@@ -34,6 +34,26 @@ class AsetBuktiImport implements ToCollection
 
     private const KETERANGAN_PREFIX_DIABAIKAN = '/^\s*(model|imei|p\s*\/?\s*n)\b/i';
 
+    /**
+     * Kata kunci buat mendeteksi "Nama Barang N" yang sebenarnya bukan
+     * barang utama (jenis aset), tapi AKSESORIS dari barang utama di baris
+     * yang sama -- misalnya di 1 baris bukti ada "Nama Barang 1: Laptop",
+     * "Nama Barang 2: Charger", "Nama Barang 3: Tas". Laptop tetap jadi
+     * baris Aset baru seperti biasa (dengan jenis_id-nya sendiri), tapi
+     * Charger & Tas TIDAK dibikinkan baris Aset terpisah -- keduanya
+     * ditempelkan sebagai `aset_kelengkapan` ke barang utama TERAKHIR yang
+     * sudah diproses di baris yang sama (lihat cocokAksesoris() &
+     * tempelSebagaiKelengkapan() di bawah).
+     *
+     * Cocok pakai substring (case-insensitive), jadi "Tas Laptop" atau
+     * "Charger Original" tetap kena. Kalau nanti ada kata kunci aksesoris
+     * lain yang perlu ditambah (mis. "mouse", "sarung", "softcase"),
+     * tinggal tambah di sini -- gak perlu ubah logic lain.
+     */
+    private const KATA_KUNCI_AKSESORIS = [
+        'charger', 'adaptor', 'adapter', 'tas',
+    ];
+
     public function collection(Collection $rows)
     {
         $indexHeader = $this->cariBarisHeader($rows);
@@ -134,6 +154,13 @@ class AsetBuktiImport implements ToCollection
 
                     $adaBarangDiproses = false;
 
+                    // Aset "utama" terakhir yang berhasil dibuat di baris ini
+                    // -- barang aksesoris (charger, tas, dst) yang muncul
+                    // SETELAHNYA di kolom Nama Barang N yang lain akan
+                    // ditempelkan sebagai kelengkapan ke aset ini, bukan
+                    // dibikinkan baris Aset sendiri.
+                    $asetUtamaTerakhir = null;
+
                     foreach ($nomorBarang as $n) {
                         $namaBarang = $row["nama_barang_{$n}"] ?? null;
 
@@ -142,12 +169,31 @@ class AsetBuktiImport implements ToCollection
                         }
 
                         $adaBarangDiproses = true;
+                        $namaBarangTrim = trim($namaBarang);
+                        $keteranganAsli = $row["keterangan_{$n}"] ?? null;
+
+                        // Barang ini kelengkapan (charger/tas/dst), BUKAN
+                        // jenis barang baru -- tempelkan ke aset utama
+                        // terakhir yang sudah dibuat di baris yang sama, lalu
+                        // lanjut ke kolom Nama Barang berikutnya (tidak bikin
+                        // baris Aset baru).
+                        if ($this->cocokAksesoris($namaBarangTrim)) {
+                            if ($asetUtamaTerakhir) {
+                                $this->tempelSebagaiKelengkapan($asetUtamaTerakhir, $namaBarangTrim, $keteranganAsli);
+                            } else {
+                                // Aksesoris muncul duluan sebelum ada barang
+                                // utama di baris ini -- tidak ada aset buat
+                                // ditempeli, jadi dilewati (dicatat sebagai
+                                // warning, bukan bikin Aset "Charger" sendiri).
+                                $this->errors[] = 'Baris data ke-' . ($index + 1) . ': barang aksesoris "' . $namaBarangTrim . '" (Nama Barang ' . $n . ') dilewati karena belum ada barang utama di baris yang sama untuk ditempeli.';
+                            }
+                            continue;
+                        }
 
                         $jenis = JenisAset::firstOrCreate(
-                            ['nama' => trim($namaBarang)]
+                            ['nama' => $namaBarangTrim]
                         );
 
-                        $keteranganAsli = $row["keterangan_{$n}"] ?? null;
                         $hasilParse = $this->parseKeterangan($keteranganAsli);
 
                         $aset = Aset::create(array_merge($infoBukti, [
@@ -171,6 +217,8 @@ class AsetBuktiImport implements ToCollection
                             ]);
                         }
 
+                        $asetUtamaTerakhir = $aset;
+
                         if ($pekerjaPenerima) {
                             AsetPemakai::create([
                                 'aset_id'            => $aset->id,
@@ -193,6 +241,42 @@ class AsetBuktiImport implements ToCollection
                 $this->errors[] = 'Baris data ke-' . ($index + 1) . ': ' . $e->getMessage();
             }
         }
+    }
+
+    /**
+     * Cek apakah 1 nama barang (dari kolom "Nama Barang N") itu aksesoris
+     * (charger, tas, dst -- lihat KATA_KUNCI_AKSESORIS), bukan jenis
+     * barang utama. Cocok pakai substring, case-insensitive.
+     */
+    private function cocokAksesoris(string $namaBarang): bool
+    {
+        $namaLower = mb_strtolower($namaBarang);
+
+        foreach (self::KATA_KUNCI_AKSESORIS as $kataKunci) {
+            if (str_contains($namaLower, $kataKunci)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Tempelkan 1 nama barang aksesoris (mis. "Charger", "Tas") sebagai
+     * baris `aset_kelengkapan` ke Aset utama yang diberikan. KelengkapanMaster
+     * dicari/dibuat berdasarkan nama barangnya sendiri (bukan hasil parsing
+     * kolom Keterangan), sedangkan kolom Keterangan barang ini (kalau ada)
+     * disimpan apa adanya ke kolom `keterangan` di aset_kelengkapan.
+     */
+    private function tempelSebagaiKelengkapan(Aset $asetUtama, string $namaBarang, ?string $keterangan): void
+    {
+        $kelengkapanMaster = KelengkapanMaster::firstOrCreate(['nama' => $namaBarang]);
+
+        AsetKelengkapan::create([
+            'aset_id'               => $asetUtama->id,
+            'kelengkapan_master_id' => $kelengkapanMaster->id,
+            'keterangan'            => $keterangan,
+        ]);
     }
 
     private function cariNomorBarang(array $headers): array
