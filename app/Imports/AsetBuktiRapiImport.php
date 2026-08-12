@@ -6,6 +6,7 @@ use App\Models\Aset;
 use App\Models\AsetPemakai;
 use App\Models\Departemen;
 use App\Models\JenisAset;
+use App\Models\Kategori;
 use App\Models\Pekerja;
 use App\Models\User;
 use Illuminate\Support\Str;
@@ -240,7 +241,7 @@ class AsetBuktiRapiImport implements ToCollection
                         return;
                     }
 
-                    $jenis = JenisAset::firstOrCreate(['nama' => $namaJenis], ['kategori' => 'aset_utama']);
+                    $jenis = JenisAset::firstOrCreate(['nama' => $namaJenis], ['kategori_id' => Kategori::where('kode', 'aset_utama')->value('id')]);
 
                     [$merek, $tipe] = $this->pisahMerekTipe((string) ($row['merek_tipe'] ?? ''));
 
@@ -282,7 +283,7 @@ class AsetBuktiRapiImport implements ToCollection
     {
         $jenis = JenisAset::firstOrCreate(
             ['nama' => $namaBarang],
-            ['kategori' => 'kelengkapan']
+            ['kategori_id' => Kategori::where('kode', 'kelengkapan')->value('id')]
         );
 
         return Aset::create(array_merge($infoBersama, [

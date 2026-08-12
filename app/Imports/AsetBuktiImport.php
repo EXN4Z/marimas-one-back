@@ -7,6 +7,7 @@ use App\Models\Aset;
 use App\Models\AsetPemakai;
 use App\Models\Departemen;
 use App\Models\JenisAset;
+use App\Models\Kategori;
 use App\Models\Pekerja;
 use App\Models\Supplier;
 use App\Models\User;
@@ -298,7 +299,7 @@ class AsetBuktiImport implements ToCollection
     {
         $jenis = JenisAset::firstOrCreate(
             ['nama' => $namaBarang],
-            ['kategori' => 'kelengkapan']
+            ['kategori_id' => Kategori::where('kode', 'kelengkapan')->value('id')]
         );
 
         return Aset::create(array_merge($infoBukti, [

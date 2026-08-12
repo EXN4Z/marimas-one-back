@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Inventaris;
 use App\Http\Controllers\Controller;
 
 use App\Models\JenisAset;
+use App\Models\Kategori;
 use Illuminate\Http\Request;
 
 class JenisAsetController extends Controller
@@ -19,7 +20,7 @@ class JenisAsetController extends Controller
         $query = JenisAset::orderBy('nama');
 
         if ($request->filled('kategori')) {
-            $query->where('kategori', $request->string('kategori'));
+            $query->kategoriKode($request->string('kategori'));
         }
 
         return response()->json($query->get());
@@ -32,7 +33,10 @@ class JenisAsetController extends Controller
             'kategori' => 'required|in:aset_utama,kelengkapan',
         ]);
 
-        $jenis = JenisAset::create($validated);
+        $jenis = JenisAset::create([
+            'nama' => $validated['nama'],
+            'kategori_id' => $this->kategoriIdFromKode($validated['kategori']),
+        ]);
 
         return response()->json($jenis, 201);
     }
@@ -44,7 +48,10 @@ class JenisAsetController extends Controller
             'kategori' => 'required|in:aset_utama,kelengkapan',
         ]);
 
-        $jenisAset->update($validated);
+        $jenisAset->update([
+            'nama' => $validated['nama'],
+            'kategori_id' => $this->kategoriIdFromKode($validated['kategori']),
+        ]);
 
         return response()->json($jenisAset);
     }
@@ -54,5 +61,12 @@ class JenisAsetController extends Controller
         $jenisAset->delete();
 
         return response()->json(['message' => "Jenis {$jenisAset->nama} berhasil dihapus."]);
+    }
+
+    // Terima 'kategori' sebagai kode ('aset_utama'/'kelengkapan') dari
+    // request lama, cari id-nya di tabel kategori yang sekarang terpisah.
+    private function kategoriIdFromKode(string $kode): int
+    {
+        return Kategori::where('kode', $kode)->value('id');
     }
 }
