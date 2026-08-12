@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Inventaris;
 use App\Http\Controllers\Controller;
 
 use App\Models\Aset;
-use App\Models\AsetKelengkapan;
 use App\Models\AsetPemakai;
 use App\Models\AsetWriteoff;
 use Illuminate\Http\Request;
@@ -36,7 +35,6 @@ class AsetController extends Controller
             'jenis',
             'departemen',
             'supplier',
-            'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni.pekerja.user',
             'pemakaiSaatIni.user',
             'pemakaiPending.pekerja.user',
@@ -91,7 +89,6 @@ class AsetController extends Controller
             'jenis',
             'departemen',
             'supplier',
-            'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni.pekerja.user',
             'pemakaiSaatIni.user',
             'pemakaiPending.pekerja.user',
@@ -109,7 +106,11 @@ class AsetController extends Controller
     /**
      * POST /api/aset
      * kode_aset digenerate otomatis lewat trigger DB, gak perlu (& gak boleh) dikirim dari frontend.
-     * kelengkapan dikirim sebagai JSON string (multipart/form-data gak bisa array of object native).
+     * Kelengkapan (Tas, Charger, dst) BUKAN lagi sub-item di form ini --
+     * kelengkapan sekarang dibuat sebagai baris Aset-nya sendiri (jenis_id
+     * mengarah ke jenis_aset berkategori 'kelengkapan'), lalu dikaitkan ke
+     * pemakai lewat aset_pemakai yang sama seperti aset utama, biasanya di
+     * form peminjaman (pinjam laptop + tas + charger sekaligus).
      */
     public function store(Request $request)
     {
@@ -120,15 +121,11 @@ class AsetController extends Controller
                 $validated['foto'] = $request->file('foto')->store('aset', 'public');
             }
 
-            $aset = Aset::create($validated);
-
-            $this->simpanKelengkapan($aset, $request);
-
-            return $aset;
+            return Aset::create($validated);
         });
 
         return response()->json(
-            $aset->load('jenis', 'departemen', 'supplier', 'kelengkapan.kelengkapanMaster'),
+            $aset->load('jenis', 'departemen', 'supplier'),
             201
         );
     }
@@ -150,17 +147,10 @@ class AsetController extends Controller
             }
 
             $aset->update($validated);
-
-            // kelengkapan cuma diupdate kalau frontend memang mengirim field-nya
-            // (biar update parsial lain, mis. cuma ganti status, gak ikut ngosongin kelengkapan)
-            if ($request->has('kelengkapan')) {
-                $aset->kelengkapan()->delete();
-                $this->simpanKelengkapan($aset, $request);
-            }
         });
 
         return response()->json(
-            $aset->fresh()->load('jenis', 'departemen', 'supplier', 'kelengkapan.kelengkapanMaster')
+            $aset->fresh()->load('jenis', 'departemen', 'supplier')
         );
     }
 
@@ -168,9 +158,9 @@ class AsetController extends Controller
      * DELETE /api/aset/{aset}
      * ?force=1 lewatin guard riwayat — dipakai admin buat bersihin data
      * lama/test yang gak bisa kehapus normal krn udah punya riwayat
-     * pemakai/penanganan. Aman: aset_pemakai, aset_perbaikan,
-     * aset_kelengkapan semua cascadeOnDelete di FK-nya, jadi riwayat
-     * ikut kehapus bersih, gak nyisa orphan row.
+     * pemakai/penanganan. Aman: aset_pemakai & aset_perbaikan semua
+     * cascadeOnDelete di FK-nya, jadi riwayat ikut kehapus bersih, gak
+     * nyisa orphan row.
      */
     public function destroy(Request $request, Aset $aset)
     {
@@ -228,28 +218,7 @@ class AsetController extends Controller
             'no_surat_jalan' => 'nullable|string|max:255',
             'no_good_receive' => 'nullable|string|max:255',
             'status' => 'nullable|in:tersedia,dipakai,rusak,menunggu_perbaikan,diperbaiki,rusak_berat',
-            'kelengkapan' => 'nullable|string', // JSON string, di-decode manual di simpanKelengkapan()
         ]);
-    }
-
-    /**
-     * Decode JSON kelengkapan dari request lalu simpan sebagai baris-baris AsetKelengkapan.
-     */
-    protected function simpanKelengkapan(Aset $aset, Request $request): void
-    {
-        $items = json_decode($request->input('kelengkapan', '[]'), true) ?: [];
-
-        foreach ($items as $item) {
-            if (empty($item['kelengkapan_master_id'])) {
-                continue;
-            }
-
-            AsetKelengkapan::create([
-                'aset_id' => $aset->id,
-                'kelengkapan_master_id' => $item['kelengkapan_master_id'],
-                'keterangan' => $item['keterangan'] ?? null,
-            ]);
-        }
     }
     public function jual(Request $request, Aset $aset)
     {
@@ -300,7 +269,6 @@ class AsetController extends Controller
             'jenis',
             'departemen',
             'supplier',
-            'kelengkapan.kelengkapanMaster',
             'pemakaiSaatIni',
             'writeoff.penyetuju:id,name',
         ]));
