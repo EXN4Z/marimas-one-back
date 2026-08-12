@@ -100,6 +100,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/aset-penanganan/{asetPenanganan}/terima', [AsetPenangananController::class, 'terima']); // admin: terima & mulai tangani laporan
     Route::post('/aset-penanganan/{asetPenanganan}', [AsetPenangananController::class, 'update']);
     Route::post('/import-aset', [ImportController::class, 'import']); // pakai POST + _method=PUT biar konsisten sama pola aset/{aset}
+    Route::post('/import-aset-rapi', [ImportController::class, 'importRapi']); // format baru "Data Aset Rapi": 1 baris = 1 barang, kolom Kategori eksplisit
 });
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
