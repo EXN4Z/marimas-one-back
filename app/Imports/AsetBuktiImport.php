@@ -2,6 +2,7 @@
 
 namespace App\Imports;
 
+use App\Http\Controllers\Concerns\GeneratesStrukNumber;
 use App\Models\Aset;
 use App\Models\AsetKelengkapan;
 use App\Models\AsetPemakai;
@@ -19,6 +20,8 @@ use Illuminate\Support\Facades\Log;
 
 class AsetBuktiImport implements ToCollection
 {
+    use GeneratesStrukNumber;
+
     protected $rowCount = 0;
     protected $errors = [];
 
@@ -45,13 +48,17 @@ class AsetBuktiImport implements ToCollection
      * sudah diproses di baris yang sama (lihat cocokAksesoris() &
      * tempelSebagaiKelengkapan() di bawah).
      *
-     * Cocok pakai substring (case-insensitive), jadi "Tas Laptop" atau
-     * "Charger Original" tetap kena. Kalau nanti ada kata kunci aksesoris
-     * lain yang perlu ditambah (mis. "mouse", "sarung", "softcase"),
-     * tinggal tambah di sini -- gak perlu ubah logic lain.
+     * Dicocokkan pakai WORD-BOUNDARY, case-insensitive (lihat
+     * cocokAksesoris()) -- BUKAN substring polos. Kata kunci pendek
+     * seperti "dus" atau "tas" gampang nyangkut ke potongan kata lain
+     * kalau dicocokkan sebagai substring (mis. "dus" nyempil di
+     * "Modem Telkomsel Orbit ex SP Kudus"), jadi harus dicocokkan sebagai
+     * kata utuh. Kalau nanti ada kata kunci aksesoris lain yang perlu
+     * ditambah (mis. "mouse", "sarung", "softcase"), tinggal tambah di
+     * sini -- gak perlu ubah logic lain.
      */
     private const KATA_KUNCI_AKSESORIS = [
-        'charger', 'adaptor', 'adapter', 'tas',
+        'charger', 'adaptor', 'adapter', 'tas', 'dus', 'case', 'baterai', 'kabel',
     ];
 
     public function collection(Collection $rows)
@@ -220,12 +227,30 @@ class AsetBuktiImport implements ToCollection
                         $asetUtamaTerakhir = $aset;
 
                         if ($pekerjaPenerima) {
+                            // Sama seperti AsetPemakaiController::store() -- setiap
+                            // AsetPemakai WAJIB punya no_struk_penerimaan, karena
+                            // kembalikan() nanti mencocokkan input no_struk_penerimaan
+                            // persis dengan kolom ini. Tanpa di-generate di sini, data
+                            // hasil import punya no_struk_penerimaan = null, dan aset
+                            // itu jadi TIDAK BISA PERNAH dikembalikan lewat endpoint
+                            // kembalikan() (gak ada string yang bisa cocok dengan null).
+                            //
+                            // 'diterima_at' SENGAJA tidak diisi (dibiarkan null) --
+                            // beda dari store() yang isi now() karena itu aksi live.
+                            // Di sini datanya historis (dari bukti serah-terima lama),
+                            // jadi biarkan riwayat() fallback ke tanggal_penerimaan
+                            // (lihat komentar fallback *_at di riwayat()) supaya
+                            // pengurutan waktu di Riwayat Aset tetap benar sesuai
+                            // tanggal transaksi asli, bukan tanggal import dijalankan.
+                            $noStruk = $this->generateNoStruk('STJ', 'aset_pemakai', 'no_struk_penerimaan');
+
                             AsetPemakai::create([
-                                'aset_id'            => $aset->id,
-                                'pekerja_id'         => $pekerjaPenerima->id,
-                                'user_id'            => $pekerjaPenerima->user_id,
-                                'status'             => 'disetujui',
-                                'tanggal_penerimaan' => $infoBukti['tanggal'],
+                                'aset_id'             => $aset->id,
+                                'pekerja_id'          => $pekerjaPenerima->id,
+                                'user_id'             => $pekerjaPenerima->user_id,
+                                'status'              => 'disetujui',
+                                'no_struk_penerimaan' => $noStruk,
+                                'tanggal_penerimaan'  => $infoBukti['tanggal'],
                             ]);
                         }
                     }
@@ -245,15 +270,18 @@ class AsetBuktiImport implements ToCollection
 
     /**
      * Cek apakah 1 nama barang (dari kolom "Nama Barang N") itu aksesoris
-     * (charger, tas, dst -- lihat KATA_KUNCI_AKSESORIS), bukan jenis
-     * barang utama. Cocok pakai substring, case-insensitive.
+     * (charger, tas, dus, dst -- lihat KATA_KUNCI_AKSESORIS), bukan jenis
+     * barang utama. Cocok pakai WORD-BOUNDARY (bukan substring polos),
+     * biar kata seperti "dus" tidak ikut kena kalau cuma nyempil di dalam
+     * kata lain (mis. "Modem Telkomsel Orbit ex SP Kudus" -- "dus" di
+     * situ bagian dari "Kudus", bukan kata "dus" yang berarti kardus).
      */
     private function cocokAksesoris(string $namaBarang): bool
     {
         $namaLower = mb_strtolower($namaBarang);
 
         foreach (self::KATA_KUNCI_AKSESORIS as $kataKunci) {
-            if (str_contains($namaLower, $kataKunci)) {
+            if (preg_match('/\b' . preg_quote($kataKunci, '/') . '\b/u', $namaLower)) {
                 return true;
             }
         }
