@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 
 use App\Http\Controllers\Concerns\GeneratesStrukNumber;
 use App\Models\Aset;
+use App\Models\AsetKelengkapan;
 use App\Models\AsetPemakai;
 use App\Models\AsetPenanganan;
 use App\Models\AsetWriteoff;
@@ -73,6 +74,13 @@ class AsetPemakaiController extends Controller
      * personal ke satu karyawan (itu keputusan admin di level aset), jadi
      * cuma muncul buat admin.
      *
+     * Event pinjam/kembali mencakup baik aset utama maupun aset_kelengkapan
+     * (dibedakan lewat kolom aset_kelengkapan_id di aset_pemakai). Event
+     * lapor_rusak/mulai_perbaikan/selesai_perbaikan/dijual TETAP khusus aset
+     * utama saja -- kelengkapan yang rusak cukup diubah statusnya manual
+     * lewat AsetKelengkapanController::update(), tidak lewat alur
+     * AsetPenanganan/AsetWriteoff.
+     *
      * PENTING soal waktu: kolom tanggal_penerimaan/tanggal_pengembalian dan
      * tanggal_lapor/tanggal_diterima/tanggal_selesai cuma nyimpen TANGGAL
      * (jam-menit-detik selalu 00:00:00) — kalau dipakai langsung buat waktu
@@ -97,7 +105,7 @@ class AsetPemakaiController extends Controller
         $page = max(1, (int) $request->query('page', 1));
         $perPage = max(10, (int) $request->query('per_page', $request->query('limit', 10)));
         $typeFilter = $request->query('type');
-        // Search bebas: cocok ke kode aset, merek/tipe aset, ATAU nama
+        // Search bebas: cocok ke kode aset/kelengkapan, merek/tipe, ATAU nama
         // peminjam/pelapor. Dilakukan di memori (bareng filter type) SETELAH
         // events digabung, jadi tetap konsisten sama scoping kepemilikan di
         // bawah (user cuma nyari dalam data dia sendiri, gak bisa nembus ke
@@ -126,6 +134,7 @@ class AsetPemakaiController extends Controller
 
         $pemakaiQuery = AsetPemakai::with([
             'aset:id,kode_aset,merek,tipe',
+            'asetKelengkapan:id,kode_kelengkapan,merek,tipe',
             'pekerja.user:id,name',
             'user:id,name', // akun cabang gak punya pekerja, jadi user-nya harus di-load langsung
         ])->where('status', 'disetujui');
@@ -140,18 +149,27 @@ class AsetPemakaiController extends Controller
             ->get()
             ->each(function ($p) use (&$events) {
                 $nama = $p->pekerja?->user?->name ?? $p->user?->name ?? '-';
+                // item yang dipinjam bisa aset utama ATAU aset_kelengkapan,
+                // gak pernah dua-duanya (mutually exclusive lewat kolom
+                // aset_kelengkapan_id). 'tipe_item' dikirim ke frontend biar
+                // tahu harus baca kode_aset atau kode_kelengkapan.
+                $item = $p->aset ?? $p->asetKelengkapan;
+                $tipeItem = $p->aset_kelengkapan_id ? 'kelengkapan' : 'aset';
+
                 $events->push([
                     'type' => 'pinjam',
                     'waktu' => $p->diterima_at ?? $p->tanggal_penerimaan,
                     'nama' => $nama,
-                    'aset' => $p->aset,
+                    'aset' => $item,
+                    'tipe_item' => $tipeItem,
                 ]);
                 if ($p->tanggal_pengembalian) {
                     $events->push([
                         'type' => 'kembali',
                         'waktu' => $p->dikembalikan_at ?? $p->tanggal_pengembalian,
                         'nama' => $nama,
-                        'aset' => $p->aset,
+                        'aset' => $item,
+                        'tipe_item' => $tipeItem,
                     ]);
                 }
             });
@@ -194,6 +212,7 @@ class AsetPemakaiController extends Controller
                     'waktu' => $pn->lapor_at ?? $pn->tanggal_lapor,
                     'nama' => $namaPelapor,
                     'aset' => $pn->aset,
+                    'tipe_item' => 'aset',
                     'keluhan' => $pn->keluhan,
                 ]);
                 if ($pn->tanggal_diterima) {
@@ -202,6 +221,7 @@ class AsetPemakaiController extends Controller
                         'waktu' => $pn->diterima_at ?? $pn->tanggal_diterima,
                         'nama' => null,
                         'aset' => $pn->aset,
+                        'tipe_item' => 'aset',
                     ]);
                 }
                 if ($pn->tanggal_selesai) {
@@ -210,6 +230,7 @@ class AsetPemakaiController extends Controller
                         'waktu' => $pn->selesai_at ?? $pn->tanggal_selesai,
                         'nama' => null,
                         'aset' => $pn->aset,
+                        'tipe_item' => 'aset',
                         'hasil' => $pn->hasil,
                     ]);
                 }
@@ -217,6 +238,8 @@ class AsetPemakaiController extends Controller
 
         // 'dijual' cuma buat admin — keputusan writeoff bukan aktivitas
         // pribadi karyawan mana pun, gak relevan buat riwayat pribadinya.
+        // Writeoff/jual cuma dikenal buat aset utama, kelengkapan gak punya
+        // alur ini.
         if ($isAdmin) {
             AsetWriteoff::with(['aset:id,kode_aset,merek,tipe', 'penyetuju:id,name'])
                 ->latest('tanggal_writeoff')
@@ -230,6 +253,7 @@ class AsetPemakaiController extends Controller
                         'waktu' => $w->created_at ?? $w->tanggal_writeoff,
                         'nama' => $w->penyetuju?->name,
                         'aset' => $w->aset,
+                        'tipe_item' => 'aset',
                         'keluhan' => $w->alasan,
                     ]);
                 });
@@ -250,6 +274,7 @@ class AsetPemakaiController extends Controller
                 $haystack = mb_strtolower(implode(' ', array_filter([
                     $ev['nama'] ?? '',
                     $aset?->kode_aset ?? '',
+                    $aset?->kode_kelengkapan ?? '',
                     $aset?->merek ?? '',
                     $aset?->tipe ?? '',
                 ])));
@@ -272,20 +297,10 @@ class AsetPemakaiController extends Controller
     }
 
     /**
-     * POST /aset/{aset}/pemakai
-     * Admin serah-terima aset langsung ke pekerja ATAU akun cabang (tanpa lewat
-     * alur request/approve). Kirim salah satu: pekerja_id (karyawan) atau
-     * user_id (akun cabang) — nggak boleh dua-duanya, nggak boleh kosong dua-duanya.
-     * Aset harus 'tersedia'. Struk penerimaan digenerate otomatis.
-     *
-     * Wajib sertakan foto_penerimaan (array file, 1-3 foto) sebagai bukti
-     * fisik serah-terima. Disimpan sebagai array path JSON, BUKAN kolom
-     * foto_1/foto_2/foto_3 terpisah. Filenya disimpan ke disk 'public' yang
-     * di-mount ke Railway Volume (lihat catatan di simpanFotoBukti()) supaya
-     * persisten antar-redeploy.
+     * GET /aset-pemakai/foto — list semua record serah-terima/pengembalian yang punya foto,
+     * buat halaman galeri. Admin lihat semua; role lain cuma punya sendiri.
+     * Search & eager-load mencakup baik aset utama maupun aset_kelengkapan.
      */
-    // GET /aset-pemakai/foto — list semua record serah-terima/pengembalian yang punya foto,
-// buat halaman galeri. Admin lihat semua; role lain cuma punya sendiri.
     public function foto(Request $request)
     {
         $user = $request->user();
@@ -296,7 +311,7 @@ class AsetPemakaiController extends Controller
         // gak nyampur kayak dulu (satu entri bisa punya dua-duanya sekaligus).
         $type = $request->input('type');
 
-        $query = AsetPemakai::with(['aset.jenis', 'pekerja.user', 'user'])
+        $query = AsetPemakai::with(['aset.jenis', 'asetKelengkapan.jenis', 'pekerja.user', 'user'])
             ->when(
                 $type === 'peminjaman',
                 fn ($q) => $q->whereNotNull('foto_penerimaan'),
@@ -314,15 +329,21 @@ class AsetPemakaiController extends Controller
         if (!$isAdmin) {
             $query->where(function ($q) use ($user) {
                 $q->whereHas('pekerja', fn ($qq) => $qq->where('user_id', $user->id))
-                ->orWhere('user_id', $user->id);
+                    ->orWhere('user_id', $user->id);
             });
         }
 
         if ($search = $request->input('search')) {
-            $query->whereHas('aset', function ($q) use ($search) {
-                $q->where('kode_aset', 'like', "%{$search}%")
-                ->orWhere('merek', 'like', "%{$search}%")
-                ->orWhere('tipe', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('aset', function ($qq) use ($search) {
+                    $qq->where('kode_aset', 'like', "%{$search}%")
+                        ->orWhere('merek', 'like', "%{$search}%")
+                        ->orWhere('tipe', 'like', "%{$search}%");
+                })->orWhereHas('asetKelengkapan', function ($qq) use ($search) {
+                    $qq->where('kode_kelengkapan', 'like', "%{$search}%")
+                        ->orWhere('merek', 'like', "%{$search}%")
+                        ->orWhere('tipe', 'like', "%{$search}%");
+                });
             });
         }
 
@@ -331,10 +352,43 @@ class AsetPemakaiController extends Controller
 
         return response()->json($data);
     }
+
+    /**
+     * POST /aset/{aset}/pemakai
+     * Admin serah-terima aset utama langsung ke pekerja ATAU akun cabang
+     * (tanpa lewat alur request/approve). Lihat serahkanItem() untuk logic
+     * lengkapnya (dipakai bareng sama storeKelengkapan()).
+     */
     public function store(Request $request, Aset $aset)
     {
-        if ($aset->status !== 'tersedia') {
-            return response()->json(['message' => 'Aset ini sedang tidak tersedia untuk diserahkan.'], 422);
+        return $this->serahkanItem($request, 'aset_id', $aset, $aset->status);
+    }
+
+    /**
+     * POST /aset-kelengkapan/{asetKelengkapan}/pemakai
+     * Sama persis kayak store(), tapi buat aset_kelengkapan (tas, charger,
+     * dst). Baris aset_pemakai yang dihasilkan mengisi kolom
+     * aset_kelengkapan_id, BUKAN aset_id.
+     */
+    public function storeKelengkapan(Request $request, AsetKelengkapan $asetKelengkapan)
+    {
+        return $this->serahkanItem($request, 'aset_kelengkapan_id', $asetKelengkapan, $asetKelengkapan->status);
+    }
+
+    /**
+     * Logic serah-terima yang dipakai bareng oleh store() & storeKelengkapan()
+     * -- satu-satunya beda antara aset utama dan kelengkapan cuma kolom FK
+     * mana yang diisi di aset_pemakai ($kolomId: 'aset_id' atau
+     * 'aset_kelengkapan_id'). Wajib sertakan foto_penerimaan (array file,
+     * 1-3 foto) sebagai bukti fisik serah-terima. Disimpan sebagai array
+     * path JSON, BUKAN kolom foto_1/foto_2/foto_3 terpisah. Filenya
+     * disimpan ke disk 'public' yang di-mount ke Railway Volume (lihat
+     * catatan di simpanFotoBukti()) supaya persisten antar-redeploy.
+     */
+    private function serahkanItem(Request $request, string $kolomId, $item, string $statusSaatIni)
+    {
+        if ($statusSaatIni !== 'tersedia') {
+            return response()->json(['message' => 'Item ini sedang tidak tersedia untuk diserahkan.'], 422);
         }
 
         $validated = $request->validate([
@@ -357,13 +411,13 @@ class AsetPemakaiController extends Controller
             'foto_penerimaan.*.max' => 'Maksimal size foto adalah 1MB',
         ]);
 
-        $pemakai = DB::transaction(function () use ($aset, $request, $validated) {
+        $pemakai = DB::transaction(function () use ($item, $request, $validated, $kolomId) {
             $noStruk = $this->generateNoStruk('STJ', 'aset_pemakai', 'no_struk_penerimaan');
 
             $fotoPaths = $this->simpanFotoBukti($request, 'foto_penerimaan', 'aset-pemakai/penerimaan');
 
             $pemakai = AsetPemakai::create([
-                'aset_id' => $aset->id,
+                $kolomId => $item->id,
                 'pekerja_id' => $validated['pekerja_id'] ?? null,
                 'user_id' => $validated['user_id'] ?? null,
                 'status' => 'disetujui',
@@ -375,24 +429,27 @@ class AsetPemakaiController extends Controller
                 'foto_penerimaan' => $fotoPaths,
             ]);
 
-            $aset->update(['status' => 'dipakai']);
+            $item->update(['status' => 'dipakai']);
 
             return $pemakai;
         });
 
-        return response()->json($pemakai->load('pekerja.user', 'user', 'aset'), 201);
+        return response()->json($pemakai->load('pekerja.user', 'user', 'aset', 'asetKelengkapan'), 201);
     }
 
     /**
      * POST /api/aset-pemakai/{asetPemakai}/kembalikan
-     * Admin terima kembali aset dari pemakai, ATAU pemakainya sendiri
-     * (karyawan/cabang yang lagi pegang aset ini) yang ngembaliin langsung.
-     * Wajib sertain no_struk_penerimaan (struk asli pas serah-terima) sebagai
-     * bukti pengembalian ini benar. Ditolak kalau masih ada laporan
-     * penanganan/perbaikan yang belum selesai.
+     * Admin terima kembali aset/kelengkapan dari pemakai, ATAU pemakainya
+     * sendiri (karyawan/cabang yang lagi pegang item ini) yang ngembaliin
+     * langsung. Wajib sertain no_struk_penerimaan (struk asli pas
+     * serah-terima) sebagai bukti pengembalian ini benar. Ditolak kalau
+     * masih ada laporan penanganan/perbaikan yang belum selesai (guard ini
+     * relevan buat aset utama; aset_pemakai_id kelengkapan gak akan pernah
+     * punya AsetPenanganan karena kelengkapan gak lewat alur itu, jadi query
+     * ini otomatis gak nemu apa-apa buat kelengkapan).
      *
      * Wajib sertakan foto_pengembalian (array file, 1-3 foto) sebagai bukti
-     * kondisi fisik aset saat dikembalikan. Filenya disimpan ke disk
+     * kondisi fisik item saat dikembalikan. Filenya disimpan ke disk
      * 'public' yang di-mount ke Railway Volume (lihat catatan di
      * simpanFotoBukti()) supaya persisten antar-redeploy.
      */
@@ -405,7 +462,7 @@ class AsetPemakaiController extends Controller
         abort_unless(
             $user->hasRoleAtLeast('admin') || $isPemilikPemakaian,
             403,
-            'Kamu tidak punya akses untuk mengembalikan aset ini.'
+            'Kamu tidak punya akses untuk mengembalikan item ini.'
         );
 
         $validated = $request->validate([
@@ -442,14 +499,16 @@ class AsetPemakaiController extends Controller
 
         DB::transaction(function () use ($asetPemakai, $request, $validated) {
             $noStruk = $this->generateNoStruk('KBL', 'aset_pemakai', 'no_struk_pengembalian');
+            $isKelengkapan = $asetPemakai->aset_kelengkapan_id !== null;
 
-            // kalau aset ini pernah rusak berat & udah ditandai selesai perbaikan
-            // (hasil tetep rusak_berat, gak ketolong), catatan pengembalian default
-            // kasih tau kondisinya -- kecuali admin udah isi catatan sendiri.
-            $asetRusakBerat = $asetPemakai->aset?->status === 'rusak_berat';
-            $catatanDefault = $asetRusakBerat
-                ? 'Dikembalikan dalam kondisi rusak berat (tidak bisa diperbaiki).'
-                : $asetPemakai->catatan_pengembalian;
+            // 'rusak_berat' cuma dikenal di status aset UTAMA (lihat enum di
+            // AsetController::validasi) -- aset_kelengkapan cuma punya
+            // tersedia/dipakai/rusak/diperbaiki, jadi gak ada state permanen
+            // yang perlu di-guard buat kelengkapan.
+            $catatanDefault = $asetPemakai->catatan_pengembalian;
+            if (!$isKelengkapan && $asetPemakai->aset?->status === 'rusak_berat') {
+                $catatanDefault = 'Dikembalikan dalam kondisi rusak berat (tidak bisa diperbaiki).';
+            }
 
             $fotoPaths = $this->simpanFotoBukti($request, 'foto_pengembalian', 'aset-pemakai/pengembalian');
 
@@ -462,25 +521,31 @@ class AsetPemakaiController extends Controller
             ]);
 
             // jangan paksa balik 'tersedia' kalau asetnya lagi rusak_berat --
-            // dia tetep gak boleh dipinjemin lagi walau pemakaiannya udah ditutup.
-            // Selain rusak_berat, baru balik normal ke 'tersedia' kayak biasa.
-            $asetPemakai->aset()
-                ->where('status', '!=', 'rusak_berat')
-                ->update(['status' => 'tersedia']);
+            // dia tetep gak boleh dipinjemin lagi walau pemakaiannya udah
+            // ditutup. Kelengkapan gak punya state itu, jadi selalu balik
+            // normal ke 'tersedia'.
+            if ($isKelengkapan) {
+                $asetPemakai->asetKelengkapan()->update(['status' => 'tersedia']);
+            } else {
+                $asetPemakai->aset()
+                    ->where('status', '!=', 'rusak_berat')
+                    ->update(['status' => 'tersedia']);
+            }
         });
 
-        return response()->json($asetPemakai->fresh()->load('pekerja.user', 'user', 'aset'));
+        return response()->json($asetPemakai->fresh()->load('pekerja.user', 'user', 'aset', 'asetKelengkapan'));
     }
 
     /**
      * DELETE /api/aset-pemakai/{asetPemakai}
-     * Admin: hapus satu entri riwayat pemakaian. Ditolak kalau entri ini
-     * punya laporan penanganan/perbaikan yang nempel (aset_pemakai_id) --
-     * sama kayak guard di AsetController::destroy(), biar riwayat perbaikan
-     * gak jadi yatim piatu tanpa konteks siapa yang lagi pegang aset waktu
-     * itu. Kalau entri yang dihapus ini pemakaian yang masih aktif (belum
-     * dikembalikan), status asetnya dikembalikan ke 'tersedia' dulu (kecuali
-     * lagi rusak_berat -- tetap gak boleh dipinjemin lagi).
+     * Admin: hapus satu entri riwayat pemakaian (aset utama maupun
+     * kelengkapan). Ditolak kalau entri ini punya laporan
+     * penanganan/perbaikan yang nempel (aset_pemakai_id) -- guard ini secara
+     * alami cuma pernah kena buat aset utama, karena kelengkapan gak lewat
+     * alur AsetPenanganan. Kalau entri yang dihapus ini pemakaian yang masih
+     * aktif (belum dikembalikan), status item-nya dikembalikan ke 'tersedia'
+     * dulu (kecuali aset utama lagi rusak_berat -- tetap gak boleh
+     * dipinjemin lagi).
      */
     public function destroy(AsetPemakai $asetPemakai)
     {
@@ -491,12 +556,17 @@ class AsetPemakaiController extends Controller
         }
 
         $masihDipakai = $asetPemakai->status === 'disetujui' && !$asetPemakai->tanggal_pengembalian;
+        $isKelengkapan = $asetPemakai->aset_kelengkapan_id !== null;
 
-        DB::transaction(function () use ($asetPemakai, $masihDipakai) {
+        DB::transaction(function () use ($asetPemakai, $masihDipakai, $isKelengkapan) {
             if ($masihDipakai) {
-                $asetPemakai->aset()
-                    ->where('status', '!=', 'rusak_berat')
-                    ->update(['status' => 'tersedia']);
+                if ($isKelengkapan) {
+                    $asetPemakai->asetKelengkapan()->update(['status' => 'tersedia']);
+                } else {
+                    $asetPemakai->aset()
+                        ->where('status', '!=', 'rusak_berat')
+                        ->update(['status' => 'tersedia']);
+                }
             }
             $asetPemakai->delete();
         });

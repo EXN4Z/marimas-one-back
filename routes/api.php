@@ -16,6 +16,7 @@ use App\Http\Controllers\Inventaris\JenisAsetController;
 use App\Http\Controllers\Inventaris\AsetController;
 use App\Http\Controllers\Inventaris\AsetPemakaiController;
 use App\Http\Controllers\Inventaris\AsetPenangananController;
+use App\Http\Controllers\Inventaris\AsetKelengkapanController;
 use App\Http\Controllers\Organisasi\CabangController;
 use App\Http\Controllers\PushSubscriptionController;
 use Illuminate\Support\Facades\DB;
@@ -98,7 +99,10 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/audit-log/trash', [AuditLogController::class, 'trash']);
     Route::post('/aset-penanganan/{asetPenanganan}/terima', [AsetPenangananController::class, 'terima']); // admin: terima & mulai tangani laporan
     Route::post('/aset-penanganan/{asetPenanganan}', [AsetPenangananController::class, 'update']);
-    Route::post('/import-aset', [ImportController::class, 'import']); // pakai POST + _method=PUT biar konsisten sama pola aset/{aset}
+    Route::post('/import-aset', [ImportController::class, 'import']);
+    Route::post('/aset-kelengkapan/{asetKelengkapan}/pemakai', [AsetPemakaiController::class, 'storeKelengkapan']);
+    Route::apiResource('aset-kelengkapan', AsetKelengkapanController::class)->except(['destroy']);// sesuaikan sama pola route aset utama kamu yang sekarang
+    Route::delete('/aset-kelengkapan/{asetKelengkapan}', [AsetKelengkapanController::class, 'destroy']); // pakai POST + _method=PUT biar konsisten sama pola aset/{aset}
 });
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {

@@ -41,11 +41,6 @@ class Aset extends Model
         return $this->belongsTo(JenisAset::class, 'jenis_id');
     }
 
-    public function departemen()
-    {
-        return $this->belongsTo(Departemen::class, 'departemen_id');
-    }
-
     public function supplier()
     {
         return $this->belongsTo(Supplier::class, 'supplier_id');
@@ -89,5 +84,9 @@ class Aset extends Model
         return $this->hasOne(AsetPenanganan::class, 'aset_id')
             ->whereNull('tanggal_selesai')
             ->latest('tanggal_lapor');
+    }
+    public function departemen()
+    {
+        return $this->belongsTo(Departemen::class, 'departemen_id');
     }
 }

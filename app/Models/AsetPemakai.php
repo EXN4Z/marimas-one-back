@@ -27,6 +27,7 @@ class AsetPemakai extends Model
         'dikembalikan_at',
         'catatan_pengembalian',
         'catatan_penolakan',
+        'aset_kelengkapan_id'
     ];
 
     // *_at (datetime lengkap jam-menit-detik) — dipakai buat riwayat aktivitas
@@ -63,5 +64,8 @@ class AsetPemakai extends Model
     }
     public function user() {
         return $this->belongsTo(User::class);
+    }
+    public function kelengkapan() {
+        return $this->belongsTo(AsetKelengkapan::class, 'aset_kelengkapan_id');
     }
 }
