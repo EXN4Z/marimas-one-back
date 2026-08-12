@@ -24,7 +24,6 @@ class AsetKelengkapanController extends Controller
         $pekerjaId = $user?->pekerja?->id;
 
         $query = AsetKelengkapan::with([
-            'jenis',
             'supplier',
             'pemakaiSaatIni.pekerja.user',
             'pemakaiSaatIni.user',
@@ -70,7 +69,6 @@ class AsetKelengkapanController extends Controller
         }
 
         $asetKelengkapan->load([
-            'jenis',
             'supplier',
             'pemakaiSaatIni.pekerja.user',
             'pemakaiSaatIni.user',
@@ -100,7 +98,7 @@ class AsetKelengkapanController extends Controller
         });
 
         return response()->json(
-            $asetKelengkapan->load('jenis', 'supplier'),
+            $asetKelengkapan->load('supplier'),
             201
         );
     }
@@ -124,7 +122,7 @@ class AsetKelengkapanController extends Controller
         });
 
         return response()->json(
-            $asetKelengkapan->fresh()->load('jenis', 'supplier')
+            $asetKelengkapan->fresh()->load('supplier')
         );
     }
 
@@ -151,8 +149,12 @@ class AsetKelengkapanController extends Controller
 
     protected function validasi(Request $request, ?AsetKelengkapan $asetKelengkapan = null): array
     {
+        $request->merge([
+            'serial_number' => $request->serial_number === '' ? null : $request->serial_number,
+        ]);
+
         return $request->validate([
-            'jenis_id' => 'nullable|exists:jenis_aset,id',
+            'nama' => 'nullable',
             'merek' => 'nullable|string|max:255',
             'tipe' => 'nullable|string|max:255',
             'warna' => 'nullable|string|max:255',

@@ -9,7 +9,7 @@ class AsetKelengkapan extends Model
     protected $table = 'aset_kelengkapan';
 
     protected $fillable = [
-        'jenis_id',
+        'nama',
         'merek',
         'tipe',
         'warna',
@@ -24,11 +24,6 @@ class AsetKelengkapan extends Model
         'no_good_receive',
         'status',
     ];
-
-    public function jenis()
-    {
-        return $this->belongsTo(JenisAset::class, 'jenis_id');
-    }
 
     public function supplier()
     {
