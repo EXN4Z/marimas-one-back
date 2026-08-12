@@ -13,7 +13,6 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Karyawan\AdminUserController;
 use App\Http\Controllers\Inventaris\SupplierController;
 use App\Http\Controllers\Inventaris\JenisAsetController;
-use App\Http\Controllers\Inventaris\KelengkapanMasterController;
 use App\Http\Controllers\Inventaris\AsetController;
 use App\Http\Controllers\Inventaris\AsetPemakaiController;
 use App\Http\Controllers\Inventaris\AsetPenangananController;
@@ -100,14 +99,12 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/aset-penanganan/{asetPenanganan}/terima', [AsetPenangananController::class, 'terima']); // admin: terima & mulai tangani laporan
     Route::post('/aset-penanganan/{asetPenanganan}', [AsetPenangananController::class, 'update']);
     Route::post('/import-aset', [ImportController::class, 'import']); // pakai POST + _method=PUT biar konsisten sama pola aset/{aset}
-    Route::post('/import-aset-rapi', [ImportController::class, 'importRapi']); // format baru "Data Aset Rapi": 1 baris = 1 barang, kolom Kategori eksplisit
 });
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
     Route::get('/aset', [AsetController::class, 'index']);
     Route::get('/aset/{aset}', [AsetController::class, 'show']);
     Route::get('/jenis-aset', [JenisAsetController::class, 'index']);
-    Route::get('/kelengkapan-master', [KelengkapanMasterController::class, 'index']);
     Route::get('/supplier', [SupplierController::class, 'index']);
 
     // admin: riwayat GLOBAL semua aset. karyawan/manajer/hr: riwayat
@@ -142,7 +139,6 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/aset/{aset}/jual', [AsetController::class, 'jual']);
 
     Route::apiResource('jenis-aset', JenisAsetController::class)->except(['index', 'show']);
-    Route::apiResource('kelengkapan-master', KelengkapanMasterController::class)->except(['index', 'show']);
     Route::apiResource('supplier', SupplierController::class)->except(['index', 'show']);
 });
 Route::get('/debug-webpush-test', function () {

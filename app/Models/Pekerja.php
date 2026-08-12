@@ -10,7 +10,7 @@ class Pekerja extends Model
 
     protected $fillable = [
         'user_id',
-        'nip',
+        'nik',
         'departemen_id',
         'lokasi_kantor_id',
         'jabatan_id',

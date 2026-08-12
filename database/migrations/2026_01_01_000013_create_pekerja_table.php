@@ -18,7 +18,7 @@ return new class extends Migration
         Schema::create('pekerja', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained('users');
-            $table->string('nip')->nullable()->unique();
+            $table->string('nik')->nullable()->unique();
             $table->foreignId('departemen_id')->nullable()->constrained('departemen')->nullOnDelete();
             $table->foreignId('jabatan_id')->nullable()->constrained('jabatan')->nullOnDelete();
             $table->foreignId('lokasi_kantor_id')->nullable()->constrained('lokasi_kantor')->nullOnDelete();

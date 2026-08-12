@@ -25,7 +25,6 @@ class JenisAsetController extends Controller
 
         return response()->json($query->get());
     }
-
     public function store(Request $request)
     {
         $validated = $request->validate([

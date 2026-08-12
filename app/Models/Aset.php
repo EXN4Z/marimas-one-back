@@ -51,11 +51,6 @@ class Aset extends Model
         return $this->belongsTo(Supplier::class, 'supplier_id');
     }
 
-    public function kelengkapan()
-    {
-        return $this->hasMany(AsetKelengkapan::class, 'aset_id');
-    }
-
     public function pemakai()
     {
         return $this->hasMany(AsetPemakai::class, 'aset_id')->latest('tanggal_penerimaan');

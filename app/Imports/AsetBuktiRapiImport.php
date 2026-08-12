@@ -6,7 +6,10 @@ use App\Models\Aset;
 use App\Models\AsetPemakai;
 use App\Models\Departemen;
 use App\Models\JenisAset;
+<<<<<<< HEAD
 use App\Models\Kategori;
+=======
+>>>>>>> 5d0d4f730e55fac8a75011c1524f60fe87df3a8b
 use App\Models\Pekerja;
 use App\Models\User;
 use Illuminate\Support\Str;
@@ -241,7 +244,11 @@ class AsetBuktiRapiImport implements ToCollection
                         return;
                     }
 
+<<<<<<< HEAD
                     $jenis = JenisAset::firstOrCreate(['nama' => $namaJenis], ['kategori_id' => Kategori::where('kode', 'aset_utama')->value('id')]);
+=======
+                    $jenis = JenisAset::firstOrCreate(['nama' => $namaJenis], ['kategori' => 'aset_utama']);
+>>>>>>> 5d0d4f730e55fac8a75011c1524f60fe87df3a8b
 
                     [$merek, $tipe] = $this->pisahMerekTipe((string) ($row['merek_tipe'] ?? ''));
 
@@ -283,7 +290,11 @@ class AsetBuktiRapiImport implements ToCollection
     {
         $jenis = JenisAset::firstOrCreate(
             ['nama' => $namaBarang],
+<<<<<<< HEAD
             ['kategori_id' => Kategori::where('kode', 'kelengkapan')->value('id')]
+=======
+            ['kategori' => 'kelengkapan']
+>>>>>>> 5d0d4f730e55fac8a75011c1524f60fe87df3a8b
         );
 
         return Aset::create(array_merge($infoBersama, [

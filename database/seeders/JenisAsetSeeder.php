@@ -16,7 +16,11 @@ class JenisAsetSeeder extends Seeder
         $kelengkapanId = Kategori::where('kode', 'kelengkapan')->value('id');
 
         foreach (['Laptop', 'Mouse', 'Monitor', 'Printer'] as $nama) {
+
             JenisAset::firstOrCreate(['nama' => $nama], ['kategori_id' => $barangId]);
+
+            JenisAset::firstOrCreate(['nama' => $nama], ['kategori' => 'aset_utama']);
+
         }
 
         // Eks KelengkapanMasterSeeder -- kelengkapan (Tas, Charger, dst)
@@ -27,6 +31,7 @@ class JenisAsetSeeder extends Seeder
         // sama dengan kategori beda.
         foreach (['Charger', 'Tas'] as $nama) {
             JenisAset::firstOrCreate(['nama' => $nama], ['kategori_id' => $kelengkapanId]);
-        }
+            JenisAset::firstOrCreate(['nama' => $nama], ['kategori' => 'kelengkapan']);
+
     }
 }
