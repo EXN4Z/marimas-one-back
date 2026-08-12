@@ -136,7 +136,7 @@ class AsetBuktiImport implements ToCollection
 
                     if ($namaPenerima !== '') {
                         if ($nikPenerima !== '') {
-                            $pekerjaPenerima = Pekerja::where('nip', $nikPenerima)->first();
+                            $pekerjaPenerima = Pekerja::where('nik', $nikPenerima)->first();
 
                             if (!$pekerjaPenerima) {
                                 $userPenerima = User::create([
@@ -148,7 +148,7 @@ class AsetBuktiImport implements ToCollection
 
                                 $pekerjaPenerima = Pekerja::create([
                                     'user_id'       => $userPenerima->id,
-                                    'nip'           => $nikPenerima,
+                                    'nik'           => $nikPenerima,
                                     'departemen_id' => $departemenId,
                                 ]);
                             }
