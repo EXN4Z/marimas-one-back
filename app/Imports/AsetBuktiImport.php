@@ -4,12 +4,17 @@ namespace App\Imports;
 
 use App\Models\Aset;
 use App\Models\AsetKelengkapan;
+use App\Models\AsetPemakai;
 use App\Models\Departemen;
 use App\Models\JenisAset;
 use App\Models\KelengkapanMaster;
+use App\Models\Pekerja;
 use App\Models\Supplier;
+use App\Models\User;
+use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -58,6 +63,16 @@ use Illuminate\Support\Facades\Log;
  * untuk semua kemungkinan format baru -- kalau ada pola keterangan baru
  * yang tidak tertangkap, cek kolom `keterangan` aslinya lalu sesuaikan
  * WARNA_KEYWORDS / pola regex di bawah.
+ *
+ * PENERIMA / PEKERJA / ASET_PEMAKAI: kolom "NIK" & "Penerima" di Excel
+ * dipakai untuk mencari (atau membuat) Pekerja penerima aset. NIK
+ * sementara disimpan di kolom `nip` tabel `pekerja` (nama kolom belum
+ * diganti). Kalau User untuk NIK itu belum ada, User + Pekerja baru
+ * otomatis dibuat (role default 'karyawan', email placeholder karena
+ * format Excel ini tidak punya kolom email). Kalau penerima berhasil
+ * diresolusi, status Aset yang dibuat jadi "dipakai" (bukan "tersedia")
+ * dan dibuatkan juga 1 baris AsetPemakai per Aset, dengan kolom yang
+ * datanya tidak tersedia dari Excel dibiarkan null.
  */
 class AsetBuktiImport implements ToCollection
 {
@@ -107,106 +122,185 @@ class AsetBuktiImport implements ToCollection
 
         foreach ($dataRows as $index => $rawRow) {
             try {
-                $rowArray = $rawRow->toArray();
+                // Setiap baris diproses dalam transaction sendiri-sendiri.
+                // PENTING di Postgres: begitu 1 query di dalam sebuah
+                // transaction gagal (mis. melanggar CHECK constraint),
+                // SELURUH transaction itu langsung "aborted" dan semua
+                // query berikutnya di transaction yang sama ikut ditolak
+                // (25P02) walau datanya sendiri valid. Kalau semua baris
+                // dari 1 file dibungkus dalam 1 transaction besar, 1 baris
+                // gagal akan bikin SEMUA baris sesudahnya ikut gagal.
+                // Makanya di sini tiap baris punya transaction terpisah:
+                // baris gagal di-rollback sendiri, baris lain tetap lanjut.
+                DB::transaction(function () use ($rawRow, $headers, $nomorBarang, $index) {
+                    $rowArray = $rawRow->toArray();
 
-                if (count(array_filter($rowArray, fn ($v) => $v !== null && $v !== '')) === 0) {
-                    continue;
-                }
-
-                $row = array_combine(
-                    $headers,
-                    array_pad($rowArray, count($headers), null)
-                );
-
-                if (empty($row['no_bukti'])) {
-                    continue;
-                }
-
-                // Tabel `aset` tidak punya kolom teks "departemen" -- yang
-                // ada cuma `departemen_id` (foreign key ke tabel
-                // `departemen`). Sama seperti Supplier di bawah, nama
-                // departemen dari Excel di-firstOrCreate supaya otomatis
-                // kebuat kalau belum ada, lalu dipakai id-nya.
-                $namaDepartemen = trim((string) ($row['departemen'] ?? ''));
-                $departemenId = null;
-
-                if ($namaDepartemen !== '') {
-                    $departemenId = Departemen::firstOrCreate(['nama' => $namaDepartemen])->id;
-                }
-
-                // Info bukti yang sama dipakai berulang untuk tiap barang
-                // di baris ini (bukan per-barang, tapi per-bukti/transaksi)
-                $infoBukti = [
-                    'no_bukti'       => $row['no_bukti'],
-                    'tanggal'        => $this->parseTanggal($row['tanggal'] ?? null),
-                    'perusahaan'     => $row['perusahaan'] ?? null,
-                    'departemen_id'  => $departemenId,
-                    'nik'            => $row['nik'] ?? null,
-                    'penerima'       => $row['penerima'] ?? null,
-                    'diterima_oleh'  => $row['diterima_oleh'] ?? null,
-                    'diketahui'      => $row['diketahui'] ?? null,
-                    'dibuat_oleh'    => $row['dibuat_oleh'] ?? null,
-                    'diketahui_hrd'  => $row['diketahui_hrd'] ?? null,
-                ];
-
-                // Supplier default untuk bukti ini (dibuat sekali, dipakai
-                // untuk semua barang di baris yang sama). Format bukti
-                // serah terima sering tidak punya kolom supplier sama
-                // sekali -- kalau kosong, jangan bikin Supplier ber-nama
-                // kosong, biarkan supplier_id null.
-                $namaSupplier = trim((string) ($row['supplier'] ?? ''));
-                $supplierId = null;
-
-                if ($namaSupplier !== '') {
-                    $supplierId = Supplier::firstOrCreate(['nama' => $namaSupplier])->id;
-                }
-
-                $adaBarangDiproses = false;
-
-                foreach ($nomorBarang as $n) {
-                    $namaBarang = $row["nama_barang_{$n}"] ?? null;
-
-                    if (empty($namaBarang)) {
-                        continue;
+                    if (count(array_filter($rowArray, fn ($v) => $v !== null && $v !== '')) === 0) {
+                        return;
                     }
 
-                    $adaBarangDiproses = true;
-
-                    $jenis = JenisAset::firstOrCreate(
-                        ['nama' => trim($namaBarang)]
+                    $row = array_combine(
+                        $headers,
+                        array_pad($rowArray, count($headers), null)
                     );
 
-                    $keteranganAsli = $row["keterangan_{$n}"] ?? null;
-                    $hasilParse = $this->parseKeterangan($keteranganAsli);
+                    if (empty($row['no_bukti'])) {
+                        return;
+                    }
 
-                    $aset = Aset::create(array_merge($infoBukti, [
-                        'jenis_id'      => $jenis->id,
-                        'supplier_id'   => $supplierId,
-                        'jumlah'        => $row["jumlah_{$n}"] ?? null,
-                        'keterangan'    => $keteranganAsli,
-                        'serial_number' => $hasilParse['serial_number'],
-                        'warna'         => $hasilParse['warna'],
-                        'status'        => 'tersedia',
-                    ]));
+                    // Tabel `aset` tidak punya kolom teks "departemen" -- yang
+                    // ada cuma `departemen_id` (foreign key ke tabel
+                    // `departemen`). Sama seperti Supplier di bawah, nama
+                    // departemen dari Excel di-firstOrCreate supaya otomatis
+                    // kebuat kalau belum ada, lalu dipakai id-nya.
+                    $namaDepartemen = trim((string) ($row['departemen'] ?? ''));
+                    $departemenId = null;
 
-                    foreach ($hasilParse['kelengkapan'] as $namaKelengkapan) {
-                        $kelengkapanMaster = KelengkapanMaster::firstOrCreate(
-                            ['nama' => $namaKelengkapan]
+                    if ($namaDepartemen !== '') {
+                        $departemenId = Departemen::firstOrCreate(['nama' => $namaDepartemen])->id;
+                    }
+
+                    // Info bukti yang sama dipakai berulang untuk tiap barang
+                    // di baris ini (bukan per-barang, tapi per-bukti/transaksi)
+                    $infoBukti = [
+                        'no_bukti'       => $row['no_bukti'],
+                        'tanggal'        => $this->parseTanggal($row['tanggal'] ?? null),
+                        'perusahaan'     => $row['perusahaan'] ?? null,
+                        'departemen_id'  => $departemenId,
+                        'nik'            => $row['nik'] ?? null,
+                        'penerima'       => $row['penerima'] ?? null,
+                        'diterima_oleh'  => $row['diterima_oleh'] ?? null,
+                        'diketahui'      => $row['diketahui'] ?? null,
+                        'dibuat_oleh'    => $row['dibuat_oleh'] ?? null,
+                        'diketahui_hrd'  => $row['diketahui_hrd'] ?? null,
+                    ];
+
+                    // Supplier default untuk bukti ini (dibuat sekali, dipakai
+                    // untuk semua barang di baris yang sama). Format bukti
+                    // serah terima sering tidak punya kolom supplier sama
+                    // sekali -- kalau kosong, jangan bikin Supplier ber-nama
+                    // kosong, biarkan supplier_id null.
+                    $namaSupplier = trim((string) ($row['supplier'] ?? ''));
+                    $supplierId = null;
+
+                    if ($namaSupplier !== '') {
+                        $supplierId = Supplier::firstOrCreate(['nama' => $namaSupplier])->id;
+                    }
+
+                    // === Resolusi Pekerja penerima untuk baris bukti ini ===
+                    // Sama seperti $infoBukti, ini SATU per baris (bukan per
+                    // barang), lalu dipakai berulang untuk tiap Aset & baris
+                    // AsetPemakai yang dibuat dari baris Excel yang sama.
+                    //
+                    // NIK di Excel disimpan ke kolom `nip` tabel pekerja
+                    // (kolomnya belum diganti nama, sementara begini dulu).
+                    // Kalau User utk NIK ini belum ada, User + Pekerja baru
+                    // otomatis dibuat (role default 'karyawan'). Email di-
+                    // generate placeholder karena format bukti ini tidak
+                    // punya kolom email -- silakan diedit manual belakangan
+                    // kalau memang perlu email asli.
+                    $namaPenerima = trim((string) ($row['penerima'] ?? ''));
+                    $nikPenerima = trim((string) ($row['nik'] ?? ''));
+                    $pekerjaPenerima = null;
+
+                    if ($namaPenerima !== '') {
+                        if ($nikPenerima !== '') {
+                            $pekerjaPenerima = Pekerja::where('nip', $nikPenerima)->first();
+
+                            if (!$pekerjaPenerima) {
+                                $userPenerima = User::create([
+                                    'name'     => $namaPenerima,
+                                    'email'    => 'nik' . $nikPenerima . '@placeholder.local',
+                                    'password' => Str::random(32),
+                                    'role'     => 'karyawan',
+                                ]);
+
+                                $pekerjaPenerima = Pekerja::create([
+                                    'user_id'       => $userPenerima->id,
+                                    'nip'           => $nikPenerima,
+                                    'departemen_id' => $departemenId,
+                                ]);
+                            }
+                        } else {
+                            // Ada nama penerima tapi NIK kosong -- tidak ada
+                            // kunci yang aman buat mencocokkan/membuat Pekerja.
+                            // Aset tetap dibuat, tapi TIDAK ditandai "dipakai"
+                            // & tidak ada baris aset_pemakai untuk baris ini.
+                            $this->errors[] = 'Baris data ke-' . ($index + 1) . ': ada nama penerima ("' . $namaPenerima . '") tapi NIK kosong, aset dibuat tanpa data pemakai.';
+                        }
+                    }
+
+                    $statusAset = $pekerjaPenerima ? 'dipakai' : 'tersedia';
+                    // === akhir bagian resolusi Pekerja penerima ===
+
+                    $adaBarangDiproses = false;
+
+                    foreach ($nomorBarang as $n) {
+                        $namaBarang = $row["nama_barang_{$n}"] ?? null;
+
+                        if (empty($namaBarang)) {
+                            continue;
+                        }
+
+                        $adaBarangDiproses = true;
+
+                        $jenis = JenisAset::firstOrCreate(
+                            ['nama' => trim($namaBarang)]
                         );
 
-                        AsetKelengkapan::create([
-                            'aset_id'                => $aset->id,
-                            'kelengkapan_master_id'   => $kelengkapanMaster->id,
-                        ]);
+                        $keteranganAsli = $row["keterangan_{$n}"] ?? null;
+                        $hasilParse = $this->parseKeterangan($keteranganAsli);
+
+                        $aset = Aset::create(array_merge($infoBukti, [
+                            'jenis_id'      => $jenis->id,
+                            'supplier_id'   => $supplierId,
+                            'jumlah'        => $row["jumlah_{$n}"] ?? null,
+                            'keterangan'    => $keteranganAsli,
+                            'serial_number' => $hasilParse['serial_number'],
+                            'warna'         => $hasilParse['warna'],
+                            'status'        => $statusAset,
+                        ]));
+
+                        foreach ($hasilParse['kelengkapan'] as $namaKelengkapan) {
+                            $kelengkapanMaster = KelengkapanMaster::firstOrCreate(
+                                ['nama' => $namaKelengkapan]
+                            );
+
+                            AsetKelengkapan::create([
+                                'aset_id'               => $aset->id,
+                                'kelengkapan_master_id' => $kelengkapanMaster->id,
+                            ]);
+                        }
+
+                        // Kalau penerima berhasil diresolusi, catat sebagai
+                        // pemakai aset ini. `status` di tabel aset_pemakai
+                        // adalah status ALUR PERSETUJUAN (CHECK constraint
+                        // cuma izinkan 'pending' | 'disetujui' | 'ditolak' --
+                        // bukan status pemakaian fisik). Karena data ini dari
+                        // bukti serah terima yang aset-nya SUDAH diserahkan
+                        // (bukan permintaan yang masih menunggu approval),
+                        // dipakai 'disetujui'. Kolom lain yang datanya tidak
+                        // ada dari Excel (nomor_penerimaan, no_struk_penerimaan,
+                        // diterima_at, catatan_penerimaan, dll) sengaja
+                        // dibiarkan null.
+                        if ($pekerjaPenerima) {
+                            AsetPemakai::create([
+                                'aset_id'            => $aset->id,
+                                'pekerja_id'         => $pekerjaPenerima->id,
+                                'user_id'            => $pekerjaPenerima->user_id,
+                                'status'             => 'disetujui',
+                                'tanggal_penerimaan' => $infoBukti['tanggal'],
+                            ]);
+                        }
                     }
-                }
 
-                if (!$adaBarangDiproses) {
-                    $this->errors[] = 'Baris data ke-' . ($index + 1) . ': tidak ada barang yang diisi.';
-                    continue;
-                }
+                    if (!$adaBarangDiproses) {
+                        $this->errors[] = 'Baris data ke-' . ($index + 1) . ': tidak ada barang yang diisi.';
+                        return;
+                    }
 
-                $this->rowCount++;
+                    $this->rowCount++;
+                });
             } catch (\Exception $e) {
                 $this->errors[] = 'Baris data ke-' . ($index + 1) . ': ' . $e->getMessage();
             }
