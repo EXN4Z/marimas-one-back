@@ -311,7 +311,7 @@ class AsetPemakaiController extends Controller
         // gak nyampur kayak dulu (satu entri bisa punya dua-duanya sekaligus).
         $type = $request->input('type');
 
-        $query = AsetPemakai::with(['aset.jenis', 'asetKelengkapan.jenis', 'pekerja.user', 'user'])
+        $query = AsetPemakai::with(['aset', 'asetKelengkapan', 'pekerja.user', 'user'])
             ->when(
                 $type === 'peminjaman',
                 fn ($q) => $q->whereNotNull('foto_penerimaan'),

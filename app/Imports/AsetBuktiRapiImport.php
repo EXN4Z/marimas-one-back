@@ -3,10 +3,9 @@
 namespace App\Imports;
 
 use App\Models\Aset;
+use App\Models\AsetKelengkapan;
 use App\Models\AsetPemakai;
 use App\Models\Departemen;
-use App\Models\JenisAset;
-use App\Models\Kategori;
 use App\Models\Pekerja;
 use App\Models\User;
 use Illuminate\Support\Str;
@@ -19,12 +18,11 @@ use Illuminate\Support\Facades\Log;
  * Import "Data Aset Rapi" -- format BARU, BEDA dari AsetBuktiImport (format
  * lama yang 1 baris Excel bisa berisi 4 barang sekaligus lewat kolom
  * "Nama Barang 1..4"). Di format ini SATU BARIS = SATU BARANG, dan kolom
- * `Kategori` bilang eksplisit apakah baris itu "Aset Utama" (jenis_id-nya
- * nunjuk ke jenis_aset berkategori 'aset_utama') atau "Kelengkapan"
- * (jenis_id-nya nunjuk ke jenis_aset berkategori 'kelengkapan') -- KEDUANYA
- * tetap jadi baris `aset` sendiri-sendiri (kode unik, S/N kalau ada,
- * status), cuma baris Kelengkapan status-nya ngikutin Aset Utama TERAKHIR
- * yang seNo Bukti sama.
+ * `Kategori` bilang eksplisit apakah baris itu "Aset Utama" atau
+ * "Kelengkapan". Baris Aset Utama jadi baris `aset` (kode unik, S/N kalau
+ * ada, status). Baris Kelengkapan jadi baris `aset_kelengkapan` yang
+ * nempel ke Aset Utama TERAKHIR yang se-No Bukti sama (aset_id), status-nya
+ * ngikutin Aset Utama itu.
  *
  * Kolom yang diharapkan (nama header bebas huruf besar/kecil & spasi,
  * dinormalisasi otomatis):
@@ -35,8 +33,8 @@ use Illuminate\Support\Facades\Log;
  *   26/00002 | ... | Laptop HP 14s-dq5001TU | Laptop | HP 14s-dq5001TU | Aset Utama | 1 | Silver; S/N : 5CD2360V48
  *   26/00002 | ... | Charger                | Charger| -               | Kelengkapan| 1 | S/N : 0A3JUGLG5L
  *   26/00002 | ... | Tas Hp                 | Tas HP | -               | Kelengkapan| 1 | Silver
- * -> hasilnya 3 baris Aset: Laptop HP (kategori aset_utama), Charger & Tas
- *    HP (kategori kelengkapan) yang status-nya ngikutin Laptop HP.
+ * -> hasilnya 1 baris Aset (Laptop HP) + 2 baris aset_kelengkapan (Charger
+ *    & Tas HP) yang nempel ke Laptop HP dan status-nya ngikutin dia.
  *
  * PENERIMA / PEKERJA / ASET_PEMAKAI: sama seperti AsetBuktiImport -- kolom
  * NIK & Penerima dipakai cari/bikin Pekerja (NIK disimpan ke kolom `nip`
@@ -45,6 +43,13 @@ use Illuminate\Support\Facades\Log;
  * dibuatkan 1 baris AsetPemakai. Kalau NIK kosong tapi nama penerima ada,
  * dicatat sebagai warning & aset tetap dibuat tapi tanpa data pemakai.
  *
+ * JENIS ASET: kolom ini sudah tidak punya kolom tujuan di tabel `aset`
+ * (jenis_id dihapus) buat baris Aset Utama, jadi isinya digabung ke depan
+ * `keterangan` supaya infonya tidak hilang -- KEPUTUSAN gw karena kolomnya
+ * memang sudah gak ada rumahnya. Untuk baris Kelengkapan, kolom ini tetap
+ * dipakai sebagai `nama` di aset_kelengkapan (kolom itu memang ada di
+ * tabel aset_kelengkapan).
+ *
  * MEREK/TIPE: kolom "Merek/Tipe" di sumber datanya cuma 1 kolom gabungan
  * (bukan 2 kolom terpisah), jadi dipisah heuristik: kata pertama jadi
  * `merek`, sisanya jadi `tipe` (mis. "HP 14s-dq5001TU" -> merek "HP", tipe
@@ -52,6 +57,8 @@ use Illuminate\Support\Facades\Log;
  * namanya lebih dari 1 kata (mis. "Sonic Gear" kepisah jadi merek "Sonic"),
  * tapi keterangan aslinya tetap utuh tersimpan di kolom `keterangan`
  * (dari kolom Keterangan Excel) jadi tidak ada info yang hilang total.
+ * `merek` inilah yang sekarang jadi dasar kode_aset (lihat trigger DB
+ * generate_kode_aset).
  *
  * KETERANGAN: dipakai apa adanya (disimpan utuh ke kolom `keterangan`),
  * SEKALIGUS diparsing lewat parseKeterangan() (logic sama seperti
@@ -176,11 +183,10 @@ class AsetBuktiRapiImport implements ToCollection
 
                     $statusAset = $pekerjaPenerima ? 'dipakai' : 'tersedia';
 
-                    // Info bersama yang disalin ke SETIAP baris Aset yang
-                    // dibuat dari baris Excel ini (Aset Utama MAUPUN
-                    // Kelengkapan, baik dari kolom Kategori eksplisit
-                    // ataupun hasil parsing teks Keterangan) -- disatukan
-                    // di sini biar gak diketik ulang di 3 tempat berbeda.
+                    // Info bersama yang disalin ke SETIAP baris Aset/
+                    // AsetKelengkapan yang dibuat dari baris Excel ini --
+                    // disatukan di sini biar gak diketik ulang di 3 tempat
+                    // berbeda.
                     $infoBersama = [
                         'departemen_id' => $departemenId,
                         'perusahaan'    => $row['perusahaan'] ?? null,
@@ -207,9 +213,9 @@ class AsetBuktiRapiImport implements ToCollection
                         if (!$asetUtamaTerakhir) {
                             // Baris Kelengkapan muncul duluan sebelum ada
                             // Aset Utama di No Bukti yang sama -- gak ada
-                            // aset induk buat dijadiin acuan status, jadi
-                            // dilewati (dicatat sebagai warning, bukan
-                            // bikin Aset nyasar tanpa status yang jelas).
+                            // aset induk buat dijadiin acuan status/aset_id,
+                            // jadi dilewati (dicatat sebagai warning, bukan
+                            // bikin AsetKelengkapan tanpa aset induk).
                             $this->errors[] = 'Baris data ke-' . ($index + 1) . ': barang kelengkapan "' . $namaJenis . '" (No Bukti ' . $noBukti . ') dilewati karena belum ada Aset Utama di bukti yang sama untuk dijadikan acuan status.';
                             return;
                         }
@@ -241,18 +247,19 @@ class AsetBuktiRapiImport implements ToCollection
                         return;
                     }
 
-                    $jenis = JenisAset::firstOrCreate(['nama' => $namaJenis], ['kategori_id' => Kategori::where('kode', 'aset_utama')->value('id')]);
-
                     [$merek, $tipe] = $this->pisahMerekTipe((string) ($row['merek_tipe'] ?? ''));
 
+                    // Jenis Aset sudah tidak ada kolomnya di tabel `aset` --
+                    // digabung ke depan keterangan biar infonya gak hilang.
+                    $keteranganGabung = trim($namaJenis . ($keteranganAsli ? ' -- ' . $keteranganAsli : ''));
+
                     $aset = Aset::create(array_merge($infoBersama, [
-                        'jenis_id'       => $jenis->id,
                         'merek'          => $merek,
                         'tipe'           => $tipe,
                         'warna'          => $hasilParse['warna'],
                         'serial_number'  => $hasilParse['serial_number'],
                         'jumlah'         => $row['jumlah'] ?? null,
-                        'keterangan'     => $keteranganAsli,
+                        'keterangan'     => $keteranganGabung,
                         'status'         => $statusAset,
                     ]));
 
@@ -272,48 +279,52 @@ class AsetBuktiRapiImport implements ToCollection
     }
 
     /**
-     * Bikin 1 nama barang kelengkapan jadi baris Aset-nya sendiri --
-     * jenis_id-nya nunjuk ke jenis_aset yang dicari/dibuat dengan kategori
-     * 'kelengkapan' (firstOrCreate cuma pakai kategori ini kalau jenisnya
-     * belum ada; kalau sudah ada dengan kategori lain, tidak ditimpa).
-     * $infoBersama (no_bukti, tanggal, departemen_id, dst) & status-nya
+     * Bikin 1 nama barang kelengkapan jadi baris AsetKelengkapan (tabel
+     * aset_kelengkapan) yang nempel ke Aset induknya lewat aset_id --
+     * BUKAN baris Aset sendiri. $keterangan (kalau ada) di-parse ulang
+     * lewat parseKeterangan() buat coba tarik serial_number & warna-nya
+     * juga, sama seperti yang dilakukan buat aset utama. Status-nya
      * disamakan dengan Aset induk saat baris ini diproses.
      */
-    private function buatAsetKelengkapan(Aset $asetInduk, array $infoBersama, string $namaBarang, ?string $keterangan): Aset
+    private function buatAsetKelengkapan(Aset $asetInduk, array $infoBersama, string $namaBarang, ?string $keterangan): AsetKelengkapan
     {
-        $jenis = JenisAset::firstOrCreate(
-            ['nama' => $namaBarang],
-            ['kategori_id' => Kategori::where('kode', 'kelengkapan')->value('id')]
-        );
+        $hasilParse = $this->parseKeterangan($keterangan);
 
-        return Aset::create(array_merge($infoBersama, [
-            'jenis_id'   => $jenis->id,
-            'keterangan' => $keterangan,
-            'status'     => $asetInduk->status,
-        ]));
+        return AsetKelengkapan::create([
+            'aset_id'           => $asetInduk->id,
+            'nama'              => $namaBarang,
+            'warna'             => $hasilParse['warna'],
+            'serial_number'     => $hasilParse['serial_number'],
+            'keterangan'        => $keterangan,
+            'perusahaan'        => $infoBersama['perusahaan'] ?? null,
+            'tanggal_pembelian' => $infoBersama['tanggal'] ?? null,
+            'status'            => $asetInduk->status,
+        ]);
     }
 
     /**
-     * Buat 1 baris aset_pemakai buat 1 Aset (aset utama ATAUPUN aset
-     * kelengkapan -- keduanya sama-sama baris `aset` biasa sekarang).
+     * Buat 1 baris aset_pemakai buat 1 barang (Aset utama ATAUPUN
+     * AsetKelengkapan) -- bedanya cuma kolom FK mana yang diisi di
+     * aset_pemakai (aset_id vs aset_kelengkapan_id).
      */
-    private function buatAsetPemakai(Aset $aset, Pekerja $pekerjaPenerima, ?string $tanggalPenerimaan): void
+    private function buatAsetPemakai(Aset|AsetKelengkapan $item, Pekerja $pekerjaPenerima, ?string $tanggalPenerimaan): void
     {
         AsetPemakai::create([
-            'aset_id'            => $aset->id,
-            'pekerja_id'         => $pekerjaPenerima->id,
-            'user_id'            => $pekerjaPenerima->user_id,
-            'status'             => 'disetujui',
-            'tanggal_penerimaan' => $tanggalPenerimaan,
+            'aset_id'             => $item instanceof Aset ? $item->id : null,
+            'aset_kelengkapan_id' => $item instanceof AsetKelengkapan ? $item->id : null,
+            'pekerja_id'          => $pekerjaPenerima->id,
+            'user_id'             => $pekerjaPenerima->user_id,
+            'status'              => 'disetujui',
+            'tanggal_penerimaan'  => $tanggalPenerimaan,
         ]);
     }
 
     /**
      * Tempel daftar nama kelengkapan (hasil ekstraksi dari teks bebas
-     * kolom Keterangan, lihat parseKeterangan()) sebagai baris Aset
-     * sendiri-sendiri buat masing-masing nama, statusnya ngikutin Aset
-     * induk. Dipisah jadi method sendiri karena dipanggil dari 2 tempat
-     * (baris Aset Utama & baris Kelengkapan).
+     * kolom Keterangan, lihat parseKeterangan()) sebagai baris
+     * AsetKelengkapan sendiri-sendiri buat masing-masing nama, statusnya
+     * ngikutin Aset induk. Dipisah jadi method sendiri karena dipanggil
+     * dari 2 tempat (baris Aset Utama & baris Kelengkapan).
      *
      * @param string[] $namaNamaKelengkapan
      */

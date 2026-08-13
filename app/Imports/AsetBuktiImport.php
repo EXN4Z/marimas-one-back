@@ -4,10 +4,9 @@ namespace App\Imports;
 
 use App\Http\Controllers\Concerns\GeneratesStrukNumber;
 use App\Models\Aset;
+use App\Models\AsetKelengkapan;
 use App\Models\AsetPemakai;
 use App\Models\Departemen;
-use App\Models\JenisAset;
-use App\Models\Kategori;
 use App\Models\Pekerja;
 use App\Models\Supplier;
 use App\Models\User;
@@ -38,14 +37,13 @@ class AsetBuktiImport implements ToCollection
 
     /**
      * Kata kunci buat mendeteksi "Nama Barang N" yang sebenarnya bukan
-     * barang utama (jenis aset), tapi AKSESORIS dari barang utama di baris
-     * yang sama -- misalnya di 1 baris bukti ada "Nama Barang 1: Laptop",
-     * "Nama Barang 2: Charger", "Nama Barang 3: Tas". Laptop tetap jadi
-     * baris Aset baru seperti biasa (dengan jenis_id-nya sendiri, kategori
-     * jenis 'aset_utama'). Charger & Tas SEKARANG JUGA dibikinkan baris
-     * Aset sendiri (kode unik, S/N kalau ada, status, riwayat pinjam
-     * sendiri) -- bedanya cuma jenis_id-nya nunjuk ke jenis_aset
-     * berkategori 'kelengkapan', dan statusnya ngikutin barang utama
+     * barang utama, tapi AKSESORIS dari barang utama di baris yang sama --
+     * misalnya di 1 baris bukti ada "Nama Barang 1: Laptop", "Nama Barang
+     * 2: Charger", "Nama Barang 3: Tas". Laptop tetap jadi baris Aset baru
+     * seperti biasa (merek diisi dari nama barang ini). Charger & Tas
+     * dibikinkan baris AsetKelengkapan (tabel aset_kelengkapan) yang
+     * nempel ke Laptop lewat aset_id -- bukan lagi baris Aset sendiri.
+     * Kode unik, S/N kalau ada, dan status-nya ngikutin barang utama
      * TERAKHIR yang sudah diproses di baris yang sama (lihat
      * cocokAksesoris() & buatAsetKelengkapan() di bawah).
      *
@@ -164,9 +162,9 @@ class AsetBuktiImport implements ToCollection
 
                     // Aset "utama" terakhir yang berhasil dibuat di baris ini
                     // -- barang aksesoris (charger, tas, dst) yang muncul
-                    // SETELAHNYA di kolom Nama Barang N yang lain tetap jadi
-                    // baris Aset-nya sendiri, tapi status-nya ngikutin aset
-                    // ini (lihat buatAsetKelengkapan()).
+                    // SETELAHNYA di kolom Nama Barang N yang lain jadi baris
+                    // AsetKelengkapan yang nempel ke aset ini, dan status-nya
+                    // ngikutin aset ini (lihat buatAsetKelengkapan()).
                     $asetUtamaTerakhir = null;
 
                     foreach ($nomorBarang as $n) {
@@ -181,10 +179,9 @@ class AsetBuktiImport implements ToCollection
                         $keteranganAsli = $row["keterangan_{$n}"] ?? null;
 
                         // Barang ini kelengkapan (charger/tas/dst) -- bikin
-                        // sebagai baris Aset-nya sendiri (jenis_id berkategori
-                        // 'kelengkapan'), statusnya ngikutin aset utama
-                        // terakhir yang sudah dibuat di baris yang sama, lalu
-                        // lanjut ke kolom Nama Barang berikutnya.
+                        // sebagai baris AsetKelengkapan yang nempel ke aset
+                        // utama terakhir yang sudah dibuat di baris yang
+                        // sama, lalu lanjut ke kolom Nama Barang berikutnya.
                         if ($this->cocokAksesoris($namaBarangTrim)) {
                             if ($asetUtamaTerakhir) {
                                 $asetKelengkapan = $this->buatAsetKelengkapan(
@@ -201,22 +198,22 @@ class AsetBuktiImport implements ToCollection
                             } else {
                                 // Aksesoris muncul duluan sebelum ada barang
                                 // utama di baris ini -- tidak ada aset induk
-                                // buat dijadiin acuan status, jadi dilewati
-                                // (dicatat sebagai warning, bukan bikin Aset
-                                // "Charger" sendiri tanpa status yang jelas).
+                                // buat dijadiin acuan status/aset_id, jadi
+                                // dilewati (dicatat sebagai warning, bukan
+                                // bikin AsetKelengkapan tanpa aset induk).
                                 $this->errors[] = 'Baris data ke-' . ($index + 1) . ': barang aksesoris "' . $namaBarangTrim . '" (Nama Barang ' . $n . ') dilewati karena belum ada barang utama di baris yang sama untuk dijadikan acuan status.';
                             }
                             continue;
                         }
 
-                        $jenis = JenisAset::firstOrCreate(
-                            ['nama' => $namaBarangTrim]
-                        );
-
+                        // Jenis Aset sudah dihapus -- nama barang ("Laptop",
+                        // "Modem Telkomsel", dst) sekarang disimpan ke
+                        // `merek`, biar trigger kode_aset (yang ambil kata
+                        // pertama dari merek) tetap dapet bahan generate.
                         $hasilParse = $this->parseKeterangan($keteranganAsli);
 
                         $aset = Aset::create(array_merge($infoBukti, [
-                            'jenis_id'      => $jenis->id,
+                            'merek'         => $namaBarangTrim,
                             'supplier_id'   => $supplierId,
                             'jumlah'        => $row["jumlah_{$n}"] ?? null,
                             'keterangan'    => $keteranganAsli,
@@ -233,9 +230,9 @@ class AsetBuktiImport implements ToCollection
 
                         // Nama kelengkapan yang ke-parse dari teks Keterangan
                         // (mis. "(charger, tas)") -- sama seperti aksesoris di
-                        // kolom Nama Barang N, tiap nama jadi baris Aset-nya
-                        // sendiri (jenis kelengkapan), statusnya ngikutin
-                        // aset utama ini, bukan lagi cuma nempel jadi atribut.
+                        // kolom Nama Barang N, tiap nama jadi baris
+                        // AsetKelengkapan yang nempel ke aset utama ini lewat
+                        // aset_id, status-nya ngikutin aset utama ini.
                         foreach ($hasilParse['kelengkapan'] as $namaKelengkapan) {
                             $asetKelengkapan = $this->buatAsetKelengkapan(
                                 $aset,
@@ -287,36 +284,40 @@ class AsetBuktiImport implements ToCollection
 
     /**
      * Bikin 1 nama barang kelengkapan (mis. "Charger", "Tas") jadi baris
-     * Aset-nya sendiri -- jenis_id-nya nunjuk ke jenis_aset yang dicari/
-     * dibuat dengan kategori 'kelengkapan' (kalau jenis itu udah ada dengan
-     * kategori lain, firstOrCreate cuma pakai yang sudah ada, tidak
-     * menimpa). Info bukti (no_bukti, tanggal, dst) & supplier disamakan
-     * dengan aset induknya lewat $infoBukti/$supplierId yang dioper dari
-     * caller, dan status-nya ikut status aset induk saat baris ini
-     * diproses (bukan status 'tersedia' hardcode).
+     * AsetKelengkapan (tabel aset_kelengkapan) yang nempel ke aset induknya
+     * lewat aset_id -- BUKAN baris Aset sendiri. $keterangan (kalau ada) di-parse ulang lewat
+     * parseKeterangan() buat coba tarik serial_number & warna-nya juga,
+     * sama seperti yang dilakukan buat aset utama. Info bukti (perusahaan,
+     * tanggal) & supplier disamakan dengan aset induknya lewat
+     * $infoBukti/$supplierId yang dioper dari caller, dan status-nya ikut
+     * status aset induk saat baris ini diproses (bukan status 'tersedia'
+     * hardcode).
      */
-    private function buatAsetKelengkapan(Aset $asetInduk, array $infoBukti, ?int $supplierId, string $namaBarang, ?string $keterangan): Aset
+    private function buatAsetKelengkapan(Aset $asetInduk, array $infoBukti, ?int $supplierId, string $namaBarang, ?string $keterangan): AsetKelengkapan
     {
-        $jenis = JenisAset::firstOrCreate(
-            ['nama' => $namaBarang],
-            ['kategori_id' => Kategori::where('kode', 'kelengkapan')->value('id')]
-        );
+        $hasilParse = $this->parseKeterangan($keterangan);
 
-        return Aset::create(array_merge($infoBukti, [
-            'jenis_id'    => $jenis->id,
-            'supplier_id' => $supplierId,
-            'keterangan'  => $keterangan,
-            'status'      => $asetInduk->status,
-        ]));
+        return AsetKelengkapan::create([
+            'aset_id'           => $asetInduk->id,
+            'nama'              => $namaBarang,
+            'warna'             => $hasilParse['warna'],
+            'serial_number'     => $hasilParse['serial_number'],
+            'keterangan'        => $keterangan,
+            'supplier_id'       => $supplierId,
+            'perusahaan'        => $infoBukti['perusahaan'] ?? null,
+            'tanggal_pembelian' => $infoBukti['tanggal'] ?? null,
+            'status'            => $asetInduk->status,
+        ]);
     }
 
     /**
-     * Buat 1 baris aset_pemakai buat 1 Aset (aset utama ATAUPUN aset
-     * kelengkapan -- keduanya sama-sama baris `aset` biasa sekarang, jadi
-     * logic-nya identik, cukup dipanggil ulang tiap kali ada penerima).
-     * Sama seperti AsetPemakaiController::store() -- setiap AsetPemakai
-     * WAJIB punya no_struk_penerimaan sendiri (unik per baris, di-generate
-     * ulang tiap panggilan), karena kembalikan() nanti mencocokkan input
+     * Buat 1 baris aset_pemakai buat 1 barang (Aset utama ATAUPUN
+     * AsetKelengkapan). Tabel aset_pemakai punya kolom aset_id DAN
+     * aset_kelengkapan_id -- cuma salah satunya yang diisi tergantung tipe
+     * $item, yang lain dibiarkan null. Sama seperti
+     * AsetPemakaiController::store() -- setiap AsetPemakai WAJIB punya
+     * no_struk_penerimaan sendiri (unik per baris, di-generate ulang tiap
+     * panggilan), karena kembalikan() nanti mencocokkan input
      * no_struk_penerimaan persis dengan kolom ini. Tanpa di-generate di
      * sini, data hasil import punya no_struk_penerimaan = null, dan aset
      * itu jadi TIDAK BISA PERNAH dikembalikan lewat endpoint kembalikan()
@@ -329,12 +330,13 @@ class AsetBuktiImport implements ToCollection
      * riwayat()) supaya pengurutan waktu di Riwayat Aset tetap benar
      * sesuai tanggal transaksi asli, bukan tanggal import dijalankan.
      */
-    private function buatAsetPemakai(Aset $aset, Pekerja $pekerjaPenerima, ?string $tanggalPenerimaan): void
+    private function buatAsetPemakai(Aset|AsetKelengkapan $item, Pekerja $pekerjaPenerima, ?string $tanggalPenerimaan): void
     {
         $noStruk = $this->generateNoStruk('STJ', 'aset_pemakai', 'no_struk_penerimaan');
 
         AsetPemakai::create([
-            'aset_id'             => $aset->id,
+            'aset_id'             => $item instanceof Aset ? $item->id : null,
+            'aset_kelengkapan_id' => $item instanceof AsetKelengkapan ? $item->id : null,
             'pekerja_id'          => $pekerjaPenerima->id,
             'user_id'             => $pekerjaPenerima->user_id,
             'status'              => 'disetujui',
