@@ -15,8 +15,6 @@ class AsetController extends Controller
 {
     /**
      * GET /api/aset
-     * GET /api/aset?kategori=aset_utama   -- tab "Aset Utama" di Inventaris
-     * GET /api/aset?kategori=kelengkapan  -- tab "Kelengkapan" di Inventaris
      * Admin: daftar SEMUA aset (perilaku lama, gak berubah).
      * Non-admin (karyawan/cabang/manajer/hr): dibatasi cuma aset yang
      * statusnya 'tersedia' (biar tau apa yang bisa dipinjam) PLUS aset yang
@@ -26,8 +24,6 @@ class AsetController extends Controller
      * yang lagi dipegang/riwayatnya cuma nempel ke orang lain TIDAK ikut
      * dikirim ke non-admin sama sekali, jadi bukan cuma disembunyiin di
      * tampilan React -- datanya memang gak nyampe ke browser mereka.
-     * Filter ?kategori= dijalankan lewat whereHas('jenis', ...) -- kategori
-     * kelengkapan/aset_utama itu atribut jenis_aset, bukan kolom di aset.
      */
     public function index(Request $request)
     {
@@ -36,7 +32,6 @@ class AsetController extends Controller
         $pekerjaId = $user?->pekerja?->id;
 
         $query = Aset::with([
-            'jenis',
             'departemen',
             'supplier',
             'pemakaiSaatIni.pekerja.user',
@@ -46,13 +41,6 @@ class AsetController extends Controller
             'penangananAktif',
             'writeoff.penyetuju:id,name',
         ])->latest();
-
-        if ($request->filled('kategori')) {
-            $kategori = (string) $request->string('kategori');
-            $query->whereHas('jenis', function ($q) use ($kategori) {
-                $q->kategoriKode($kategori);
-            });
-        }
 
         if (!$isAdmin) {
             $query->where(function ($q) use ($user, $pekerjaId) {
@@ -97,7 +85,6 @@ class AsetController extends Controller
         }
 
         $aset->load([
-            'jenis',
             'departemen',
             'supplier',
             'pemakaiSaatIni.pekerja.user',
@@ -109,7 +96,6 @@ class AsetController extends Controller
             'penanganan',
             'penangananAktif',
             'writeoff.penyetuju:id,name',
-            'asetKelengkapan.supplier',
         ]);
 
         return response()->json($aset);
@@ -117,12 +103,12 @@ class AsetController extends Controller
 
     /**
      * POST /api/aset
-     * kode_aset digenerate otomatis lewat trigger DB, gak perlu (& gak boleh) dikirim dari frontend.
-     * Kelengkapan (Tas, Charger, dst) BUKAN lagi sub-item di form ini --
-     * kelengkapan sekarang dibuat sebagai baris Aset-nya sendiri (jenis_id
-     * mengarah ke jenis_aset berkategori 'kelengkapan'), lalu dikaitkan ke
-     * pemakai lewat aset_pemakai yang sama seperti aset utama, biasanya di
-     * form peminjaman (pinjam laptop + tas + charger sekaligus).
+     * kode_aset digenerate otomatis lewat trigger DB (dari kata pertama
+     * `merek`), gak perlu (& gak boleh) dikirim dari frontend.
+     * Kelengkapan (Tas, Charger, dst) BUKAN sub-item di form ini -- itu
+     * dikelola lewat tabel aset_kelengkapan yang nempel ke aset induknya
+     * (lihat AsetKelengkapanController), lalu dikaitkan ke pemakai lewat
+     * aset_pemakai.aset_kelengkapan_id, biasanya di form peminjaman.
      */
     public function store(Request $request)
     {
@@ -137,7 +123,7 @@ class AsetController extends Controller
         });
 
         return response()->json(
-            $aset->load('jenis', 'departemen', 'supplier'),
+            $aset->load('departemen', 'supplier'),
             201
         );
     }
@@ -162,7 +148,7 @@ class AsetController extends Controller
         });
 
         return response()->json(
-            $aset->fresh()->load('jenis', 'departemen', 'supplier')
+            $aset->fresh()->load('departemen', 'supplier')
         );
     }
 
@@ -207,7 +193,6 @@ class AsetController extends Controller
     protected function validasi(Request $request, ?Aset $aset = null): array
     {
         return $request->validate([
-            'jenis_id' => 'nullable|exists:jenis_aset,id',
             'departemen_id' => 'nullable|exists:departemen,id',
             'merek' => 'nullable|string|max:255',
             'tipe' => 'nullable|string|max:255',
@@ -278,7 +263,6 @@ class AsetController extends Controller
         });
 
         return response()->json($aset->fresh()->load([
-            'jenis',
             'departemen',
             'supplier',
             'pemakaiSaatIni',

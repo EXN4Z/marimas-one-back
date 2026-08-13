@@ -7,7 +7,6 @@ use App\Models\Aset;
 use App\Models\AsetKelengkapan;
 use App\Models\AsetPemakai;
 use App\Models\Departemen;
-use App\Models\JenisAset;
 use App\Models\Pekerja;
 use App\Models\Supplier;
 use App\Models\User;
@@ -38,16 +37,15 @@ class AsetBuktiImport implements ToCollection
 
     /**
      * Kata kunci buat mendeteksi "Nama Barang N" yang sebenarnya bukan
-     * barang utama (jenis aset), tapi AKSESORIS dari barang utama di baris
-     * yang sama -- misalnya di 1 baris bukti ada "Nama Barang 1: Laptop",
-     * "Nama Barang 2: Charger", "Nama Barang 3: Tas". Laptop tetap jadi
-     * baris Aset baru seperti biasa (dengan jenis_id-nya sendiri, kategori
-     * jenis 'aset_utama'). Charger & Tas SEKARANG dibikinkan baris
-     * AsetKelengkapan (tabel aset_kelengkapan) yang nempel ke Laptop lewat
-     * aset_id -- bukan lagi baris Aset sendiri. Kode unik, S/N kalau ada,
-     * dan status-nya ngikutin barang utama TERAKHIR yang sudah diproses di
-     * baris yang sama (lihat cocokAksesoris() & buatAsetKelengkapan() di
-     * bawah).
+     * barang utama, tapi AKSESORIS dari barang utama di baris yang sama --
+     * misalnya di 1 baris bukti ada "Nama Barang 1: Laptop", "Nama Barang
+     * 2: Charger", "Nama Barang 3: Tas". Laptop tetap jadi baris Aset baru
+     * seperti biasa (merek diisi dari nama barang ini). Charger & Tas
+     * dibikinkan baris AsetKelengkapan (tabel aset_kelengkapan) yang
+     * nempel ke Laptop lewat aset_id -- bukan lagi baris Aset sendiri.
+     * Kode unik, S/N kalau ada, dan status-nya ngikutin barang utama
+     * TERAKHIR yang sudah diproses di baris yang sama (lihat
+     * cocokAksesoris() & buatAsetKelengkapan() di bawah).
      *
      * Dicocokkan pakai WORD-BOUNDARY, case-insensitive (lihat
      * cocokAksesoris()) -- BUKAN substring polos. Kata kunci pendek
@@ -208,14 +206,14 @@ class AsetBuktiImport implements ToCollection
                             continue;
                         }
 
-                        $jenis = JenisAset::firstOrCreate(
-                            ['nama' => $namaBarangTrim]
-                        );
-
+                        // Jenis Aset sudah dihapus -- nama barang ("Laptop",
+                        // "Modem Telkomsel", dst) sekarang disimpan ke
+                        // `merek`, biar trigger kode_aset (yang ambil kata
+                        // pertama dari merek) tetap dapet bahan generate.
                         $hasilParse = $this->parseKeterangan($keteranganAsli);
 
                         $aset = Aset::create(array_merge($infoBukti, [
-                            'jenis_id'      => $jenis->id,
+                            'merek'         => $namaBarangTrim,
                             'supplier_id'   => $supplierId,
                             'jumlah'        => $row["jumlah_{$n}"] ?? null,
                             'keterangan'    => $keteranganAsli,
@@ -287,8 +285,7 @@ class AsetBuktiImport implements ToCollection
     /**
      * Bikin 1 nama barang kelengkapan (mis. "Charger", "Tas") jadi baris
      * AsetKelengkapan (tabel aset_kelengkapan) yang nempel ke aset induknya
-     * lewat aset_id -- BUKAN lagi baris Aset sendiri dengan jenis_id
-     * kategori 'kelengkapan'. $keterangan (kalau ada) di-parse ulang lewat
+     * lewat aset_id -- BUKAN baris Aset sendiri. $keterangan (kalau ada) di-parse ulang lewat
      * parseKeterangan() buat coba tarik serial_number & warna-nya juga,
      * sama seperti yang dilakukan buat aset utama. Info bukti (perusahaan,
      * tanggal) & supplier disamakan dengan aset induknya lewat

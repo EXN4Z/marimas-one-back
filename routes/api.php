@@ -12,7 +12,6 @@ use Illuminate\Support\Facades\Broadcast;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Karyawan\AdminUserController;
 use App\Http\Controllers\Inventaris\SupplierController;
-use App\Http\Controllers\Inventaris\JenisAsetController;
 use App\Http\Controllers\Inventaris\AsetController;
 use App\Http\Controllers\Inventaris\AsetPemakaiController;
 use App\Http\Controllers\Inventaris\AsetPenangananController;
@@ -108,7 +107,6 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
     Route::get('/aset', [AsetController::class, 'index']);
     Route::get('/aset/{aset}', [AsetController::class, 'show']);
-    Route::get('/jenis-aset', [JenisAsetController::class, 'index']);
     Route::get('/supplier', [SupplierController::class, 'index']);
 
     // admin: riwayat GLOBAL semua aset. karyawan/manajer/hr: riwayat
@@ -142,7 +140,6 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::delete('/aset-pemakai/{asetPemakai}', [AsetPemakaiController::class, 'destroy']);
     Route::post('/aset/{aset}/jual', [AsetController::class, 'jual']);
 
-    Route::apiResource('jenis-aset', JenisAsetController::class)->except(['index', 'show']);
     Route::apiResource('supplier', SupplierController::class)->except(['index', 'show']);
 });
 Route::get('/debug-webpush-test', function () {
