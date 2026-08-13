@@ -9,6 +9,7 @@ class AsetKelengkapan extends Model
     protected $table = 'aset_kelengkapan';
 
     protected $fillable = [
+        'aset_id',
         'nama',
         'merek',
         'tipe',
@@ -28,6 +29,12 @@ class AsetKelengkapan extends Model
     public function supplier()
     {
         return $this->belongsTo(Supplier::class, 'supplier_id');
+    }
+
+    // aset induk tempat kelengkapan ini menempel (mis. mouse punya laptop tertentu)
+    public function aset()
+    {
+        return $this->belongsTo(Aset::class, 'aset_id');
     }
 
     public function pemakai()

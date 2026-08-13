@@ -89,4 +89,10 @@ class Aset extends Model
     {
         return $this->belongsTo(Departemen::class, 'departemen_id');
     }
+
+    // daftar kelengkapan (aksesoris) yang nempel di aset ini
+    public function kelengkapan()
+    {
+        return $this->hasMany(AsetKelengkapan::class, 'aset_id');
+    }
 }
