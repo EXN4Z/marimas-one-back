@@ -96,6 +96,7 @@ class AsetController extends Controller
             'penanganan',
             'penangananAktif',
             'writeoff.penyetuju:id,name',
+            'asetKelengkapan.supplier',
         ]);
 
         return response()->json($aset);

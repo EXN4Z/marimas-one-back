@@ -366,13 +366,20 @@ class AsetPemakaiController extends Controller
 
     /**
      * POST /aset-kelengkapan/{asetKelengkapan}/pemakai
-     * Sama persis kayak store(), tapi buat aset_kelengkapan (tas, charger,
-     * dst). Baris aset_pemakai yang dihasilkan mengisi kolom
-     * aset_kelengkapan_id, BUKAN aset_id.
+     * DIHAPUS DARI ALUR NORMAL: kelengkapan (tas, charger, dst) TIDAK BISA
+     * dipinjamkan sendiri/berdiri sendiri lagi -- dia wajib nempel & ikut
+     * status aset induknya. Begitu aset induk dipinjamkan lewat store(),
+     * semua kelengkapan induk itu yang lagi 'tersedia' otomatis ikut
+     * dipinjamkan bareng (lihat serahkanItem()) dan otomatis ikut kembali
+     * pas induknya dikembalikan (lihat kembalikan()). Endpoint ini
+     * dipertahankan (bukan dihapus routenya) supaya kalau ada pemanggil
+     * lama nggak 500, tapi sengaja selalu ditolak di sini.
      */
     public function storeKelengkapan(Request $request, AsetKelengkapan $asetKelengkapan)
     {
-        return $this->serahkanItem($request, 'aset_kelengkapan_id', $asetKelengkapan, $asetKelengkapan->status);
+        return response()->json([
+            'message' => 'Kelengkapan tidak bisa dipinjamkan sendiri. Pinjamkan aset utamanya -- kelengkapan yang tersedia akan otomatis ikut dipinjamkan.',
+        ], 422);
     }
 
     /**
@@ -430,6 +437,38 @@ class AsetPemakaiController extends Controller
             ]);
 
             $item->update(['status' => 'dipakai']);
+
+            // Kelengkapan wajib ikut aset induknya -- begitu aset utama
+            // dipinjamkan, semua kelengkapan miliknya yang masih 'tersedia'
+            // otomatis ikut dipinjamkan ke pemakai yang sama, pakai foto
+            // bukti & tanggal serah-terima yang sama juga (satu kejadian
+            // serah-terima fisik, bukan kejadian terpisah-pisah). Kelengkapan
+            // TIDAK bisa dipinjam lewat jalur lain lagi (lihat
+            // storeKelengkapan()), jadi ini satu-satunya cara kelengkapan
+            // pindah status ke 'dipakai'.
+            if ($kolomId === 'aset_id') {
+                $item->asetKelengkapan()
+                    ->where('status', 'tersedia')
+                    ->get()
+                    ->each(function ($kelengkapan) use ($validated, $fotoPaths, $request) {
+                        $noStrukKelengkapan = $this->generateNoStruk('STJ', 'aset_pemakai', 'no_struk_penerimaan');
+
+                        AsetPemakai::create([
+                            'aset_kelengkapan_id' => $kelengkapan->id,
+                            'pekerja_id' => $validated['pekerja_id'] ?? null,
+                            'user_id' => $validated['user_id'] ?? null,
+                            'status' => 'disetujui',
+                            'requested_by_user_id' => $request->user()?->id,
+                            'no_struk_penerimaan' => $noStrukKelengkapan,
+                            'tanggal_penerimaan' => $validated['tanggal_penerimaan'],
+                            'diterima_at' => now(),
+                            'catatan_penerimaan' => 'Dipinjamkan otomatis -- mengikuti aset induk.',
+                            'foto_penerimaan' => $fotoPaths,
+                        ]);
+
+                        $kelengkapan->update(['status' => 'dipakai']);
+                    });
+            }
 
             return $pemakai;
         });
@@ -530,6 +569,34 @@ class AsetPemakaiController extends Controller
                 $asetPemakai->aset()
                     ->where('status', '!=', 'rusak_berat')
                     ->update(['status' => 'tersedia']);
+
+                // Kelengkapan ikut aset induknya juga pas dikembalikan --
+                // semua kelengkapan aset ini yang masih aktif dipinjam
+                // (disetujui, belum ada tanggal_pengembalian) ditutup
+                // bareng, pakai foto & tanggal pengembalian yang sama
+                // dengan induknya (satu kejadian serah-terima fisik).
+                $noStrukIndukKembali = $asetPemakai->no_struk_pengembalian;
+                AsetPemakai::where('aset_kelengkapan_id', function ($q) use ($asetPemakai) {
+                    $q->select('id')
+                        ->from('aset_kelengkapan')
+                        ->where('aset_id', $asetPemakai->aset_id);
+                })
+                    ->where('status', 'disetujui')
+                    ->whereNull('tanggal_pengembalian')
+                    ->get()
+                    ->each(function ($kelengkapanPemakai) use ($validated, $fotoPaths, $noStrukIndukKembali) {
+                        $noStrukKelengkapan = $this->generateNoStruk('KBL', 'aset_pemakai', 'no_struk_pengembalian');
+
+                        $kelengkapanPemakai->update([
+                            'no_struk_pengembalian' => $noStrukKelengkapan,
+                            'tanggal_pengembalian' => $validated['tanggal_pengembalian'],
+                            'dikembalikan_at' => now(),
+                            'catatan_pengembalian' => 'Dikembalikan otomatis -- mengikuti aset induk (' . $noStrukIndukKembali . ').',
+                            'foto_pengembalian' => $fotoPaths,
+                        ]);
+
+                        $kelengkapanPemakai->asetKelengkapan()->update(['status' => 'tersedia']);
+                    });
             }
         });
 
@@ -566,6 +633,28 @@ class AsetPemakaiController extends Controller
                     $asetPemakai->aset()
                         ->where('status', '!=', 'rusak_berat')
                         ->update(['status' => 'tersedia']);
+
+                    // Sama seperti kembalikan(): entri kelengkapan yang masih
+                    // aktif ikut aset ini juga ikut dilepas & ditutup statusnya
+                    // (bukan dihapus, biar riwayatnya tetap ada), biar gak
+                    // nyangkut "dipakai" padahal riwayat pinjam aset induknya
+                    // udah dihapus.
+                    AsetPemakai::where('aset_kelengkapan_id', function ($q) use ($asetPemakai) {
+                        $q->select('id')
+                            ->from('aset_kelengkapan')
+                            ->where('aset_id', $asetPemakai->aset_id);
+                    })
+                        ->where('status', 'disetujui')
+                        ->whereNull('tanggal_pengembalian')
+                        ->get()
+                        ->each(function ($kelengkapanPemakai) {
+                            $kelengkapanPemakai->update([
+                                'tanggal_pengembalian' => now()->toDateString(),
+                                'dikembalikan_at' => now(),
+                                'catatan_pengembalian' => 'Dikembalikan otomatis -- riwayat pinjam aset induk dihapus.',
+                            ]);
+                            $kelengkapanPemakai->asetKelengkapan()->update(['status' => 'tersedia']);
+                        });
                 }
             }
             $asetPemakai->delete();
