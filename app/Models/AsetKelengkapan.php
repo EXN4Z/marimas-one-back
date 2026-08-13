@@ -9,6 +9,7 @@ class AsetKelengkapan extends Model
     protected $table = 'aset_kelengkapan';
 
     protected $fillable = [
+        'aset_id',
         'nama',
         'merek',
         'tipe',
@@ -48,5 +49,8 @@ class AsetKelengkapan extends Model
         return $this->hasMany(AsetPemakai::class, 'aset_kelengkapan_id')
             ->where('status', 'pending')
             ->latest();
+    }
+    public function aset() {
+        return $this->belongsTo(Aset::class, 'aset_id');
     }
 }

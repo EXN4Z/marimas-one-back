@@ -24,6 +24,7 @@ class AsetKelengkapanController extends Controller
         $pekerjaId = $user?->pekerja?->id;
 
         $query = AsetKelengkapan::with([
+            'aset',
             'supplier',
             'pemakaiSaatIni.pekerja.user',
             'pemakaiSaatIni.user',
@@ -69,6 +70,7 @@ class AsetKelengkapanController extends Controller
         }
 
         $asetKelengkapan->load([
+            'aset',
             'supplier',
             'pemakaiSaatIni.pekerja.user',
             'pemakaiSaatIni.user',
@@ -154,6 +156,7 @@ class AsetKelengkapanController extends Controller
         ]);
 
         return $request->validate([
+            'aset_id' => 'required|exists:aset,id',
             'nama' => 'nullable',
             'merek' => 'nullable|string|max:255',
             'tipe' => 'nullable|string|max:255',
