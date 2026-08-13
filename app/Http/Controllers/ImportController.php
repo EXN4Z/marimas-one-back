@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Imports\AsetBuktiImport;
+use App\Imports\AsetBuktiRapiImport;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\DB;
@@ -58,7 +59,7 @@ class ImportController extends Controller
 
         DB::beginTransaction();
         try {
-            $import = new AsetBuktiImport();
+            $import = new AsetBuktiRapiImport();
             Excel::import($import, $request->file('file'));
 
             if (count($import->getErrors()) > 0) {
