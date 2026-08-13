@@ -31,6 +31,12 @@ class AsetKelengkapan extends Model
         return $this->belongsTo(Supplier::class, 'supplier_id');
     }
 
+    // aset induk tempat kelengkapan ini menempel (mis. mouse punya laptop tertentu)
+    public function aset()
+    {
+        return $this->belongsTo(Aset::class, 'aset_id');
+    }
+
     public function pemakai()
     {
         return $this->hasMany(AsetPemakai::class, 'aset_kelengkapan_id')->latest('tanggal_penerimaan');
@@ -49,8 +55,5 @@ class AsetKelengkapan extends Model
         return $this->hasMany(AsetPemakai::class, 'aset_kelengkapan_id')
             ->where('status', 'pending')
             ->latest();
-    }
-    public function aset() {
-        return $this->belongsTo(Aset::class, 'aset_id');
     }
 }

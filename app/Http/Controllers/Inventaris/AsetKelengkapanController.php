@@ -100,7 +100,7 @@ class AsetKelengkapanController extends Controller
         });
 
         return response()->json(
-            $asetKelengkapan->load('supplier'),
+            $asetKelengkapan->load(['aset', 'supplier']),
             201
         );
     }
@@ -124,7 +124,7 @@ class AsetKelengkapanController extends Controller
         });
 
         return response()->json(
-            $asetKelengkapan->fresh()->load('supplier')
+            $asetKelengkapan->fresh()->load(['aset', 'supplier'])
         );
     }
 
