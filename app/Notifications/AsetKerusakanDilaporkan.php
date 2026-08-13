@@ -28,9 +28,7 @@ class AsetKerusakanDilaporkan extends Notification
 
     protected function namaPelapor(): string
     {
-        return $this->penanganan->pemakai?->pekerja?->user?->name
-            ?? $this->penanganan->pemakai?->pekerja?->nama
-            ?? 'Karyawan';
+        return $this->penanganan->pemakai?->user?->name ?? 'Karyawan';
     }
 
     protected function namaAset(): string

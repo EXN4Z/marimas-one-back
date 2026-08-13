@@ -19,37 +19,31 @@ class AsetController extends Controller
      * Non-admin (karyawan/cabang/manajer/hr): dibatasi cuma aset yang
      * statusnya 'tersedia' (biar tau apa yang bisa dipinjam) PLUS aset yang
      * pernah/sedang ada hubungan pemakaian sama akun dia sendiri (lewat
-     * user_id atau pekerja_id di tabel aset_pemakai) -- sama persis pola
-     * kepemilikan yang dipakai di AsetPemakaiController::riwayat(). Aset
-     * yang lagi dipegang/riwayatnya cuma nempel ke orang lain TIDAK ikut
-     * dikirim ke non-admin sama sekali, jadi bukan cuma disembunyiin di
-     * tampilan React -- datanya memang gak nyampe ke browser mereka.
+     * user_id di tabel aset_pemakai) -- sama persis pola kepemilikan yang
+     * dipakai di AsetPemakaiController::riwayat(). Aset yang lagi
+     * dipegang/riwayatnya cuma nempel ke orang lain TIDAK ikut dikirim ke
+     * non-admin sama sekali, jadi bukan cuma disembunyiin di tampilan
+     * React -- datanya memang gak nyampe ke browser mereka.
      */
     public function index(Request $request)
     {
         $user = $request->user();
         $isAdmin = $user?->role === 'admin';
-        $pekerjaId = $user?->pekerja?->id;
 
         $query = Aset::with([
             'departemen',
             'supplier',
-            'pemakaiSaatIni.pekerja.user',
-            'pemakaiSaatIni.user',
-            'pemakaiPending.pekerja.user',
-            'pemakaiPending.user',
+            'pemakaiSaatIni.user.departemen',
+            'pemakaiPending.user.departemen',
             'penangananAktif',
             'writeoff.penyetuju:id,name',
         ])->latest();
 
         if (!$isAdmin) {
-            $query->where(function ($q) use ($user, $pekerjaId) {
+            $query->where(function ($q) use ($user) {
                 $q->where('status', 'tersedia')
-                    ->orWhereHas('pemakai', function ($sub) use ($user, $pekerjaId) {
+                    ->orWhereHas('pemakai', function ($sub) use ($user) {
                         $sub->where('user_id', $user->id);
-                        if ($pekerjaId) {
-                            $sub->orWhere('pekerja_id', $pekerjaId);
-                        }
                     });
             });
         }
@@ -71,14 +65,8 @@ class AsetController extends Controller
         $isAdmin = $user?->role === 'admin';
 
         if (!$isAdmin) {
-            $pekerjaId = $user?->pekerja?->id;
             $terkaitUser = $aset->pemakai()
-                ->where(function ($q) use ($user, $pekerjaId) {
-                    $q->where('user_id', $user->id);
-                    if ($pekerjaId) {
-                        $q->orWhere('pekerja_id', $pekerjaId);
-                    }
-                })
+                ->where('user_id', $user->id)
                 ->exists();
 
             abort_unless($aset->status === 'tersedia' || $terkaitUser, 403, 'Kamu tidak punya akses untuk melihat detail aset ini.');
@@ -87,12 +75,9 @@ class AsetController extends Controller
         $aset->load([
             'departemen',
             'supplier',
-            'pemakaiSaatIni.pekerja.user',
-            'pemakaiSaatIni.user',
-            'pemakaiPending.pekerja.user',
-            'pemakaiPending.user',
-            'pemakai.pekerja.user',
-            'pemakai.user',
+            'pemakaiSaatIni.user.departemen',
+            'pemakaiPending.user.departemen',
+            'pemakai.user.departemen',
             'penanganan',
             'penangananAktif',
             'writeoff.penyetuju:id,name',

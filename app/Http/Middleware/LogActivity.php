@@ -120,19 +120,13 @@ class LogActivity
         return null;
     }
 
-    // Nama pekerja/akun cabang penerima aset pas serah-terima. Request body
-    // cuma kirim id (pekerja_id / user_id), jadi perlu 1 query kecil buat
-    // ambil namanya -- aman karena cuma jalan di request POST serah-terima,
+    // Nama karyawan/akun cabang penerima aset pas serah-terima. Request body
+    // sekarang cuma kirim user_id (pekerja_id sudah dihapus total dari
+    // AsetPemakaiController & frontend), jadi cukup 1 query kecil ambil
+    // namanya -- aman karena cuma jalan di request POST serah-terima,
     // bukan tiap request.
     protected function namaPenerima(Request $request): string
     {
-        if ($pekerjaId = $request->input('pekerja_id')) {
-            $nama = \App\Models\Pekerja::with('user:id,name')->find($pekerjaId)?->user?->name;
-            if ($nama) {
-                return $nama;
-            }
-        }
-
         if ($userId = $request->input('user_id')) {
             $nama = \App\Models\User::find($userId)?->name;
             if ($nama) {

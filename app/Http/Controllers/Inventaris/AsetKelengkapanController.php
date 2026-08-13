@@ -21,25 +21,19 @@ class AsetKelengkapanController extends Controller
     {
         $user = $request->user();
         $isAdmin = $user?->role === 'admin';
-        $pekerjaId = $user?->pekerja?->id;
 
         $query = AsetKelengkapan::with([
             'aset',
             'supplier',
-            'pemakaiSaatIni.pekerja.user',
             'pemakaiSaatIni.user',
-            'pemakaiPending.pekerja.user',
             'pemakaiPending.user',
         ])->latest();
 
         if (!$isAdmin) {
-            $query->where(function ($q) use ($user, $pekerjaId) {
+            $query->where(function ($q) use ($user) {
                 $q->where('status', 'tersedia')
-                    ->orWhereHas('pemakai', function ($sub) use ($user, $pekerjaId) {
+                    ->orWhereHas('pemakai', function ($sub) use ($user) {
                         $sub->where('user_id', $user->id);
-                        if ($pekerjaId) {
-                            $sub->orWhere('pekerja_id', $pekerjaId);
-                        }
                     });
             });
         }
@@ -56,14 +50,8 @@ class AsetKelengkapanController extends Controller
         $isAdmin = $user?->role === 'admin';
 
         if (!$isAdmin) {
-            $pekerjaId = $user?->pekerja?->id;
             $terkaitUser = $asetKelengkapan->pemakai()
-                ->where(function ($q) use ($user, $pekerjaId) {
-                    $q->where('user_id', $user->id);
-                    if ($pekerjaId) {
-                        $q->orWhere('pekerja_id', $pekerjaId);
-                    }
-                })
+                ->where('user_id', $user->id)
                 ->exists();
 
             abort_unless($asetKelengkapan->status === 'tersedia' || $terkaitUser, 403, 'Kamu tidak punya akses untuk melihat detail kelengkapan ini.');
@@ -72,11 +60,8 @@ class AsetKelengkapanController extends Controller
         $asetKelengkapan->load([
             'aset',
             'supplier',
-            'pemakaiSaatIni.pekerja.user',
             'pemakaiSaatIni.user',
-            'pemakaiPending.pekerja.user',
             'pemakaiPending.user',
-            'pemakai.pekerja.user',
             'pemakai.user',
         ]);
 

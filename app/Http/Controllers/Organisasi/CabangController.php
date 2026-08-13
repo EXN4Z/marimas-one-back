@@ -12,7 +12,11 @@ class CabangController extends Controller
     // GET /api/cabang — daftar cabang + jumlah pegawai masing-masing
     public function index()
     {
-        $cabang = LokasiKantor::withCount('pekerja')
+        // BARU: withCount('karyawan') -- relasi baru yang udah filter
+        // role != 'cabang' (lihat LokasiKantor::karyawan()), biar akun
+        // cabang gak ikut kehitung sebagai pegawainya sendiri. Alias tetap
+        // 'pekerja_count' biar frontend (CabangPage.tsx) gak perlu diubah.
+        $cabang = LokasiKantor::withCount(['karyawan as pekerja_count'])
             ->orderBy('nama')
             ->get();
 
@@ -22,7 +26,7 @@ class CabangController extends Controller
     // GET /api/cabang/{id}
     public function show($id)
     {
-        $cabang = LokasiKantor::withCount('pekerja')->findOrFail($id);
+        $cabang = LokasiKantor::withCount(['karyawan as pekerja_count'])->findOrFail($id);
 
         return response()->json($cabang);
     }
@@ -40,7 +44,7 @@ class CabangController extends Controller
         ]);
 
         $cabang = LokasiKantor::create($validated);
-        $cabang->loadCount('pekerja');
+        $cabang->loadCount(['karyawan as pekerja_count']);
 
         return response()->json($cabang, 201);
     }
@@ -58,7 +62,7 @@ class CabangController extends Controller
         ]);
 
         $cabang->update($validated);
-        $cabang->loadCount('pekerja');
+        $cabang->loadCount(['karyawan as pekerja_count']);
 
         return response()->json($cabang);
     }
@@ -66,7 +70,7 @@ class CabangController extends Controller
     // DELETE /api/cabang/{id}
     public function destroy($id)
     {
-        $cabang = LokasiKantor::withCount('pekerja')->findOrFail($id);
+        $cabang = LokasiKantor::withCount(['karyawan as pekerja_count'])->findOrFail($id);
 
         if ($cabang->pekerja_count > 0) {
             return response()->json([

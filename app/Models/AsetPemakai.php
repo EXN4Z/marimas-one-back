@@ -10,7 +10,6 @@ class AsetPemakai extends Model
 
     protected $fillable = [
         'aset_id',
-        'pekerja_id',
         'user_id',
         'status',
         'requested_by_user_id',
@@ -46,11 +45,6 @@ class AsetPemakai extends Model
     public function aset()
     {
         return $this->belongsTo(Aset::class, 'aset_id');
-    }
-    
-    public function pekerja()
-    {
-        return $this->belongsTo(Pekerja::class, 'pekerja_id');
     }
     
     public function requestedBy()

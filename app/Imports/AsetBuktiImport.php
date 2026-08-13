@@ -7,7 +7,6 @@ use App\Models\Aset;
 use App\Models\AsetKelengkapan;
 use App\Models\AsetPemakai;
 use App\Models\Departemen;
-use App\Models\Pekerja;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Support\Str;
@@ -131,22 +130,23 @@ class AsetBuktiImport implements ToCollection
 
                     $namaPenerima = trim((string) ($row['penerima'] ?? ''));
                     $nikPenerima = trim((string) ($row['nik'] ?? ''));
-                    $pekerjaPenerima = null;
+                    $penerimaUser = null;
 
                     if ($namaPenerima !== '') {
                         if ($nikPenerima !== '') {
-                            $pekerjaPenerima = Pekerja::where('nik', $nikPenerima)->first();
+                            $penerimaUser = User::where('nik', $nikPenerima)->first();
 
-                            if (!$pekerjaPenerima) {
-                                $userPenerima = User::create([
-                                    'name'     => $namaPenerima,
-                                    'email'    => 'nik' . $nikPenerima . '@placeholder.local',
-                                    'password' => Str::random(32),
-                                    'role'     => 'karyawan',
-                                ]);
-
-                                $pekerjaPenerima = Pekerja::create([
-                                    'user_id'       => $userPenerima->id,
+                            if (!$penerimaUser) {
+                                // Pekerja::create() dulu bikin row minimal tanpa akun
+                                // login/password. Sekarang pekerja = users, jadi
+                                // User::create() butuh email/password (kolom wajib) --
+                                // diisi dummy unik & random, sama seperti resolusi
+                                // NIK di atas.
+                                $penerimaUser = User::create([
+                                    'name'          => $namaPenerima,
+                                    'email'         => 'nik' . $nikPenerima . '@placeholder.local',
+                                    'password'      => Str::random(32),
+                                    'role'          => 'karyawan',
                                     'nik'           => $nikPenerima,
                                     'departemen_id' => $departemenId,
                                 ]);
@@ -156,7 +156,7 @@ class AsetBuktiImport implements ToCollection
                         }
                     }
 
-                    $statusAset = $pekerjaPenerima ? 'dipakai' : 'tersedia';
+                    $statusAset = $penerimaUser ? 'dipakai' : 'tersedia';
 
                     $adaBarangDiproses = false;
 
@@ -192,8 +192,8 @@ class AsetBuktiImport implements ToCollection
                                     $keteranganAsli
                                 );
 
-                                if ($pekerjaPenerima) {
-                                    $this->buatAsetPemakai($asetKelengkapan, $pekerjaPenerima, $infoBukti['tanggal']);
+                                if ($penerimaUser) {
+                                    $this->buatAsetPemakai($asetKelengkapan, $penerimaUser, $infoBukti['tanggal']);
                                 }
                             } else {
                                 // Aksesoris muncul duluan sebelum ada barang
@@ -224,8 +224,8 @@ class AsetBuktiImport implements ToCollection
 
                         $asetUtamaTerakhir = $aset;
 
-                        if ($pekerjaPenerima) {
-                            $this->buatAsetPemakai($aset, $pekerjaPenerima, $infoBukti['tanggal']);
+                        if ($penerimaUser) {
+                            $this->buatAsetPemakai($aset, $penerimaUser, $infoBukti['tanggal']);
                         }
 
                         // Nama kelengkapan yang ke-parse dari teks Keterangan
@@ -242,8 +242,8 @@ class AsetBuktiImport implements ToCollection
                                 null
                             );
 
-                            if ($pekerjaPenerima) {
-                                $this->buatAsetPemakai($asetKelengkapan, $pekerjaPenerima, $infoBukti['tanggal']);
+                            if ($penerimaUser) {
+                                $this->buatAsetPemakai($asetKelengkapan, $penerimaUser, $infoBukti['tanggal']);
                             }
                         }
                     }
@@ -330,15 +330,14 @@ class AsetBuktiImport implements ToCollection
      * riwayat()) supaya pengurutan waktu di Riwayat Aset tetap benar
      * sesuai tanggal transaksi asli, bukan tanggal import dijalankan.
      */
-    private function buatAsetPemakai(Aset|AsetKelengkapan $item, Pekerja $pekerjaPenerima, ?string $tanggalPenerimaan): void
+    private function buatAsetPemakai(Aset|AsetKelengkapan $item, User $penerimaUser, ?string $tanggalPenerimaan): void
     {
         $noStruk = $this->generateNoStruk('STJ', 'aset_pemakai', 'no_struk_penerimaan');
 
         AsetPemakai::create([
             'aset_id'             => $item instanceof Aset ? $item->id : null,
             'aset_kelengkapan_id' => $item instanceof AsetKelengkapan ? $item->id : null,
-            'pekerja_id'          => $pekerjaPenerima->id,
-            'user_id'             => $pekerjaPenerima->user_id,
+            'user_id'             => $penerimaUser->id,
             'status'              => 'disetujui',
             'no_struk_penerimaan' => $noStruk,
             'tanggal_penerimaan'  => $tanggalPenerimaan,

@@ -10,8 +10,8 @@ class Jabatan extends Model
 
     protected $fillable = ['nama', 'gaji_pokok', 'tunjangan'];
 
-    public function pekerja()
-    {
-        return $this->hasMany(Pekerja::class, 'jabatan_id');
-    }
+    // Relasi ke karyawan (dulu Pekerja) sengaja dihapus total — jabatan
+    // tidak lagi terhubung ke alur karyawan. Model & tabel ini tetap
+    // berdiri sendiri sebagai master data (nama, gaji_pokok, tunjangan)
+    // di halaman Master Data.
 }
