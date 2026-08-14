@@ -4,7 +4,6 @@ use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Karyawan\UserController;
 use App\Http\Controllers\Organisasi\DepartemenController;
-use App\Http\Controllers\Organisasi\JabatanController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\Dashboard\DashboardController;
 use Illuminate\Http\Request;
@@ -90,7 +89,6 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 
 Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
     Route::apiResource('departemen', DepartemenController::class)->except(['show']);
-    Route::apiResource('jabatan', JabatanController::class)->except(['show']);
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
