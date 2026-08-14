@@ -88,6 +88,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 });
 
 Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
+    Route::post('/departemen/import', [DepartemenController::class, 'import']);
     Route::apiResource('departemen', DepartemenController::class)->except(['show']);
 });
 
@@ -98,6 +99,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/aset-penanganan/{asetPenanganan}', [AsetPenangananController::class, 'update']);
     Route::post('/import-aset', [ImportController::class, 'import']);
     Route::post('/import-aset-penanganan', [ImportController::class, 'importAsetPenanganan']); // import bulk laporan penanganan aset (Berhasil Diperbaiki / Rusak Berat)
+    Route::post('/aset-kelengkapan/import', [AsetKelengkapanController::class, 'import']);
     Route::post('/aset-kelengkapan/{asetKelengkapan}/pemakai', [AsetPemakaiController::class, 'storeKelengkapan']);
     Route::apiResource('aset-kelengkapan', AsetKelengkapanController::class)->except(['destroy']);// sesuaikan sama pola route aset utama kamu yang sekarang
     Route::delete('/aset-kelengkapan/{asetKelengkapan}', [AsetKelengkapanController::class, 'destroy']); // pakai POST + _method=PUT biar konsisten sama pola aset/{aset}
@@ -139,6 +141,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::delete('/aset-pemakai/{asetPemakai}', [AsetPemakaiController::class, 'destroy']);
     Route::post('/aset/{aset}/jual', [AsetController::class, 'jual']);
 
+    Route::post('/supplier/import', [SupplierController::class, 'import']);
     Route::apiResource('supplier', SupplierController::class)->except(['index', 'show']);
 });
 Route::get('/debug-webpush-test', function () {
