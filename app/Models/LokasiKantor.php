@@ -16,10 +16,17 @@ class LokasiKantor extends Model
         'link'
     ];
 
-    public function pekerja(): HasMany
+    // BARU (eks-pekerja): karyawan yang kerja di cabang ini — dikecualikan
+    // akun role 'cabang' sendiri, biar cabang gak kehitung sebagai
+    // pegawainya sendiri (penting buat cek "cabang masih ada pegawai?"
+    // sebelum boleh dihapus, lihat CabangController).
+    public function karyawan(): HasMany
     {
-        return $this->hasMany(Pekerja::class, 'lokasi_kantor_id');
+        return $this->hasMany(User::class, 'lokasi_kantor_id')->where('role', '!=', 'cabang');
     }
+
+    // Semua akun yang nunjuk ke lokasi ini, termasuk akun cabang sendiri.
+    // Superset dari karyawan().
     public function users(): HasMany
     {
         return $this->hasMany(User::class, 'lokasi_kantor_id');

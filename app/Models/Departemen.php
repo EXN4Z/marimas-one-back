@@ -10,9 +10,10 @@ class Departemen extends Model
     protected $table = 'departemen';
     protected $fillable = ['nama'];
 
-    public function pekerja()
+    // BARU (eks-pekerja): karyawan sekarang langsung di tabel users.
+    public function karyawan()
     {
-        return $this->hasMany(Pekerja::class, 'departemen_id');
+        return $this->hasMany(User::class, 'departemen_id');
     }
 
     public function aset()

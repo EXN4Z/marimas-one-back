@@ -27,7 +27,7 @@ class AsetPenangananController extends Controller
     // admin only (dicek di route middleware, lihat bawah)
     public function index()
     {
-        $data = AsetPenanganan::with(['aset', 'pemakai.pekerja.user', 'pemakai.user'])
+        $data = AsetPenanganan::with(['aset', 'pemakai.user'])
             ->orderByDesc('tanggal_lapor')
             ->get();
 
@@ -40,7 +40,7 @@ class AsetPenangananController extends Controller
     // array kayak foto_penerimaan/foto_pengembalian di AsetPemakai).
     public function foto(Request $request)
     {
-        $query = AsetPenanganan::with(['aset', 'pemakai.pekerja.user', 'pemakai.user'])
+        $query = AsetPenanganan::with(['aset', 'pemakai.user'])
             ->whereNotNull('foto')
             ->orderByDesc('tanggal_lapor');
 
@@ -97,20 +97,14 @@ class AsetPenangananController extends Controller
             ]);
         }
 
-        // cek user emang lagi pegang aset ini via pemakaian aktif (status disetujui, belum dikembalikan)
-        // PENTING: akun cabang gak punya relasi pekerja (dia nempel langsung
-        // lewat user_id di aset_pemakai, bukan pekerja_id) -- kalau cuma cek
-        // whereHas('pekerja', ...) laporan cabang gak akan pernah ketemu
-        // pemakai-nya, jadinya aset_pemakai_id kesimpen null dan nama
-        // pelapornya ilang di riwayat. Makanya di sini dicek dua-duanya.
-        
+        // cek user emang lagi pegang aset ini via pemakaian aktif (status
+        // disetujui, belum dikembalikan). BARU: aset_pemakai cuma punya satu
+        // kolom identitas pemakai (user_id), berlaku sama buat karyawan
+        // maupun akun cabang -- gak perlu lagi cek dua kolom sekaligus.
         $pemakai = AsetPemakai::where('aset_id', $validated['aset_id'])
             ->where('status', 'disetujui')
             ->whereNull('tanggal_pengembalian')
-            ->where(function ($q) use ($user) {
-                $q->whereHas('pekerja', fn ($qq) => $qq->where('user_id', $user->id))
-                    ->orWhere('user_id', $user->id);
-            })
+            ->where('user_id', $user->id)
             ->first();
 
         $penanganan = DB::transaction(function () use ($validated, $pemakai, $request) {
@@ -140,7 +134,7 @@ class AsetPenangananController extends Controller
         try {
             Notification::send(
                 User::whereIn('role', ['manajer', 'hr', 'admin'])->get(),
-                new AsetKerusakanDilaporkan($penanganan->load(['aset', 'pemakai.pekerja.user', 'pemakai.user']))
+                new AsetKerusakanDilaporkan($penanganan->load(['aset', 'pemakai.user']))
             );
         } catch (\Throwable $e) {
             Log::error('Gagal mengirim notifikasi laporan kerusakan aset', [
@@ -150,7 +144,7 @@ class AsetPenangananController extends Controller
             ]);
         }
 
-        return response()->json($penanganan->load(['aset', 'pemakai.pekerja.user', 'pemakai.user']), 201);
+        return response()->json($penanganan->load(['aset', 'pemakai.user']), 201);
     }
 
     // admin: terima & mulai tangani laporan -> aset jadi "diperbaiki" (sedang diperbaiki)
@@ -169,7 +163,7 @@ class AsetPenangananController extends Controller
             Aset::whereKey($asetPenanganan->aset_id)->update(['status' => 'diperbaiki']);
         });
 
-        return response()->json($asetPenanganan->fresh()->load(['aset', 'pemakai.pekerja.user', 'pemakai.user']));
+        return response()->json($asetPenanganan->fresh()->load(['aset', 'pemakai.user']));
     }
 
     // admin: tandai penanganan selesai + isi hasil/biaya, generate no_struk (dicek di route middleware, lihat bawah)
@@ -280,15 +274,14 @@ class AsetPenangananController extends Controller
         // (baik diperbaiki maupun rusak_berat -- keduanya "selesai ditangani")
         if (($validated['tanggal_selesai'] ?? null) && !$sudahSelesaiSebelumnya) {
             try {
-                // fallback: akun cabang gak punya relasi pekerja (nempel
-                // langsung lewat user_id di aset_pemakai), jadi kalau
-                // pemakai->pekerja->user null, coba pemakai->user
-                $pelapor = $asetPenanganan->pemakai?->pekerja?->user
-                    ?? $asetPenanganan->pemakai?->user;
+                // BARU: aset_pemakai cuma punya satu kolom identitas
+                // pemakai (user_id), berlaku sama buat karyawan maupun
+                // akun cabang -- gak perlu lagi fallback pekerja->user.
+                $pelapor = $asetPenanganan->pemakai?->user;
 
                 if ($pelapor) {
                     $pelapor->notify(new AsetKerusakanSelesai(
-                        $asetPenanganan->load(['aset', 'pemakai.pekerja.user', 'pemakai.user'])
+                        $asetPenanganan->load(['aset', 'pemakai.user'])
                     ));
                 }
             } catch (\Throwable $e) {
@@ -300,7 +293,7 @@ class AsetPenangananController extends Controller
             }
         }
 
-        return response()->json($asetPenanganan->fresh()->load(['aset', 'pemakai.pekerja.user', 'pemakai.user']));
+        return response()->json($asetPenanganan->fresh()->load(['aset', 'pemakai.user']));
     }
 
     public function destroy(AsetPenanganan $asetPenanganan)

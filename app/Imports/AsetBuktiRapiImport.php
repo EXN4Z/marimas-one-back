@@ -6,7 +6,6 @@ use App\Models\Aset;
 use App\Models\AsetKelengkapan;
 use App\Models\AsetPemakai;
 use App\Models\Departemen;
-use App\Models\Pekerja;
 use App\Models\User;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\ToCollection;
@@ -36,12 +35,14 @@ use Illuminate\Support\Facades\Log;
  * -> hasilnya 1 baris Aset (Laptop HP) + 2 baris aset_kelengkapan (Charger
  *    & Tas HP) yang nempel ke Laptop HP dan status-nya ngikutin dia.
  *
- * PENERIMA / PEKERJA / ASET_PEMAKAI: sama seperti AsetBuktiImport -- kolom
- * NIK & Penerima dipakai cari/bikin Pekerja (NIK disimpan ke kolom `nip`
- * tabel pekerja). Kalau ketemu/berhasil dibuat, tiap Aset Utama yang
- * dibuat di baris yang sama statusnya "dipakai" (bukan "tersedia") dan
- * dibuatkan 1 baris AsetPemakai. Kalau NIK kosong tapi nama penerima ada,
- * dicatat sebagai warning & aset tetap dibuat tapi tanpa data pemakai.
+ * PENERIMA / ASET_PEMAKAI: sama seperti AsetBuktiImport -- kolom NIK &
+ * Penerima dipakai cari/bikin User langsung lewat `nik` (tabel `pekerja`
+ * sudah dihapus, data karyawan nempel di `users`). Kalau ketemu/berhasil
+ * dibuat, tiap Aset Utama yang dibuat di baris yang sama statusnya
+ * "dipakai" (bukan "tersedia") dan dibuatkan 1 baris AsetPemakai (langsung
+ * pakai user_id, tidak ada lagi pekerja_id). Kalau NIK kosong tapi nama
+ * penerima ada, dicatat sebagai warning & aset tetap dibuat tapi tanpa
+ * data pemakai.
  *
  * JENIS ASET: kolom ini sudah tidak punya kolom tujuan di tabel `aset`
  * (jenis_id dihapus) buat baris Aset Utama, jadi isinya digabung ke depan
@@ -152,26 +153,22 @@ class AsetBuktiRapiImport implements ToCollection
 
                     // NIK & Penerima diulang di SETIAP baris (bukan cuma
                     // baris pertama per bukti) di format ini, jadi aman
-                    // diresolusi per baris -- Pekerja::where(...)->first()
+                    // diresolusi per baris -- User::where('nik', ...)->first()
                     // idempoten, gak bikin duplikat kalau sudah ada.
                     $namaPenerima = trim((string) ($row['penerima'] ?? ''));
                     $nikPenerima = trim((string) ($row['nik'] ?? ''));
-                    $pekerjaPenerima = null;
+                    $penerimaUser = null;
 
                     if ($namaPenerima !== '') {
                         if ($nikPenerima !== '') {
-                            $pekerjaPenerima = Pekerja::where('nik', $nikPenerima)->first();
+                            $penerimaUser = User::where('nik', $nikPenerima)->first();
 
-                            if (!$pekerjaPenerima) {
-                                $userPenerima = User::create([
-                                    'name'     => $namaPenerima,
-                                    'email'    => 'nik' . $nikPenerima . '@placeholder.local',
-                                    'password' => Str::random(32),
-                                    'role'     => 'karyawan',
-                                ]);
-
-                                $pekerjaPenerima = Pekerja::create([
-                                    'user_id'       => $userPenerima->id,
+                            if (!$penerimaUser) {
+                                $penerimaUser = User::create([
+                                    'name'          => $namaPenerima,
+                                    'email'         => 'nik' . $nikPenerima . '@placeholder.local',
+                                    'password'      => Str::random(32),
+                                    'role'          => 'karyawan',
                                     'nik'           => $nikPenerima,
                                     'departemen_id' => $departemenId,
                                 ]);
@@ -181,7 +178,7 @@ class AsetBuktiRapiImport implements ToCollection
                         }
                     }
 
-                    $statusAset = $pekerjaPenerima ? 'dipakai' : 'tersedia';
+                    $statusAset = $penerimaUser ? 'dipakai' : 'tersedia';
 
                     // Info bersama yang disalin ke SETIAP baris Aset/
                     // AsetKelengkapan yang dibuat dari baris Excel ini --
@@ -222,8 +219,8 @@ class AsetBuktiRapiImport implements ToCollection
 
                         $asetKelengkapan = $this->buatAsetKelengkapan($asetUtamaTerakhir, $infoBersama, $namaJenis, $keteranganAsli);
 
-                        if ($pekerjaPenerima) {
-                            $this->buatAsetPemakai($asetKelengkapan, $pekerjaPenerima, $infoBersama['tanggal']);
+                        if ($penerimaUser) {
+                            $this->buatAsetPemakai($asetKelengkapan, $penerimaUser, $infoBersama['tanggal']);
                         }
 
                         // Kelengkapan tambahan yang nyempil di teks
@@ -231,7 +228,7 @@ class AsetBuktiRapiImport implements ToCollection
                         // dijaga-jaga) tetap ditempel dengan acuan status
                         // dari Aset Utama yang sama (bukan dari baris
                         // kelengkapan ini).
-                        $this->tempelKelengkapanTambahan($asetUtamaTerakhir, $infoBersama, $hasilParse['kelengkapan'], $pekerjaPenerima);
+                        $this->tempelKelengkapanTambahan($asetUtamaTerakhir, $infoBersama, $hasilParse['kelengkapan'], $penerimaUser);
 
                         $this->rowCount++;
                         return;
@@ -263,11 +260,11 @@ class AsetBuktiRapiImport implements ToCollection
                         'status'         => $statusAset,
                     ]));
 
-                    if ($pekerjaPenerima) {
-                        $this->buatAsetPemakai($aset, $pekerjaPenerima, $infoBersama['tanggal']);
+                    if ($penerimaUser) {
+                        $this->buatAsetPemakai($aset, $penerimaUser, $infoBersama['tanggal']);
                     }
 
-                    $this->tempelKelengkapanTambahan($aset, $infoBersama, $hasilParse['kelengkapan'], $pekerjaPenerima);
+                    $this->tempelKelengkapanTambahan($aset, $infoBersama, $hasilParse['kelengkapan'], $penerimaUser);
 
                     $asetUtamaTerakhir = $aset;
                     $this->rowCount++;
@@ -307,13 +304,12 @@ class AsetBuktiRapiImport implements ToCollection
      * AsetKelengkapan) -- bedanya cuma kolom FK mana yang diisi di
      * aset_pemakai (aset_id vs aset_kelengkapan_id).
      */
-    private function buatAsetPemakai(Aset|AsetKelengkapan $item, Pekerja $pekerjaPenerima, ?string $tanggalPenerimaan): void
+    private function buatAsetPemakai(Aset|AsetKelengkapan $item, User $penerimaUser, ?string $tanggalPenerimaan): void
     {
         AsetPemakai::create([
             'aset_id'             => $item instanceof Aset ? $item->id : null,
             'aset_kelengkapan_id' => $item instanceof AsetKelengkapan ? $item->id : null,
-            'pekerja_id'          => $pekerjaPenerima->id,
-            'user_id'             => $pekerjaPenerima->user_id,
+            'user_id'             => $penerimaUser->id,
             'status'              => 'disetujui',
             'tanggal_penerimaan'  => $tanggalPenerimaan,
         ]);
@@ -328,13 +324,13 @@ class AsetBuktiRapiImport implements ToCollection
      *
      * @param string[] $namaNamaKelengkapan
      */
-    private function tempelKelengkapanTambahan(Aset $aset, array $infoBersama, array $namaNamaKelengkapan, ?Pekerja $pekerjaPenerima): void
+    private function tempelKelengkapanTambahan(Aset $aset, array $infoBersama, array $namaNamaKelengkapan, ?User $penerimaUser): void
     {
         foreach ($namaNamaKelengkapan as $namaKelengkapan) {
             $asetKelengkapan = $this->buatAsetKelengkapan($aset, $infoBersama, $namaKelengkapan, null);
 
-            if ($pekerjaPenerima) {
-                $this->buatAsetPemakai($asetKelengkapan, $pekerjaPenerima, $infoBersama['tanggal']);
+            if ($penerimaUser) {
+                $this->buatAsetPemakai($asetKelengkapan, $penerimaUser, $infoBersama['tanggal']);
             }
         }
     }

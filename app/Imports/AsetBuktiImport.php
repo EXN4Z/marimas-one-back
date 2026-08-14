@@ -7,7 +7,6 @@ use App\Models\Aset;
 use App\Models\AsetKelengkapan;
 use App\Models\AsetPemakai;
 use App\Models\Departemen;
-use App\Models\Pekerja;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Support\Str;
@@ -26,6 +25,18 @@ class AsetBuktiImport implements ToCollection
     private const MAX_BARIS_DISCAN = 10;
     private const KOLOM_PENANDA_HEADER = 'no_bukti';
 
+    /**
+     * Nomor kolom "Nama Barang N" yang dianggap ASET UTAMA. Semua kolom
+     * "Nama Barang" dengan nomor lain (2, 3, dst) otomatis dianggap
+     * KELENGKAPAN dari aset utama terakhir yang diproses di baris yang
+     * sama -- terlepas dari isi namanya ("Charger", "Tas", "Modem",
+     * apapun). Ini gantiin deteksi berbasis kata kunci (cocokAksesoris)
+     * yang dulu dipakai, karena posisi kolom di Excel sumber sudah pasti
+     * konsisten: kolom pertama = barang utama, kolom berikutnya = barang
+     * yang menyertai/melengkapi barang utama itu.
+     */
+    private const NOMOR_KOLOM_ASET_UTAMA = 1;
+
     private const WARNA_KEYWORDS = [
         'black', 'white', 'silver', 'grey', 'gray', 'blue', 'red', 'green',
         'yellow', 'pink', 'purple', 'gold', 'navy', 'cream', 'orange',
@@ -34,31 +45,6 @@ class AsetBuktiImport implements ToCollection
     ];
 
     private const KETERANGAN_PREFIX_DIABAIKAN = '/^\s*(model|imei|p\s*\/?\s*n)\b/i';
-
-    /**
-     * Kata kunci buat mendeteksi "Nama Barang N" yang sebenarnya bukan
-     * barang utama, tapi AKSESORIS dari barang utama di baris yang sama --
-     * misalnya di 1 baris bukti ada "Nama Barang 1: Laptop", "Nama Barang
-     * 2: Charger", "Nama Barang 3: Tas". Laptop tetap jadi baris Aset baru
-     * seperti biasa (merek diisi dari nama barang ini). Charger & Tas
-     * dibikinkan baris AsetKelengkapan (tabel aset_kelengkapan) yang
-     * nempel ke Laptop lewat aset_id -- bukan lagi baris Aset sendiri.
-     * Kode unik, S/N kalau ada, dan status-nya ngikutin barang utama
-     * TERAKHIR yang sudah diproses di baris yang sama (lihat
-     * cocokAksesoris() & buatAsetKelengkapan() di bawah).
-     *
-     * Dicocokkan pakai WORD-BOUNDARY, case-insensitive (lihat
-     * cocokAksesoris()) -- BUKAN substring polos. Kata kunci pendek
-     * seperti "dus" atau "tas" gampang nyangkut ke potongan kata lain
-     * kalau dicocokkan sebagai substring (mis. "dus" nyempil di
-     * "Modem Telkomsel Orbit ex SP Kudus"), jadi harus dicocokkan sebagai
-     * kata utuh. Kalau nanti ada kata kunci aksesoris lain yang perlu
-     * ditambah (mis. "mouse", "sarung", "softcase"), tinggal tambah di
-     * sini -- gak perlu ubah logic lain.
-     */
-    private const KATA_KUNCI_AKSESORIS = [
-        'charger', 'adaptor', 'adapter', 'tas', 'dus', 'case', 'baterai', 'kabel',
-    ];
 
     public function collection(Collection $rows)
     {
@@ -131,22 +117,23 @@ class AsetBuktiImport implements ToCollection
 
                     $namaPenerima = trim((string) ($row['penerima'] ?? ''));
                     $nikPenerima = trim((string) ($row['nik'] ?? ''));
-                    $pekerjaPenerima = null;
+                    $penerimaUser = null;
 
                     if ($namaPenerima !== '') {
                         if ($nikPenerima !== '') {
-                            $pekerjaPenerima = Pekerja::where('nik', $nikPenerima)->first();
+                            $penerimaUser = User::where('nik', $nikPenerima)->first();
 
-                            if (!$pekerjaPenerima) {
-                                $userPenerima = User::create([
-                                    'name'     => $namaPenerima,
-                                    'email'    => 'nik' . $nikPenerima . '@placeholder.local',
-                                    'password' => Str::random(32),
-                                    'role'     => 'karyawan',
-                                ]);
-
-                                $pekerjaPenerima = Pekerja::create([
-                                    'user_id'       => $userPenerima->id,
+                            if (!$penerimaUser) {
+                                // Pekerja::create() dulu bikin row minimal tanpa akun
+                                // login/password. Sekarang pekerja = users, jadi
+                                // User::create() butuh email/password (kolom wajib) --
+                                // diisi dummy unik & random, sama seperti resolusi
+                                // NIK di atas.
+                                $penerimaUser = User::create([
+                                    'name'          => $namaPenerima,
+                                    'email'         => 'nik' . $nikPenerima . '@placeholder.local',
+                                    'password'      => Str::random(32),
+                                    'role'          => 'karyawan',
                                     'nik'           => $nikPenerima,
                                     'departemen_id' => $departemenId,
                                 ]);
@@ -156,15 +143,15 @@ class AsetBuktiImport implements ToCollection
                         }
                     }
 
-                    $statusAset = $pekerjaPenerima ? 'dipakai' : 'tersedia';
+                    $statusAset = $penerimaUser ? 'dipakai' : 'tersedia';
 
                     $adaBarangDiproses = false;
 
                     // Aset "utama" terakhir yang berhasil dibuat di baris ini
-                    // -- barang aksesoris (charger, tas, dst) yang muncul
-                    // SETELAHNYA di kolom Nama Barang N yang lain jadi baris
-                    // AsetKelengkapan yang nempel ke aset ini, dan status-nya
-                    // ngikutin aset ini (lihat buatAsetKelengkapan()).
+                    // -- barang di kolom Nama Barang N (N != NOMOR_KOLOM_ASET_UTAMA)
+                    // yang muncul SETELAHNYA jadi baris AsetKelengkapan yang
+                    // nempel ke aset ini, dan status-nya ngikutin aset ini
+                    // (lihat buatAsetKelengkapan()).
                     $asetUtamaTerakhir = null;
 
                     foreach ($nomorBarang as $n) {
@@ -178,11 +165,12 @@ class AsetBuktiImport implements ToCollection
                         $namaBarangTrim = trim($namaBarang);
                         $keteranganAsli = $row["keterangan_{$n}"] ?? null;
 
-                        // Barang ini kelengkapan (charger/tas/dst) -- bikin
-                        // sebagai baris AsetKelengkapan yang nempel ke aset
-                        // utama terakhir yang sudah dibuat di baris yang
-                        // sama, lalu lanjut ke kolom Nama Barang berikutnya.
-                        if ($this->cocokAksesoris($namaBarangTrim)) {
+                        // Kolom Nama Barang selain kolom aset utama (mis.
+                        // Nama Barang 2, 3, dst) SELALU dianggap kelengkapan
+                        // dari aset utama terakhir yang sudah dibuat di baris
+                        // yang sama -- ditentukan murni dari POSISI KOLOM,
+                        // bukan dari kata dalam namanya.
+                        if ($n !== self::NOMOR_KOLOM_ASET_UTAMA) {
                             if ($asetUtamaTerakhir) {
                                 $asetKelengkapan = $this->buatAsetKelengkapan(
                                     $asetUtamaTerakhir,
@@ -192,16 +180,17 @@ class AsetBuktiImport implements ToCollection
                                     $keteranganAsli
                                 );
 
-                                if ($pekerjaPenerima) {
-                                    $this->buatAsetPemakai($asetKelengkapan, $pekerjaPenerima, $infoBukti['tanggal']);
+                                if ($penerimaUser) {
+                                    $this->buatAsetPemakai($asetKelengkapan, $penerimaUser, $infoBukti['tanggal']);
                                 }
                             } else {
-                                // Aksesoris muncul duluan sebelum ada barang
-                                // utama di baris ini -- tidak ada aset induk
-                                // buat dijadiin acuan status/aset_id, jadi
-                                // dilewati (dicatat sebagai warning, bukan
-                                // bikin AsetKelengkapan tanpa aset induk).
-                                $this->errors[] = 'Baris data ke-' . ($index + 1) . ': barang aksesoris "' . $namaBarangTrim . '" (Nama Barang ' . $n . ') dilewati karena belum ada barang utama di baris yang sama untuk dijadikan acuan status.';
+                                // Kolom kelengkapan terisi tapi kolom aset
+                                // utama (Nama Barang 1) di baris ini kosong --
+                                // tidak ada aset induk buat dijadikan acuan
+                                // status/aset_id, jadi dilewati (dicatat
+                                // sebagai warning, bukan bikin AsetKelengkapan
+                                // tanpa aset induk).
+                                $this->errors[] = 'Baris data ke-' . ($index + 1) . ': barang "' . $namaBarangTrim . '" (Nama Barang ' . $n . ') dilewati karena kolom Nama Barang ' . self::NOMOR_KOLOM_ASET_UTAMA . ' (aset utama) di baris yang sama kosong.';
                             }
                             continue;
                         }
@@ -224,13 +213,13 @@ class AsetBuktiImport implements ToCollection
 
                         $asetUtamaTerakhir = $aset;
 
-                        if ($pekerjaPenerima) {
-                            $this->buatAsetPemakai($aset, $pekerjaPenerima, $infoBukti['tanggal']);
+                        if ($penerimaUser) {
+                            $this->buatAsetPemakai($aset, $penerimaUser, $infoBukti['tanggal']);
                         }
 
                         // Nama kelengkapan yang ke-parse dari teks Keterangan
-                        // (mis. "(charger, tas)") -- sama seperti aksesoris di
-                        // kolom Nama Barang N, tiap nama jadi baris
+                        // (mis. "(charger, tas)") -- sama seperti kolom Nama
+                        // Barang N lainnya, tiap nama jadi baris
                         // AsetKelengkapan yang nempel ke aset utama ini lewat
                         // aset_id, status-nya ngikutin aset utama ini.
                         foreach ($hasilParse['kelengkapan'] as $namaKelengkapan) {
@@ -242,8 +231,8 @@ class AsetBuktiImport implements ToCollection
                                 null
                             );
 
-                            if ($pekerjaPenerima) {
-                                $this->buatAsetPemakai($asetKelengkapan, $pekerjaPenerima, $infoBukti['tanggal']);
+                            if ($penerimaUser) {
+                                $this->buatAsetPemakai($asetKelengkapan, $penerimaUser, $infoBukti['tanggal']);
                             }
                         }
                     }
@@ -262,36 +251,16 @@ class AsetBuktiImport implements ToCollection
     }
 
     /**
-     * Cek apakah 1 nama barang (dari kolom "Nama Barang N") itu aksesoris
-     * (charger, tas, dus, dst -- lihat KATA_KUNCI_AKSESORIS), bukan jenis
-     * barang utama. Cocok pakai WORD-BOUNDARY (bukan substring polos),
-     * biar kata seperti "dus" tidak ikut kena kalau cuma nyempil di dalam
-     * kata lain (mis. "Modem Telkomsel Orbit ex SP Kudus" -- "dus" di
-     * situ bagian dari "Kudus", bukan kata "dus" yang berarti kardus).
-     */
-    private function cocokAksesoris(string $namaBarang): bool
-    {
-        $namaLower = mb_strtolower($namaBarang);
-
-        foreach (self::KATA_KUNCI_AKSESORIS as $kataKunci) {
-            if (preg_match('/\b' . preg_quote($kataKunci, '/') . '\b/u', $namaLower)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Bikin 1 nama barang kelengkapan (mis. "Charger", "Tas") jadi baris
+     * Bikin 1 nama barang kelengkapan (mis. "Charger", "Tas", atau apapun
+     * isi kolom Nama Barang selain kolom aset utama) jadi baris
      * AsetKelengkapan (tabel aset_kelengkapan) yang nempel ke aset induknya
-     * lewat aset_id -- BUKAN baris Aset sendiri. $keterangan (kalau ada) di-parse ulang lewat
-     * parseKeterangan() buat coba tarik serial_number & warna-nya juga,
-     * sama seperti yang dilakukan buat aset utama. Info bukti (perusahaan,
-     * tanggal) & supplier disamakan dengan aset induknya lewat
-     * $infoBukti/$supplierId yang dioper dari caller, dan status-nya ikut
-     * status aset induk saat baris ini diproses (bukan status 'tersedia'
-     * hardcode).
+     * lewat aset_id -- BUKAN baris Aset sendiri. $keterangan (kalau ada)
+     * di-parse ulang lewat parseKeterangan() buat coba tarik serial_number
+     * & warna-nya juga, sama seperti yang dilakukan buat aset utama. Info
+     * bukti (perusahaan, tanggal) & supplier disamakan dengan aset induknya
+     * lewat $infoBukti/$supplierId yang dioper dari caller, dan status-nya
+     * ikut status aset induk saat baris ini diproses (bukan status
+     * 'tersedia' hardcode).
      */
     private function buatAsetKelengkapan(Aset $asetInduk, array $infoBukti, ?int $supplierId, string $namaBarang, ?string $keterangan): AsetKelengkapan
     {
@@ -330,15 +299,14 @@ class AsetBuktiImport implements ToCollection
      * riwayat()) supaya pengurutan waktu di Riwayat Aset tetap benar
      * sesuai tanggal transaksi asli, bukan tanggal import dijalankan.
      */
-    private function buatAsetPemakai(Aset|AsetKelengkapan $item, Pekerja $pekerjaPenerima, ?string $tanggalPenerimaan): void
+    private function buatAsetPemakai(Aset|AsetKelengkapan $item, User $penerimaUser, ?string $tanggalPenerimaan): void
     {
         $noStruk = $this->generateNoStruk('STJ', 'aset_pemakai', 'no_struk_penerimaan');
 
         AsetPemakai::create([
             'aset_id'             => $item instanceof Aset ? $item->id : null,
             'aset_kelengkapan_id' => $item instanceof AsetKelengkapan ? $item->id : null,
-            'pekerja_id'          => $pekerjaPenerima->id,
-            'user_id'             => $pekerjaPenerima->user_id,
+            'user_id'             => $penerimaUser->id,
             'status'              => 'disetujui',
             'no_struk_penerimaan' => $noStruk,
             'tanggal_penerimaan'  => $tanggalPenerimaan,

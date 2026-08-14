@@ -94,7 +94,6 @@ class AsetPemakaiController extends Controller
     {
         $user = $request->user();
         $isAdmin = $user?->role === 'admin';
-        $pekerjaId = $user?->pekerja?->id;
 
         // Pagination: minimal 10 data per halaman (dipaksa di server biar gak
         // ada yang kirim per_page kecil trus datanya keliatan bolong pas
@@ -123,20 +122,14 @@ class AsetPemakaiController extends Controller
         // Filter kepemilikan dipakai berkali-kali di bawah — biar 1 sumber
         // kebenaran soal "ini punya user ini apa bukan", gak diketik ulang
         // beda-beda tiap query (rawan salah/kelewat kalau diketik manual).
-        $milikUser = function ($query) use ($user, $pekerjaId) {
-            $query->where(function ($q) use ($user, $pekerjaId) {
-                $q->where('user_id', $user->id);
-                if ($pekerjaId) {
-                    $q->orWhere('pekerja_id', $pekerjaId);
-                }
-            });
+        $milikUser = function ($query) use ($user) {
+            $query->where('user_id', $user->id);
         };
 
         $pemakaiQuery = AsetPemakai::with([
             'aset:id,kode_aset,merek,tipe',
             'asetKelengkapan:id,kode_kelengkapan,merek,tipe',
-            'pekerja.user:id,name',
-            'user:id,name', // akun cabang gak punya pekerja, jadi user-nya harus di-load langsung
+            'user:id,name',
         ])->where('status', 'disetujui');
 
         if (!$isAdmin) {
@@ -148,7 +141,7 @@ class AsetPemakaiController extends Controller
             ->limit($ambil)
             ->get()
             ->each(function ($p) use (&$events) {
-                $nama = $p->pekerja?->user?->name ?? $p->user?->name ?? '-';
+                $nama = $p->user?->name ?? '-';
                 // item yang dipinjam bisa aset utama ATAU aset_kelengkapan,
                 // gak pernah dua-duanya (mutually exclusive lewat kolom
                 // aset_kelengkapan_id). 'tipe_item' dikirim ke frontend biar
@@ -176,15 +169,14 @@ class AsetPemakaiController extends Controller
 
         $penangananQuery = AsetPenanganan::with([
             'aset:id,kode_aset,merek,tipe',
-            'pemakai.pekerja.user:id,name',
-            'pemakai.user:id,name', // akun cabang gak punya pekerja, jadi user-nya harus di-load langsung
+            'pemakai.user:id,name',
         ]);
 
         if (!$isAdmin) {
-            // laporan kerusakan gak punya user_id/pekerja_id langsung —
-            // nempel ke AsetPemakai lewat aset_pemakai_id, jadi filternya
-            // lewat relasi 'pemakai'. Laporan hasil audit gudang (pemakai
-            // null) otomatis kepotong karena whereHas butuh relasi itu ada.
+            // laporan kerusakan gak punya user_id langsung — nempel ke
+            // AsetPemakai lewat aset_pemakai_id, jadi filternya lewat
+            // relasi 'pemakai'. Laporan hasil audit gudang (pemakai null)
+            // otomatis kepotong karena whereHas butuh relasi itu ada.
             $penangananQuery->whereHas('pemakai', $milikUser);
         }
 
@@ -194,9 +186,9 @@ class AsetPemakaiController extends Controller
             ->get()
             ->each(function ($pn) use (&$events) {
                 // nama pelapor: sama kayak event pinjam, ambil dari
-                // pemakai->pekerja->user atau pemakai->user. Kalau
-                // aset_pemakai_id null (lapor pas aset lagi nganggur/audit
-                // gudang), nama emang gak ada -- tampilin '-' di frontend.
+                // pemakai->user langsung. Kalau aset_pemakai_id null (lapor
+                // pas aset lagi nganggur/audit gudang), nama emang gak ada
+                // -- tampilin '-' di frontend.
                 //
                 // PENTING: nama ini cuma valid buat event 'lapor_rusak'
                 // (itu aksi si pemakai). 'mulai_perbaikan' & 'selesai_perbaikan'
@@ -205,7 +197,7 @@ class AsetPemakaiController extends Controller
                 // kelihatan seolah pemakai yang benerin asetnya sendiri.
                 // (Belum ada kolom yang nyimpen admin mana yang ngerjain,
                 // makanya nama dikosongin aja dulu, bukan salah orang.)
-                $namaPelapor = $pn->pemakai?->pekerja?->user?->name ?? $pn->pemakai?->user?->name ?? null;
+                $namaPelapor = $pn->pemakai?->user?->name ?? null;
 
                 $events->push([
                     'type' => 'lapor_rusak',
@@ -311,7 +303,7 @@ class AsetPemakaiController extends Controller
         // gak nyampur kayak dulu (satu entri bisa punya dua-duanya sekaligus).
         $type = $request->input('type');
 
-        $query = AsetPemakai::with(['aset', 'asetKelengkapan', 'pekerja.user', 'user'])
+        $query = AsetPemakai::with(['aset', 'asetKelengkapan', 'user'])
             ->when(
                 $type === 'peminjaman',
                 fn ($q) => $q->whereNotNull('foto_penerimaan'),
@@ -327,10 +319,7 @@ class AsetPemakaiController extends Controller
             ->orderByDesc('created_at');
 
         if (!$isAdmin) {
-            $query->where(function ($q) use ($user) {
-                $q->whereHas('pekerja', fn ($qq) => $qq->where('user_id', $user->id))
-                    ->orWhere('user_id', $user->id);
-            });
+            $query->where('user_id', $user->id);
         }
 
         if ($search = $request->input('search')) {
@@ -355,7 +344,7 @@ class AsetPemakaiController extends Controller
 
     /**
      * POST /aset/{aset}/pemakai
-     * Admin serah-terima aset utama langsung ke pekerja ATAU akun cabang
+     * Admin serah-terima aset utama langsung ke karyawan ATAU akun cabang
      * (tanpa lewat alur request/approve). Lihat serahkanItem() untuk logic
      * lengkapnya (dipakai bareng sama storeKelengkapan()).
      */
@@ -399,17 +388,9 @@ class AsetPemakaiController extends Controller
         }
 
         $validated = $request->validate([
-            'pekerja_id' => 'required_without:user_id|nullable|exists:pekerja,id',
-            'user_id' => [
-                'required_without:pekerja_id',
-                'nullable',
-                'exists:users,id',
-                function ($attribute, $value, $fail) {
-                    if ($value && \App\Models\User::where('id', $value)->where('role', 'cabang')->doesntExist()) {
-                        $fail('Akun yang dipilih bukan akun cabang.');
-                    }
-                },
-            ],
+            // BARU: gak ada lagi pekerja_id -- user_id satu-satunya identitas
+            // pemakai, baik karyawan biasa maupun akun cabang.
+            'user_id' => 'required|exists:users,id',
             'tanggal_penerimaan' => 'required|date',
             'catatan_penerimaan' => 'nullable|string',
             'foto_penerimaan' => 'required|array|min:1|max:3',
@@ -425,8 +406,7 @@ class AsetPemakaiController extends Controller
 
             $pemakai = AsetPemakai::create([
                 $kolomId => $item->id,
-                'pekerja_id' => $validated['pekerja_id'] ?? null,
-                'user_id' => $validated['user_id'] ?? null,
+                'user_id' => $validated['user_id'],
                 'status' => 'disetujui',
                 'requested_by_user_id' => $request->user()?->id,
                 'no_struk_penerimaan' => $noStruk,
@@ -455,8 +435,7 @@ class AsetPemakaiController extends Controller
 
                         AsetPemakai::create([
                             'aset_kelengkapan_id' => $kelengkapan->id,
-                            'pekerja_id' => $validated['pekerja_id'] ?? null,
-                            'user_id' => $validated['user_id'] ?? null,
+                            'user_id' => $validated['user_id'],
                             'status' => 'disetujui',
                             'requested_by_user_id' => $request->user()?->id,
                             'no_struk_penerimaan' => $noStrukKelengkapan,
@@ -473,7 +452,7 @@ class AsetPemakaiController extends Controller
             return $pemakai;
         });
 
-        return response()->json($pemakai->load('pekerja.user', 'user', 'aset', 'asetKelengkapan'), 201);
+        return response()->json($pemakai->load('user', 'aset', 'asetKelengkapan'), 201);
     }
 
     /**
@@ -495,8 +474,7 @@ class AsetPemakaiController extends Controller
     public function kembalikan(Request $request, AsetPemakai $asetPemakai)
     {
         $user = $request->user();
-        $isPemilikPemakaian = ($asetPemakai->pekerja?->user_id === $user->id)
-            || ($asetPemakai->user_id === $user->id);
+        $isPemilikPemakaian = $asetPemakai->user_id === $user->id;
 
         abort_unless(
             $user->hasRoleAtLeast('admin') || $isPemilikPemakaian,
@@ -600,7 +578,7 @@ class AsetPemakaiController extends Controller
             }
         });
 
-        return response()->json($asetPemakai->fresh()->load('pekerja.user', 'user', 'aset', 'asetKelengkapan'));
+        return response()->json($asetPemakai->fresh()->load('user', 'aset', 'asetKelengkapan'));
     }
 
     /**

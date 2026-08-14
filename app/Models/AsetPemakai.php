@@ -10,7 +10,6 @@ class AsetPemakai extends Model
 
     protected $fillable = [
         'aset_id',
-        'pekerja_id',
         'user_id',
         'status',
         'requested_by_user_id',
@@ -48,11 +47,6 @@ class AsetPemakai extends Model
         return $this->belongsTo(Aset::class, 'aset_id');
     }
     
-    public function pekerja()
-    {
-        return $this->belongsTo(Pekerja::class, 'pekerja_id');
-    }
-    
     public function requestedBy()
     {
         return $this->belongsTo(User::class, 'requested_by_user_id');
@@ -66,6 +60,14 @@ class AsetPemakai extends Model
         return $this->belongsTo(User::class);
     }
     public function kelengkapan() {
+        return $this->belongsTo(AsetKelengkapan::class, 'aset_kelengkapan_id');
+    }
+
+    // Alias buat kelengkapan() — beberapa controller/resource manggil pakai
+    // nama "asetKelengkapan" (prefix "aset" biar konsisten sama nama kolom
+    // aset_kelengkapan_id). Sama-sama nunjuk ke relasi yang sama.
+    public function asetKelengkapan()
+    {
         return $this->belongsTo(AsetKelengkapan::class, 'aset_kelengkapan_id');
     }
 }

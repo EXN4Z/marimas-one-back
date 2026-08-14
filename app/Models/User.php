@@ -22,6 +22,11 @@ class User extends Authenticatable
         // BARU: cuma dipakai buat akun role 'cabang', nunjuk ke lokasi_kantor
         // mana yang dia urus. Null buat role lain.
         'lokasi_kantor_id',
+        // BARU (eks-pekerja): data karyawan sekarang nempel langsung di sini,
+        // tidak ada lagi tabel/model Pekerja terpisah.
+        'nik',
+        'departemen_id',
+        'tanggal_masuk',
     ];
 
     protected $hidden = [
@@ -55,17 +60,19 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'phone_verified_at' => 'datetime',
             'password' => 'hashed',
+            'tanggal_masuk' => 'date',
         ];
-    }
-
-    public function pekerja()
-    {
-        return $this->hasOne(Pekerja::class, 'user_id');
     }
 
     // BARU: lokasi kantor yang diurus akun ini — cuma relevan buat role 'cabang'.
     public function lokasiKantor()
     {
         return $this->belongsTo(LokasiKantor::class, 'lokasi_kantor_id');
+    }
+
+    // BARU (eks-pekerja): departemen karyawan ini, langsung dari users.departemen_id.
+    public function departemen()
+    {
+        return $this->belongsTo(Departemen::class, 'departemen_id');
     }
 }
