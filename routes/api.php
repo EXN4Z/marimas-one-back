@@ -89,6 +89,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 });
 
 Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
+    Route::post('/departemen/import', [DepartemenController::class, 'import']); // sebelum apiResource biar gak ketabrak /departemen/{departemen}
     Route::apiResource('departemen', DepartemenController::class)->except(['show']);
     Route::apiResource('jabatan', JabatanController::class)->except(['show']);
 });
@@ -140,6 +141,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::delete('/aset-pemakai/{asetPemakai}', [AsetPemakaiController::class, 'destroy']);
     Route::post('/aset/{aset}/jual', [AsetController::class, 'jual']);
 
+    Route::post('/supplier/import', [SupplierController::class, 'import']); // sebelum apiResource biar gak ketabrak /supplier/{supplier}
     Route::apiResource('supplier', SupplierController::class)->except(['index', 'show']);
 });
 Route::get('/debug-webpush-test', function () {
