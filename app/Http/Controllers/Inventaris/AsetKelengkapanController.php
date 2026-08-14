@@ -192,7 +192,7 @@ class AsetKelengkapanController extends Controller
         ]);
 
         return $request->validate([
-            'aset_id' => 'required|exists:aset,id',
+            'aset_id' => 'nullable|exists:aset,id',
             'nama' => 'nullable',
             'merek' => 'nullable|string|max:255',
             'tipe' => 'nullable|string|max:255',
