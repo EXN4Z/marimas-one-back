@@ -3,14 +3,65 @@
 namespace App\Http\Controllers\Inventaris;
 
 use App\Http\Controllers\Controller;
+use App\Imports\AsetKelengkapanImport;
 use App\Models\AsetKelengkapan;
 use App\Models\AsetPemakai;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Maatwebsite\Excel\Facades\Excel;
 
 class AsetKelengkapanController extends Controller
 {
+    /**
+     * POST /api/aset-kelengkapan/import
+     * Import massal Aset Kelengkapan dari file Excel (.xlsx/.xls), item
+     * berdiri sendiri yang nempel ke aset utama yang SUDAH ADA (dicari
+     * lewat kolom "Kode Aset Induk"). Lihat AsetKelengkapanImport buat
+     * detail format kolom yang diharapkan.
+     */
+    public function import(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls|max:10240', // max 10MB
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $import = new AsetKelengkapanImport();
+            Excel::import($import, $request->file('file'));
+
+            if (count($import->getErrors()) > 0) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'errors'  => $import->getErrors(),
+                    'message' => $import->getErrors()[0] ?? 'Gagal import.',
+                ], 422);
+            }
+
+            if ($import->getRowCount() === 0) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Tidak ada baris data yang berhasil dibaca dari file.',
+                ], 422);
+            }
+
+            DB::commit();
+            return response()->json([
+                'success' => true,
+                'message' => "Berhasil import {$import->getRowCount()} kelengkapan aset",
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal import: ' . $e->getMessage(),
+            ], 422);
+        }
+    }
+
     /**
      * GET /api/aset-kelengkapan
      * Sama polanya kayak AsetController::index() — admin lihat semua,
