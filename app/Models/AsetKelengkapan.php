@@ -25,6 +25,7 @@ class AsetKelengkapan extends Model
         'no_surat_jalan',
         'no_good_receive',
         'status',
+        'tanggal_rusak',
     ];
 
     public function supplier()

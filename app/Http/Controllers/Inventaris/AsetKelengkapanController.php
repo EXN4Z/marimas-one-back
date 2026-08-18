@@ -287,7 +287,7 @@ class AsetKelengkapanController extends Controller
             'no_surat_jalan' => 'nullable|string|max:255',
             'no_good_receive' => 'nullable|string|max:255',
             'status' => 'nullable|in:tersedia,dipakai,rusak,diperbaiki',
-            'tanggal_rusak' => 'nullable',
+            'tanggal_rusak' => 'nullable|date',
         ]);
     }
 }
