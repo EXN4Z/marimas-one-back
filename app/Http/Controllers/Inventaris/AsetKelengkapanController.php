@@ -69,9 +69,13 @@ class AsetKelengkapanController extends Controller
 
     /**
      * GET /api/aset-kelengkapan
-     * Sama polanya kayak AsetController::index() — admin lihat semua,
-     * non-admin cuma lihat yang 'tersedia' atau yang terkait pemakaian
-     * dia sendiri (lewat aset_pemakai.aset_kelengkapan_id).
+     * Admin lihat semua (termasuk yang 'rusak' & punya orang lain).
+     * Non-admin cuma lihat yang 'tersedia' ATAU yang LAGI dia pinjam/pending
+     * sendiri (pemakaiSaatIni/pemakaiPending, bukan `pemakai()` yang isinya
+     * riwayat lengkap -- kalau dibiarin riwayat, kelengkapan yang udah balik
+     * ke rusak/dipegang orang lain lain ikut kebocor cuma karena user ini
+     * PERNAH pegang). Status 'rusak' juga sengaja DIKECUALIKAN total dari
+     * non-admin, bukan cuma disembunyiin di tab FE.
      */
     public function index(Request $request)
     {
@@ -87,12 +91,16 @@ class AsetKelengkapanController extends Controller
         ])->latest();
 
         if (!$isAdmin) {
-            $query->where(function ($q) use ($user) {
-                $q->where('status', 'tersedia')
-                    ->orWhereHas('pemakai', function ($sub) use ($user) {
-                        $sub->where('user_id', $user->id);
-                    });
-            });
+            $query->where('status', '!=', 'rusak')
+                ->where(function ($q) use ($user) {
+                    $q->where('status', 'tersedia')
+                        ->orWhereHas('pemakaiSaatIni', function ($sub) use ($user) {
+                            $sub->where('user_id', $user->id);
+                        })
+                        ->orWhereHas('pemakaiPending', function ($sub) use ($user) {
+                            $sub->where('user_id', $user->id);
+                        });
+                });
         }
 
         return response()->json($query->get());
@@ -100,6 +108,9 @@ class AsetKelengkapanController extends Controller
 
     /**
      * GET /api/aset-kelengkapan/{aset_kelengkapan}
+     * Scoping sama kayak index() -- WAJIB dicek di sini juga (bukan cuma
+     * index()), soalnya endpoint ini bisa dipanggil langsung lewat ID
+     * tanpa lewat daftar/tabel.
      */
     public function show(Request $request, AsetKelengkapan $asetKelengkapan)
     {
@@ -107,9 +118,10 @@ class AsetKelengkapanController extends Controller
         $isAdmin = $user?->role === 'admin';
 
         if (!$isAdmin) {
-            $terkaitUser = $asetKelengkapan->pemakai()
-                ->where('user_id', $user->id)
-                ->exists();
+            abort_if($asetKelengkapan->status === 'rusak', 403, 'Kamu tidak punya akses untuk melihat detail kelengkapan ini.');
+
+            $terkaitUser = $asetKelengkapan->pemakaiSaatIni()->where('user_id', $user->id)->exists()
+                || $asetKelengkapan->pemakaiPending()->where('user_id', $user->id)->exists();
 
             abort_unless($asetKelengkapan->status === 'tersedia' || $terkaitUser, 403, 'Kamu tidak punya akses untuk melihat detail kelengkapan ini.');
         }

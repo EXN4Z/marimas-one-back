@@ -103,7 +103,11 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/import-aset-penanganan', [ImportController::class, 'importAsetPenanganan']); // import bulk laporan penanganan aset (Berhasil Diperbaiki / Rusak Berat)
     Route::post('/aset-kelengkapan/import', [AsetKelengkapanController::class, 'import']);
     Route::post('/aset-kelengkapan/{asetKelengkapan}/pemakai', [AsetPemakaiController::class, 'storeKelengkapan']);
-    Route::apiResource('aset-kelengkapan', AsetKelengkapanController::class)->except(['destroy']);// sesuaikan sama pola route aset utama kamu yang sekarang
+    // index & show DIPINDAH ke grup role:karyawan,manajer,hr,admin di bawah
+    // (bareng /aset) -- non-admin butuh baca kelengkapan yang tersedia/lagi
+    // dia pinjam sendiri, filtering-nya udah dihandle di controller.
+    Route::post('/aset-kelengkapan', [AsetKelengkapanController::class, 'store']);
+    Route::post('/aset-kelengkapan/{asetKelengkapan}', [AsetKelengkapanController::class, 'update']); // POST + _method=PUT krn ada file upload, sama pola kayak /aset
     Route::delete('/aset-kelengkapan/{asetKelengkapan}', [AsetKelengkapanController::class, 'destroy']);
     Route::post('/aset-kelengkapan/{aset_kelengkapan}/lapor-rusak', [AsetKelengkapanController::class, 'laporRusak']);
     Route::post('/aset-kelengkapan/{aset_kelengkapan}/pasang-pengganti', [AsetKelengkapanController::class, 'pasangPengganti']);
@@ -114,6 +118,14 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     Route::get('/aset', [AsetController::class, 'index']);
     Route::get('/aset/{aset}', [AsetController::class, 'show']);
     Route::get('/supplier', [SupplierController::class, 'index']);
+
+    // BARU: non-admin (karyawan/manajer/hr) butuh liat daftar kelengkapan
+    // aset (charger, tas, dll) buat tau apa yang tersedia & apa yang lagi
+    // dia pinjam sendiri -- scoping detail (gak boleh liat punya orang
+    // lain / yang berstatus rusak) dicek DI DALAM controller, bukan cuma
+    // di middleware ini.
+    Route::get('/aset-kelengkapan', [AsetKelengkapanController::class, 'index']);
+    Route::get('/aset-kelengkapan/{asetKelengkapan}', [AsetKelengkapanController::class, 'show']);
 
     // admin: riwayat GLOBAL semua aset. karyawan/manajer/hr: riwayat
     // dibatasi cuma punya sendiri (dicek & difilter di dalam controller,
