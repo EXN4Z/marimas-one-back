@@ -75,6 +75,7 @@ class AsetKelengkapanController extends Controller
 
         $query = AsetKelengkapan::with([
             'aset',
+            'lokasiKantor',
             'supplier',
             'pemakaiSaatIni.user',
             'pemakaiPending.user',
@@ -110,6 +111,7 @@ class AsetKelengkapanController extends Controller
 
         $asetKelengkapan->load([
             'aset',
+            'lokasiKantor',
             'supplier',
             'pemakaiSaatIni.user',
             'pemakaiPending.user',
@@ -136,7 +138,7 @@ class AsetKelengkapanController extends Controller
         });
 
         return response()->json(
-            $asetKelengkapan->load(['aset', 'supplier']),
+            $asetKelengkapan->load(['aset', 'lokasiKantor', 'supplier']),
             201
         );
     }
@@ -160,7 +162,7 @@ class AsetKelengkapanController extends Controller
         });
 
         return response()->json(
-            $asetKelengkapan->fresh()->load(['aset', 'supplier'])
+            $asetKelengkapan->fresh()->load(['aset', 'lokasiKantor', 'supplier'])
         );
     }
 
@@ -189,10 +191,17 @@ class AsetKelengkapanController extends Controller
     {
         $request->merge([
             'serial_number' => $request->serial_number === '' ? null : $request->serial_number,
+            // Multipart FormData ngirim '' (bukan field ilang) pas dikosongkan
+            // dari FE, jadi harus dinormalisasi manual ke null biar exists:...
+            // gak ikut divalidasi & biar update() beneran ngosongin kolomnya
+            // (bukan malah dibiarin ke value lama krn key gak ke-set).
+            'aset_id' => $request->aset_id === '' ? null : $request->aset_id,
+            'lokasi_kantor_id' => $request->lokasi_kantor_id === '' ? null : $request->lokasi_kantor_id,
         ]);
 
         return $request->validate([
             'aset_id' => 'nullable|exists:aset,id',
+            'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
             'nama' => 'nullable',
             'merek' => 'nullable|string|max:255',
             'tipe' => 'nullable|string|max:255',
