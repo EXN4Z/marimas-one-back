@@ -6,8 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Imports\AsetKelengkapanImport;
 use App\Models\AsetKelengkapan;
 use App\Models\AsetPemakai;
+use App\Models\User;
+use App\Notifications\AsetKelengkapanKerusakanDilaporkan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -201,6 +205,16 @@ class AsetKelengkapanController extends Controller
             ], 422);
         }
 
+        // tangkep dulu sebelum aset_id dikosongin di transaksi bawah --
+        // butuh buat isi pesan notif ("terpasang di ...").
+        $asetIndukLabel = null;
+        if ($asetKelengkapan->aset_id) {
+            $asetInduk = $asetKelengkapan->load('aset')->aset;
+            if ($asetInduk) {
+                $asetIndukLabel = trim(($asetInduk->kode_aset ?? '') . ' ' . ($asetInduk->merek ?? ''));
+            }
+        }
+
         DB::transaction(function () use ($asetKelengkapan) {
             $asetKelengkapan->update([
                 'aset_id' => null,
@@ -217,6 +231,28 @@ class AsetKelengkapanController extends Controller
                     'catatan_pengembalian' => 'Dikembalikan otomatis — kelengkapan dinyatakan rusak.',
                 ]);
         });
+
+        // TAMBAH: notif ke manajer/hr/admin tiap ada laporan kerusakan
+        // kelengkapan masuk (database + broadcast + web push), sama pola
+        // kayak laporan kerusakan aset utama. Yang lapor selalu admin
+        // (route ini role:admin-only) jadi dia sendiri dikecualikan dari
+        // penerima biar gak notif diri sendiri.
+        // try-catch: laporan yang SUDAH tersimpan di atas jangan ikut gagal
+        // kalau notif error.
+        try {
+            Notification::send(
+                User::whereIn('role', ['manajer', 'hr', 'admin'])
+                    ->where('id', '!=', auth()->id())
+                    ->get(),
+                new AsetKelengkapanKerusakanDilaporkan($asetKelengkapan, $asetIndukLabel, auth()->user()->name)
+            );
+        } catch (\Throwable $e) {
+            Log::error('Gagal mengirim notifikasi laporan kerusakan kelengkapan', [
+                'aset_kelengkapan_id' => $asetKelengkapan->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
 
         return response()->json(
             $asetKelengkapan->fresh()->load(['aset', 'lokasiKantor', 'supplier'])
