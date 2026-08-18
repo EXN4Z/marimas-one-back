@@ -31,4 +31,11 @@ class LokasiKantor extends Model
     {
         return $this->hasMany(User::class, 'lokasi_kantor_id');
     }
+
+    // Kelengkapan aset yang berdiri sendiri (tanpa aset induk) dan
+    // ditempatkan di lokasi ini.
+    public function asetKelengkapan(): HasMany
+    {
+        return $this->hasMany(AsetKelengkapan::class, 'lokasi_kantor_id');
+    }
 }

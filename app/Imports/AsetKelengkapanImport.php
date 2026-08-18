@@ -4,6 +4,7 @@ namespace App\Imports;
 
 use App\Models\Aset;
 use App\Models\AsetKelengkapan;
+use App\Models\LokasiKantor;
 use App\Models\Supplier;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
@@ -18,15 +19,27 @@ use Maatwebsite\Excel\Concerns\ToCollection;
  *
  * Format kolom yang diharapkan (baris pertama = header, nama kolom bebas
  * huruf besar/kecil & spasi, dinormalisasi otomatis ke snake_case):
- *   Kode Aset Induk | Nama | Merek | Tipe | Warna | Serial Number
- *   | Perusahaan | Supplier | Tanggal Pembelian | No Surat Jalan
- *   | No Good Receive | Tanggal Garansi | Status | Keterangan
+ *   Kode Aset Induk | Lokasi Kantor | Nama | Merek | Tipe | Warna
+ *   | Serial Number | Perusahaan | Supplier | Tanggal Pembelian
+ *   | No Surat Jalan | No Good Receive | Tanggal Garansi | Status
+ *   | Keterangan
  *
- * "Kode Aset Induk" WAJIB dan harus cocok dengan kode_aset yang sudah ada
- * (kolom aset_id di tabel aset_kelengkapan NOT NULL -- setiap kelengkapan
- * harus nempel ke 1 aset utama). "Nama" juga wajib. Kolom lain opsional.
- * "Supplier" dicari/dibuat otomatis (firstOrCreate by nama), sama seperti
- * pola AsetBuktiRapiImport buat Departemen.
+ * "Kode Aset Induk" DAN "Lokasi Kantor" sama-sama opsional PER BARIS,
+ * tapi SALAH SATU wajib diisi (sama kayak aturan di form tambah/edit
+ * kelengkapan lewat UI):
+ *   - Kalau "Kode Aset Induk" diisi -> kelengkapan nempel ke aset itu
+ *     (harus cocok dengan kode_aset yang sudah ada), dan kolom "Lokasi
+ *     Kantor" di baris itu DIABAIKAN (kelengkapan ikut lokasi aset
+ *     induknya, sama seperti mutual-exclusive-nya di form UI).
+ *   - Kalau "Kode Aset Induk" kosong -> kelengkapan dianggap BERDIRI
+ *     SENDIRI (tanpa induk), dan "Lokasi Kantor" WAJIB diisi & harus
+ *     cocok (case-insensitive) dengan nama lokasi/cabang yang sudah ada.
+ *   - Kalau DUA-DUANYA kosong -> baris itu error, dilewati.
+ *
+ * "Nama" wajib. Kolom lain opsional. "Supplier" dicari/dibuat otomatis
+ * (firstOrCreate by nama), sama seperti pola AsetBuktiRapiImport buat
+ * Departemen -- beda dengan "Lokasi Kantor" yang TIDAK dibuat otomatis
+ * (harus sudah ada di data master lokasi/cabang).
  * "Status" default "tersedia" kalau kosong, harus salah satu dari
  * tersedia/dipakai/rusak/diperbaiki kalau diisi.
  */
@@ -65,10 +78,11 @@ class AsetKelengkapanImport implements ToCollection
             $baris = $index + 1;
 
             $kodeAsetInduk = trim((string) ($row['kode_aset_induk'] ?? ''));
+            $namaLokasi = trim((string) ($row['lokasi_kantor'] ?? ''));
             $nama = trim((string) ($row['nama'] ?? ''));
 
-            if ($kodeAsetInduk === '') {
-                $this->errors[] = "Baris data ke-{$baris}: kolom \"Kode Aset Induk\" kosong, dilewati.";
+            if ($kodeAsetInduk === '' && $namaLokasi === '') {
+                $this->errors[] = "Baris data ke-{$baris}: isi salah satu kolom \"Kode Aset Induk\" (kalau nempel ke aset) atau \"Lokasi Kantor\" (kalau berdiri sendiri), dilewati.";
                 continue;
             }
 
@@ -77,11 +91,30 @@ class AsetKelengkapanImport implements ToCollection
                 continue;
             }
 
-            $asetInduk = Aset::where('kode_aset', $kodeAsetInduk)->first();
+            // Aset induk lebih prioritas kalau dua-duanya diisi -- kelengkapan
+            // yang nempel ke aset ikut lokasi aset itu, jadi "Lokasi Kantor"
+            // di baris yang sama diabaikan (mutual-exclusive, sama kayak form UI).
+            $asetIndukId = null;
+            $lokasiKantorId = null;
 
-            if (!$asetInduk) {
-                $this->errors[] = "Baris data ke-{$baris}: aset induk dengan kode \"{$kodeAsetInduk}\" tidak ditemukan, dilewati.";
-                continue;
+            if ($kodeAsetInduk !== '') {
+                $asetInduk = Aset::where('kode_aset', $kodeAsetInduk)->first();
+
+                if (!$asetInduk) {
+                    $this->errors[] = "Baris data ke-{$baris}: aset induk dengan kode \"{$kodeAsetInduk}\" tidak ditemukan, dilewati.";
+                    continue;
+                }
+
+                $asetIndukId = $asetInduk->id;
+            } else {
+                $lokasi = LokasiKantor::whereRaw('lower(nama) = ?', [mb_strtolower($namaLokasi)])->first();
+
+                if (!$lokasi) {
+                    $this->errors[] = "Baris data ke-{$baris}: lokasi kantor \"{$namaLokasi}\" tidak ditemukan, dilewati.";
+                    continue;
+                }
+
+                $lokasiKantorId = $lokasi->id;
             }
 
             $status = mb_strtolower(trim((string) ($row['status'] ?? '')));
@@ -106,7 +139,8 @@ class AsetKelengkapanImport implements ToCollection
 
             try {
                 AsetKelengkapan::create([
-                    'aset_id'            => $asetInduk->id,
+                    'aset_id'            => $asetIndukId,
+                    'lokasi_kantor_id'   => $lokasiKantorId,
                     'nama'               => $nama,
                     'merek'              => trim((string) ($row['merek'] ?? '')) ?: null,
                     'tipe'               => trim((string) ($row['tipe'] ?? '')) ?: null,

@@ -10,6 +10,7 @@ class AsetKelengkapan extends Model
 
     protected $fillable = [
         'aset_id',
+        'lokasi_kantor_id',
         'nama',
         'merek',
         'tipe',
@@ -35,6 +36,13 @@ class AsetKelengkapan extends Model
     public function aset()
     {
         return $this->belongsTo(Aset::class, 'aset_id');
+    }
+
+    // lokasi kelengkapan ini kalau BERDIRI SENDIRI (tanpa aset induk) --
+    // dipakai buat nandain kelengkapan itu fisiknya ada di kantor/cabang mana.
+    public function lokasiKantor()
+    {
+        return $this->belongsTo(LokasiKantor::class, 'lokasi_kantor_id');
     }
 
     public function pemakai()
