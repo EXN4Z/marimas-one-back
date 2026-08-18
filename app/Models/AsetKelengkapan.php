@@ -28,6 +28,15 @@ class AsetKelengkapan extends Model
         'tanggal_rusak',
     ];
 
+    protected $casts = [
+        'tanggal_rusak' => 'datetime',
+    ];
+
+    public function scopeRusak($query)
+    {
+        return $query->where('status', 'rusak');
+    }
+
     public function supplier()
     {
         return $this->belongsTo(Supplier::class, 'supplier_id');

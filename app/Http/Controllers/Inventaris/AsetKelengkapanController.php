@@ -187,19 +187,39 @@ class AsetKelengkapanController extends Controller
 
         return response()->json(['message' => "Kelengkapan {$namaKelengkapan} berhasil dihapus."]);
     }
-    public function updateStatus(Request $request, AsetKelengkapan $asetKelengkapan) {
-        $validated = $request->validate([
-            'status' => 'required|in:tersedia,dipakai,rusak,rusak_berat,diperbaiki',
-            'keterangan' => 'nullable|string',
-        ]);
-        if (in_array($validated['status'], ['rusak'])) {
-            $validated['aset_id'] = null;
-            $validated['tanggal_rusak'] = now();
+    /**
+     * POST /api/aset-kelengkapan/{aset_kelengkapan}/lapor-rusak
+     * Lepas otomatis dari induk (kalau ada), tutup paksa peminjaman aktif
+     * yang nempel di kelengkapan ini, status -> 'rusak'. Final, gak ada
+     * opsi "diperbaiki" buat kelengkapan.
+     */
+    public function laporRusak(AsetKelengkapan $asetKelengkapan)
+    {
+        if ($asetKelengkapan->status === 'rusak') {
+            return response()->json([
+                'message' => 'Kelengkapan ini sudah dilaporkan rusak.',
+            ], 422);
         }
-        $asetKelengkapan->update($validated);
+
+        DB::transaction(function () use ($asetKelengkapan) {
+            $asetKelengkapan->update([
+                'aset_id' => null,
+                'status' => 'rusak',
+                'tanggal_rusak' => now(),
+            ]);
+
+            AsetPemakai::where('aset_kelengkapan_id', $asetKelengkapan->id)
+                ->where('status', 'disetujui')
+                ->whereNull('tanggal_pengembalian')
+                ->update([
+                    'tanggal_pengembalian' => now(),
+                    'dikembalikan_at' => now(),
+                    'catatan_pengembalian' => 'Dikembalikan otomatis — kelengkapan dinyatakan rusak.',
+                ]);
+        });
 
         return response()->json(
-            $asetKelengkapan->fresh()->load(['aset', 'supplier'])
+            $asetKelengkapan->fresh()->load(['aset', 'lokasiKantor', 'supplier'])
         );
     }
     public function pasangPengganti(Request $request, AsetKelengkapan $asetKelengkapan)
@@ -227,7 +247,7 @@ class AsetKelengkapanController extends Controller
         });
 
         return response()->json(
-            $asetKelengkapan->fresh()->load(['aset', 'supplier'])
+            $asetKelengkapan->fresh()->load(['aset', 'lokasiKantor', 'supplier'])
         );
     }
     public function rusak(Request $request)
@@ -244,7 +264,7 @@ class AsetKelengkapanController extends Controller
         }
 
         $data = $query
-            ->with(['aset', 'supplier'])
+            ->with(['aset', 'lokasiKantor', 'supplier'])
             ->orderByDesc('tanggal_rusak')
             ->paginate($request->query('per_page', 15));
 
@@ -286,7 +306,7 @@ class AsetKelengkapanController extends Controller
             'tanggal_pembelian' => 'nullable|date',
             'no_surat_jalan' => 'nullable|string|max:255',
             'no_good_receive' => 'nullable|string|max:255',
-            'status' => 'nullable|in:tersedia,dipakai,rusak,diperbaiki',
+            'status' => 'nullable|in:tersedia,dipakai,rusak',
             'tanggal_rusak' => 'nullable|date',
         ]);
     }

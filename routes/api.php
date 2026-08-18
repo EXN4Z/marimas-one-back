@@ -105,9 +105,9 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/aset-kelengkapan/{asetKelengkapan}/pemakai', [AsetPemakaiController::class, 'storeKelengkapan']);
     Route::apiResource('aset-kelengkapan', AsetKelengkapanController::class)->except(['destroy']);// sesuaikan sama pola route aset utama kamu yang sekarang
     Route::delete('/aset-kelengkapan/{asetKelengkapan}', [AsetKelengkapanController::class, 'destroy']);
-    Route::patch('/aset-kelengkapan/{aset_kelengkapan}/lapor-rusak', [AsetKelengkapanController::class, 'updateStatus']);
+    Route::post('/aset-kelengkapan/{aset_kelengkapan}/lapor-rusak', [AsetKelengkapanController::class, 'laporRusak']);
     Route::post('/aset-kelengkapan/{aset_kelengkapan}/pasang-pengganti', [AsetKelengkapanController::class, 'pasangPengganti']);
-    Route::get('/aset-kelengkapan/rusak', [AsetKelengkapanController::class, 'rusak']); // pakai POST + _method=PUT biar konsisten sama pola aset/{aset}
+    Route::get('/aset-kelengkapan/rusak', [AsetKelengkapanController::class, 'rusak']);
 });
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
