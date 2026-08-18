@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 
+
 class AsetKelengkapanController extends Controller
 {
     /**
@@ -184,6 +185,69 @@ class AsetKelengkapanController extends Controller
 
         return response()->json(['message' => "Kelengkapan {$namaKelengkapan} berhasil dihapus."]);
     }
+    public function updateStatus(Request $request, AsetKelengkapan $asetKelengkapan) {
+        $validated = $request->validate([
+            'status' => 'required|in:tersedia,dipakai,rusak,rusak_berat,diperbaiki',
+            'keterangan' => 'nullable|string',
+        ]);
+        if (in_array($validated['status'], ['rusak'])) {
+            $validated['aset_id'] = null;
+            $validated['tanggal_rusak'] = now();
+        }
+        $asetKelengkapan->update($validated);
+
+        return response()->json(
+            $asetKelengkapan->fresh()->load(['aset', 'supplier'])
+        );
+    }
+    public function pasangPengganti(Request $request, AsetKelengkapan $asetKelengkapan)
+    {
+        if ($asetKelengkapan->status !== 'tersedia') {
+            return response()->json([
+                'message' => 'Kelengkapan ini tidak tersedia untuk dipasang.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'aset_id' => 'required|exists:aset,id',
+        ]);
+
+        DB::transaction(function () use ($asetKelengkapan, $validated) {
+            $adaPemakaiAktif = AsetPemakai::where('aset_id', $validated['aset_id'])
+                ->where('status', 'disetujui')
+                ->whereNull('tanggal_pengembalian')
+                ->exists();
+
+            $asetKelengkapan->update([
+                'aset_id' => $validated['aset_id'],
+                'status'  => $adaPemakaiAktif ? 'dipakai' : 'tersedia',
+            ]);
+        });
+
+        return response()->json(
+            $asetKelengkapan->fresh()->load(['aset', 'supplier'])
+        );
+    }
+    public function rusak(Request $request)
+    {
+        $query = AsetKelengkapan::query()
+            ->where('status', 'rusak');
+
+        if ($search = $request->query('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('kode_kelengkapan', 'like', "%{$search}%")
+                ->orWhere('nama', 'like', "%{$search}%")
+                ->orWhere('merek', 'like', "%{$search}%");
+            });
+        }
+
+        $data = $query
+            ->with(['aset', 'supplier'])
+            ->orderByDesc('tanggal_rusak')
+            ->paginate($request->query('per_page', 15));
+
+        return response()->json($data);
+    }
 
     protected function validasi(Request $request, ?AsetKelengkapan $asetKelengkapan = null): array
     {
@@ -214,6 +278,7 @@ class AsetKelengkapanController extends Controller
             'no_surat_jalan' => 'nullable|string|max:255',
             'no_good_receive' => 'nullable|string|max:255',
             'status' => 'nullable|in:tersedia,dipakai,rusak,diperbaiki',
+            'tanggal_rusak' => 'nullable',
         ]);
     }
 }

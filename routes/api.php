@@ -19,6 +19,7 @@ use App\Http\Controllers\Organisasi\CabangController;
 use App\Http\Controllers\PushSubscriptionController;
 use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\ImportController;
+use App\Models\AsetKelengkapan;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
@@ -103,7 +104,10 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/aset-kelengkapan/import', [AsetKelengkapanController::class, 'import']);
     Route::post('/aset-kelengkapan/{asetKelengkapan}/pemakai', [AsetPemakaiController::class, 'storeKelengkapan']);
     Route::apiResource('aset-kelengkapan', AsetKelengkapanController::class)->except(['destroy']);// sesuaikan sama pola route aset utama kamu yang sekarang
-    Route::delete('/aset-kelengkapan/{asetKelengkapan}', [AsetKelengkapanController::class, 'destroy']); // pakai POST + _method=PUT biar konsisten sama pola aset/{aset}
+    Route::delete('/aset-kelengkapan/{asetKelengkapan}', [AsetKelengkapanController::class, 'destroy']);
+    Route::patch('/aset-kelengkapan/{aset_kelengkapan}/lapor-rusak', [AsetKelengkapanController::class, 'updateStatus']);
+    Route::post('/aset-kelengkapan/{aset_kelengkapan}/pasang-pengganti', [AsetKelengkapanController::class, 'pasangPengganti']);
+    Route::get('/aset-kelengkapan/rusak', [AsetKelengkapanController::class, 'rusak']); // pakai POST + _method=PUT biar konsisten sama pola aset/{aset}
 });
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
