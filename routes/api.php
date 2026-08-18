@@ -17,7 +17,6 @@ use App\Http\Controllers\Inventaris\AsetPenangananController;
 use App\Http\Controllers\Inventaris\AsetKelengkapanController;
 use App\Http\Controllers\Organisasi\CabangController;
 use App\Http\Controllers\PushSubscriptionController;
-use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\ImportController;
 use App\Models\AsetKelengkapan;
 
@@ -25,11 +24,6 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
 Route::post('/resend-otp', [AuthController::class, 'resendOtp']);
 Route::post('/login', [AuthController::class, 'login']);
-
-// TODO: route debug ini gak ada middleware auth sama sekali, publik.
-// Kalau ini sisa development, hapus. Kalau masih dipakai, minimal
-// kasih ['auth:sanctum', 'role:admin'].
-Route::get('/debug-keuangan', [DashboardController::class, 'debugKeuangan']);
 
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
@@ -160,37 +154,4 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 
     Route::post('/supplier/import', [SupplierController::class, 'import']);
     Route::apiResource('supplier', SupplierController::class)->except(['index', 'show']);
-});
-Route::get('/debug-webpush-test', function () {
-    $auth = [
-        'VAPID' => [
-            'subject' => config('webpush.vapid.subject'),
-            'publicKey' => config('webpush.vapid.public_key'),
-            'privateKey' => config('webpush.vapid.private_key'),
-        ],
-    ];
-    $webPush = new \Minishlink\WebPush\WebPush($auth);
-    $sub = DB::table('push_subscriptions')->where('subscribable_id', 1)
-        ->where('subscribable_id', 1)
-        ->where('endpoint', 'like', '%notify.windows.com%')
-        ->latest('created_at')
-        ->first();
-    $subscription = \Minishlink\WebPush\Subscription::create([
-        'endpoint' => $sub->endpoint,
-        'publicKey' => $sub->public_key,
-        'authToken' => $sub->auth_token,
-        'contentEncoding' => $sub->content_encoding ?? 'aes128gcm',
-    ]);
-    $report = $webPush->sendOneNotification(
-        $subscription,
-        json_encode(['title' => 'Test', 'body' => 'Halo dari route'])
-    );
-
-    return response()->json([
-        'uri' => (string) $report->getRequest()->getUri(),
-        'success' => $report->isSuccess(),
-        'reason' => $report->getReason(),
-        'status_code' => $report->getResponse()?->getStatusCode(),
-        'body' => (string) $report->getResponse()?->getBody(),
-    ]);
 });
