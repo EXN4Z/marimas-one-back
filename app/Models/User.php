@@ -58,6 +58,16 @@ class User extends Authenticatable
     {
         return self::$roleLevels[$role] ?? 0;
     }
+
+    // BARU: generate password default dari nama depan (kata pertama di
+    // 'name'), persis apa adanya, huruf besar/kecil tidak diubah.
+    // Contoh: "Febriyan Arbi" -> "Febriyan", "FEBRIYAN ARBI" -> "FEBRIYAN".
+    public static function generatePasswordFromName(string $name): string
+    {
+        $firstName = trim(explode(' ', trim($name))[0] ?? '');
+
+        return $firstName !== '' ? $firstName : Str::random(8);
+    }
     protected function casts(): array
     {
         return [
