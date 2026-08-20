@@ -309,7 +309,7 @@ class AsetBuktiImport implements ToCollection
             'user_id'             => $penerimaUser->id,
             'status'              => 'disetujui',
             'no_struk_penerimaan' => $noStruk,
-            'tanggal_penerimaan'  => $tanggalPenerimaan,
+            'diterima_at'  => $tanggalPenerimaan,
         ]);
     }
 
