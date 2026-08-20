@@ -27,7 +27,7 @@ Route::post('/login', [AuthController::class, 'login']);
 
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
-Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
+Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::apiResource('cabang', CabangController::class);
 });
 
@@ -56,7 +56,6 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     });
 
     Route::get('/user', [AuthController::class, 'user']);
-    Route::get('/karyawan', [UserController::class, 'index']);
 });
 
 // BARU: role 'cabang' butuh akses read-only ke kpd juga (dipakai DashboardCabang).
@@ -76,6 +75,7 @@ Route::middleware(['auth:sanctum', 'role:manajer,hr,admin,cabang'])->group(funct
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
+    Route::get('/karyawan', [UserController::class, 'index']);
     Route::get('/karyawan/{user}', [UserController::class, 'edit']);
     Route::put('/karyawan/{user}', [UserController::class, 'update']);
     Route::delete('/karyawan/{user}', [UserController::class, 'destroy']);
