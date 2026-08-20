@@ -8,7 +8,6 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Str;
 
 class UserController extends Controller
 {
@@ -64,6 +63,9 @@ class UserController extends Controller
             'tanggal_masuk' => 'nullable|date',
         ]);
 
+        // BARU: password default dibuat dari nama user (huruf kecil, spasi
+        // diganti underscore), bukan random lagi.
+        $plainPassword = User::generatePasswordFromName($validated['name']);
         $isCabang = $validated['role'] === 'cabang';
 
         // BARU: gak ada lagi tabel pekerja terpisah — semua kolom karyawan

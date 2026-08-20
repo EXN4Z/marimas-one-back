@@ -9,7 +9,6 @@ use App\Models\AsetPemakai;
 use App\Models\Departemen;
 use App\Models\Supplier;
 use App\Models\User;
-use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -127,12 +126,13 @@ class AsetBuktiImport implements ToCollection
                                 // Pekerja::create() dulu bikin row minimal tanpa akun
                                 // login/password. Sekarang pekerja = users, jadi
                                 // User::create() butuh email/password (kolom wajib) --
-                                // diisi dummy unik & random, sama seperti resolusi
-                                // NIK di atas.
+                                // email diisi dummy unik. BARU: password dibuat dari
+                                // nama (huruf kecil, spasi jadi underscore), bukan
+                                // random lagi, biar user hasil import juga bisa login.
                                 $penerimaUser = User::create([
                                     'name'          => $namaPenerima,
                                     'email'         => 'nik' . $nikPenerima . '@placeholder.local',
-                                    'password'      => Str::random(32),
+                                    'password'      => User::generatePasswordFromName($namaPenerima),
                                     'role'          => 'karyawan',
                                     'nik'           => $nikPenerima,
                                     'departemen_id' => $departemenId,

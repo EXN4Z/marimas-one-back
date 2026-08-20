@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Hash;
 
 class AdminUserController extends Controller
@@ -20,7 +19,9 @@ class AdminUserController extends Controller
         }
 
         $user = User::findOrFail($id);
-        $newPassword = Str::random(10); // BARU: password baru, human-typeable
+        // BARU: password baru dibuat dari nama user (huruf kecil, spasi
+        // diganti underscore), bukan random lagi.
+        $newPassword = User::generatePasswordFromName($user->name);
 
         $user->update([
             'password' => Hash::make($newPassword),
