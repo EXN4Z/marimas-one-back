@@ -14,9 +14,9 @@ class User extends Authenticatable
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasApiTokens, HasFactory, Notifiable, HasPushSubscriptions;
 
-    // BARU: password default/reset dibuat dari nama user, huruf kecil,
-    // spasi (satu atau lebih) diganti underscore. Contoh: "Budi Santoso"
-    // -> "budi_santoso".
+    // BARU: password default/reset dibuat dari nama depan user saja,
+    // persis apa adanya (huruf besar/kecil TIDAK diubah). Contoh:
+    // "Febriyan Arbi" -> "Febriyan", "FEBRIYAN ARBI" -> "FEBRIYAN".
     protected $fillable = [
         'name',
         'email',
