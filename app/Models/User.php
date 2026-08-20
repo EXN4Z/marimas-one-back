@@ -14,15 +14,17 @@ class User extends Authenticatable
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasApiTokens, HasFactory, Notifiable, HasPushSubscriptions;
 
-    // BARU: password default/reset dibuat dari nama user, huruf kecil,
-    // spasi (satu atau lebih) diganti underscore. Contoh: "Budi Santoso"
-    // -> "budi_santoso".
+    // BARU: password default/reset dibuat dari nama depan user saja,
+    // persis apa adanya (huruf besar/kecil TIDAK diubah). Contoh:
+    // "Febriyan Arbi" -> "Febriyan", "FEBRIYAN ARBI" -> "FEBRIYAN".
     public static function generatePasswordFromName(string $name): string
     {
-        $password = Str::lower(trim($name));
-        $password = preg_replace('/\s+/', '_', $password);
+        $name = trim($name);
 
-        return $password;
+        // Ambil kata pertama aja sebagai nama depan.
+        $firstName = Str::before($name, ' ');
+
+        return $firstName;
     }
 
     protected $fillable = [
