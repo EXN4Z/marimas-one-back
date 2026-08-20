@@ -251,13 +251,17 @@ class AsetBuktiRapiImport implements ToCollection
                     $keteranganGabung = trim($namaJenis . ($keteranganAsli ? ' -- ' . $keteranganAsli : ''));
 
                     $aset = Aset::create(array_merge($infoBersama, [
-                        'merek'          => $merek,
-                        'tipe'           => $tipe,
-                        'warna'          => $hasilParse['warna'],
-                        'serial_number'  => $hasilParse['serial_number'],
-                        'jumlah'         => $row['jumlah'] ?? null,
-                        'keterangan'     => $keteranganGabung,
-                        'status'         => $statusAset,
+                        'merek'             => $merek,
+                        'tipe'              => $tipe,
+                        'warna'             => $hasilParse['warna'],
+                        'serial_number'     => $hasilParse['serial_number'],
+                        'jumlah'            => $row['jumlah'] ?? null,
+                        'keterangan'        => $keteranganGabung,
+                        'status'            => $statusAset,
+                        // BARU: samain juga ke tanggal_pembelian (kolom yang
+                        // dipakai dashboard "Tren Pembelian Aset per Bulan"),
+                        // sama seperti fix di AsetBuktiImport.
+                        'tanggal_pembelian' => $infoBersama['tanggal'] ?? null,
                     ]));
 
                     if ($penerimaUser) {

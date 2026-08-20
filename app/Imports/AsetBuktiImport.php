@@ -202,13 +202,19 @@ class AsetBuktiImport implements ToCollection
                         $hasilParse = $this->parseKeterangan($keteranganAsli);
 
                         $aset = Aset::create(array_merge($infoBukti, [
-                            'merek'         => $namaBarangTrim,
-                            'supplier_id'   => $supplierId,
-                            'jumlah'        => $row["jumlah_{$n}"] ?? null,
-                            'keterangan'    => $keteranganAsli,
-                            'serial_number' => $hasilParse['serial_number'],
-                            'warna'         => $hasilParse['warna'],
-                            'status'        => $statusAset,
+                            'merek'             => $namaBarangTrim,
+                            'supplier_id'       => $supplierId,
+                            'jumlah'            => $row["jumlah_{$n}"] ?? null,
+                            'keterangan'        => $keteranganAsli,
+                            'serial_number'     => $hasilParse['serial_number'],
+                            'warna'             => $hasilParse['warna'],
+                            'status'            => $statusAset,
+                            // BARU: samain juga ke tanggal_pembelian (kolom yang
+                            // dipakai dashboard "Tren Pembelian Aset per Bulan").
+                            // $infoBukti['tanggal'] cuma keisi ke kolom 'tanggal'
+                            // (kolom bukti serah-terima), jadi tanpa ini
+                            // tanggal_pembelian selalu null buat aset hasil import.
+                            'tanggal_pembelian' => $infoBukti['tanggal'] ?? null,
                         ]));
 
                         $asetUtamaTerakhir = $aset;
