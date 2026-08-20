@@ -6,10 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Imports\AsetKelengkapanImport;
 use App\Models\AsetKelengkapan;
 use App\Models\AsetPemakai;
+use App\Models\User;
+use App\Notifications\AsetKelengkapanKerusakanDilaporkan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
+
 
 class AsetKelengkapanController extends Controller
 {
@@ -64,9 +69,13 @@ class AsetKelengkapanController extends Controller
 
     /**
      * GET /api/aset-kelengkapan
-     * Sama polanya kayak AsetController::index() — admin lihat semua,
-     * non-admin cuma lihat yang 'tersedia' atau yang terkait pemakaian
-     * dia sendiri (lewat aset_pemakai.aset_kelengkapan_id).
+     * Admin lihat semua (termasuk yang 'rusak' & punya orang lain).
+     * Non-admin cuma lihat yang 'tersedia' ATAU yang LAGI dia pinjam/pending
+     * sendiri (pemakaiSaatIni/pemakaiPending, bukan `pemakai()` yang isinya
+     * riwayat lengkap -- kalau dibiarin riwayat, kelengkapan yang udah balik
+     * ke rusak/dipegang orang lain lain ikut kebocor cuma karena user ini
+     * PERNAH pegang). Status 'rusak' juga sengaja DIKECUALIKAN total dari
+     * non-admin, bukan cuma disembunyiin di tab FE.
      */
     public function index(Request $request)
     {
@@ -82,12 +91,16 @@ class AsetKelengkapanController extends Controller
         ])->latest();
 
         if (!$isAdmin) {
-            $query->where(function ($q) use ($user) {
-                $q->where('status', 'tersedia')
-                    ->orWhereHas('pemakai', function ($sub) use ($user) {
-                        $sub->where('user_id', $user->id);
-                    });
-            });
+            $query->where('status', '!=', 'rusak')
+                ->where(function ($q) use ($user) {
+                    $q->where('status', 'tersedia')
+                        ->orWhereHas('pemakaiSaatIni', function ($sub) use ($user) {
+                            $sub->where('user_id', $user->id);
+                        })
+                        ->orWhereHas('pemakaiPending', function ($sub) use ($user) {
+                            $sub->where('user_id', $user->id);
+                        });
+                });
         }
 
         return response()->json($query->get());
@@ -95,6 +108,9 @@ class AsetKelengkapanController extends Controller
 
     /**
      * GET /api/aset-kelengkapan/{aset_kelengkapan}
+     * Scoping sama kayak index() -- WAJIB dicek di sini juga (bukan cuma
+     * index()), soalnya endpoint ini bisa dipanggil langsung lewat ID
+     * tanpa lewat daftar/tabel.
      */
     public function show(Request $request, AsetKelengkapan $asetKelengkapan)
     {
@@ -102,9 +118,10 @@ class AsetKelengkapanController extends Controller
         $isAdmin = $user?->role === 'admin';
 
         if (!$isAdmin) {
-            $terkaitUser = $asetKelengkapan->pemakai()
-                ->where('user_id', $user->id)
-                ->exists();
+            abort_if($asetKelengkapan->status === 'rusak', 403, 'Kamu tidak punya akses untuk melihat detail kelengkapan ini.');
+
+            $terkaitUser = $asetKelengkapan->pemakaiSaatIni()->where('user_id', $user->id)->exists()
+                || $asetKelengkapan->pemakaiPending()->where('user_id', $user->id)->exists();
 
             abort_unless($asetKelengkapan->status === 'tersedia' || $terkaitUser, 403, 'Kamu tidak punya akses untuk melihat detail kelengkapan ini.');
         }
@@ -186,6 +203,121 @@ class AsetKelengkapanController extends Controller
 
         return response()->json(['message' => "Kelengkapan {$namaKelengkapan} berhasil dihapus."]);
     }
+    /**
+     * POST /api/aset-kelengkapan/{aset_kelengkapan}/lapor-rusak
+     * Lepas otomatis dari induk (kalau ada), tutup paksa peminjaman aktif
+     * yang nempel di kelengkapan ini, status -> 'rusak'. Final, gak ada
+     * opsi "diperbaiki" buat kelengkapan.
+     */
+    public function laporRusak(AsetKelengkapan $asetKelengkapan)
+    {
+        if ($asetKelengkapan->status === 'rusak') {
+            return response()->json([
+                'message' => 'Kelengkapan ini sudah dilaporkan rusak.',
+            ], 422);
+        }
+
+        // tangkep dulu sebelum aset_id dikosongin di transaksi bawah --
+        // butuh buat isi pesan notif ("terpasang di ...").
+        $asetIndukLabel = null;
+        if ($asetKelengkapan->aset_id) {
+            $asetInduk = $asetKelengkapan->load('aset')->aset;
+            if ($asetInduk) {
+                $asetIndukLabel = trim(($asetInduk->kode_aset ?? '') . ' ' . ($asetInduk->merek ?? ''));
+            }
+        }
+
+        DB::transaction(function () use ($asetKelengkapan) {
+            $asetKelengkapan->update([
+                'aset_id' => null,
+                'status' => 'rusak',
+                'tanggal_rusak' => now(),
+            ]);
+
+            AsetPemakai::where('aset_kelengkapan_id', $asetKelengkapan->id)
+                ->where('status', 'disetujui')
+                ->whereNull('tanggal_pengembalian')
+                ->update([
+                    'tanggal_pengembalian' => now(),
+                    'dikembalikan_at' => now(),
+                    'catatan_pengembalian' => 'Dikembalikan otomatis — kelengkapan dinyatakan rusak.',
+                ]);
+        });
+
+        // TAMBAH: notif ke manajer/hr/admin tiap ada laporan kerusakan
+        // kelengkapan masuk (database + broadcast + web push), sama pola
+        // kayak laporan kerusakan aset utama. Yang lapor selalu admin
+        // (route ini role:admin-only) jadi dia sendiri dikecualikan dari
+        // penerima biar gak notif diri sendiri.
+        // try-catch: laporan yang SUDAH tersimpan di atas jangan ikut gagal
+        // kalau notif error.
+        try {
+            Notification::send(
+                User::whereIn('role', ['manajer', 'hr', 'admin'])
+                    ->where('id', '!=', auth()->id())
+                    ->get(),
+                new AsetKelengkapanKerusakanDilaporkan($asetKelengkapan, $asetIndukLabel, auth()->user()->name)
+            );
+        } catch (\Throwable $e) {
+            Log::error('Gagal mengirim notifikasi laporan kerusakan kelengkapan', [
+                'aset_kelengkapan_id' => $asetKelengkapan->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
+
+        return response()->json(
+            $asetKelengkapan->fresh()->load(['aset', 'lokasiKantor', 'supplier'])
+        );
+    }
+    public function pasangPengganti(Request $request, AsetKelengkapan $asetKelengkapan)
+    {
+        if ($asetKelengkapan->status !== 'tersedia') {
+            return response()->json([
+                'message' => 'Kelengkapan ini tidak tersedia untuk dipasang.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'aset_id' => 'required|exists:aset,id',
+        ]);
+
+        DB::transaction(function () use ($asetKelengkapan, $validated) {
+            $adaPemakaiAktif = AsetPemakai::where('aset_id', $validated['aset_id'])
+                ->where('status', 'disetujui')
+                ->whereNull('tanggal_pengembalian')
+                ->exists();
+
+            $asetKelengkapan->update([
+                'aset_id' => $validated['aset_id'],
+                'status'  => $adaPemakaiAktif ? 'dipakai' : 'tersedia',
+            ]);
+        });
+
+        return response()->json(
+            $asetKelengkapan->fresh()->load(['aset', 'lokasiKantor', 'supplier'])
+        );
+    }
+    public function rusak(Request $request)
+    {
+        $query = AsetKelengkapan::query()
+            ->where('status', 'rusak');
+
+        if ($search = $request->query('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('kode_kelengkapan', 'like', "%{$search}%")
+                ->orWhere('nama', 'like', "%{$search}%")
+                ->orWhere('merek', 'like', "%{$search}%");
+            });
+        }
+
+        $data = $query
+            ->with(['aset', 'lokasiKantor', 'supplier'])
+            ->orderByDesc('tanggal_rusak')
+            ->paginate($request->query('per_page', 15));
+
+        return response()->json($data);
+    }
 
     protected function validasi(Request $request, ?AsetKelengkapan $asetKelengkapan = null): array
     {
@@ -222,7 +354,8 @@ class AsetKelengkapanController extends Controller
             'tanggal_pembelian' => 'nullable|date',
             'no_surat_jalan' => 'nullable|string|max:255',
             'no_good_receive' => 'nullable|string|max:255',
-            'status' => 'nullable|in:tersedia,dipakai,rusak,diperbaiki',
+            'status' => 'nullable|in:tersedia,dipakai,rusak',
+            'tanggal_rusak' => 'nullable|date',
         ]);
     }
 }

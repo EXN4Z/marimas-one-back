@@ -17,22 +17,17 @@ use App\Http\Controllers\Inventaris\AsetPenangananController;
 use App\Http\Controllers\Inventaris\AsetKelengkapanController;
 use App\Http\Controllers\Organisasi\CabangController;
 use App\Http\Controllers\PushSubscriptionController;
-use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\ImportController;
+use App\Models\AsetKelengkapan;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
 Route::post('/resend-otp', [AuthController::class, 'resendOtp']);
 Route::post('/login', [AuthController::class, 'login']);
 
-// TODO: route debug ini gak ada middleware auth sama sekali, publik.
-// Kalau ini sisa development, hapus. Kalau masih dipakai, minimal
-// kasih ['auth:sanctum', 'role:admin'].
-Route::get('/debug-keuangan', [DashboardController::class, 'debugKeuangan']);
-
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
-Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
+Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::apiResource('cabang', CabangController::class);
 });
 
@@ -52,6 +47,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::delete('/push-subscriptions', [PushSubscriptionController::class, 'destroy']);
 });
 Route::middleware(['auth:sanctum', 'role:admin'])->post('/admin/users/{id}/reset-password', [AdminUserController::class, 'resetPassword']);
+Route::middleware(['auth:sanctum', 'role:admin'])->post('/admin/users/{id}/set-password', [AdminUserController::class, 'setPassword']);
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
     Route::post('/aset-penanganan', [AsetPenangananController::class, 'store']); // karyawan: lapor kerusakan aset yang lagi dia pakai
@@ -61,7 +57,6 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     });
 
     Route::get('/user', [AuthController::class, 'user']);
-    Route::get('/karyawan', [UserController::class, 'index']);
 });
 
 // BARU: role 'cabang' butuh akses read-only ke kpd juga (dipakai DashboardCabang).
@@ -81,6 +76,7 @@ Route::middleware(['auth:sanctum', 'role:manajer,hr,admin,cabang'])->group(funct
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
+    Route::get('/karyawan', [UserController::class, 'index']);
     Route::get('/karyawan/{user}', [UserController::class, 'edit']);
     Route::put('/karyawan/{user}', [UserController::class, 'update']);
     Route::delete('/karyawan/{user}', [UserController::class, 'destroy']);
@@ -102,14 +98,29 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/import-aset-penanganan', [ImportController::class, 'importAsetPenanganan']); // import bulk laporan penanganan aset (Berhasil Diperbaiki / Rusak Berat)
     Route::post('/aset-kelengkapan/import', [AsetKelengkapanController::class, 'import']);
     Route::post('/aset-kelengkapan/{asetKelengkapan}/pemakai', [AsetPemakaiController::class, 'storeKelengkapan']);
-    Route::apiResource('aset-kelengkapan', AsetKelengkapanController::class)->except(['destroy']);// sesuaikan sama pola route aset utama kamu yang sekarang
-    Route::delete('/aset-kelengkapan/{asetKelengkapan}', [AsetKelengkapanController::class, 'destroy']); // pakai POST + _method=PUT biar konsisten sama pola aset/{aset}
+    // index & show DIPINDAH ke grup role:karyawan,manajer,hr,admin di bawah
+    // (bareng /aset) -- non-admin butuh baca kelengkapan yang tersedia/lagi
+    // dia pinjam sendiri, filtering-nya udah dihandle di controller.
+    Route::post('/aset-kelengkapan', [AsetKelengkapanController::class, 'store']);
+    Route::post('/aset-kelengkapan/{asetKelengkapan}', [AsetKelengkapanController::class, 'update']); // POST + _method=PUT krn ada file upload, sama pola kayak /aset
+    Route::delete('/aset-kelengkapan/{asetKelengkapan}', [AsetKelengkapanController::class, 'destroy']);
+    Route::post('/aset-kelengkapan/{aset_kelengkapan}/lapor-rusak', [AsetKelengkapanController::class, 'laporRusak']);
+    Route::post('/aset-kelengkapan/{aset_kelengkapan}/pasang-pengganti', [AsetKelengkapanController::class, 'pasangPengganti']);
+    Route::get('/aset-kelengkapan/rusak', [AsetKelengkapanController::class, 'rusak']);
 });
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
     Route::get('/aset', [AsetController::class, 'index']);
     Route::get('/aset/{aset}', [AsetController::class, 'show']);
     Route::get('/supplier', [SupplierController::class, 'index']);
+
+    // BARU: non-admin (karyawan/manajer/hr) butuh liat daftar kelengkapan
+    // aset (charger, tas, dll) buat tau apa yang tersedia & apa yang lagi
+    // dia pinjam sendiri -- scoping detail (gak boleh liat punya orang
+    // lain / yang berstatus rusak) dicek DI DALAM controller, bukan cuma
+    // di middleware ini.
+    Route::get('/aset-kelengkapan', [AsetKelengkapanController::class, 'index']);
+    Route::get('/aset-kelengkapan/{asetKelengkapan}', [AsetKelengkapanController::class, 'show']);
 
     // admin: riwayat GLOBAL semua aset. karyawan/manajer/hr: riwayat
     // dibatasi cuma punya sendiri (dicek & difilter di dalam controller,
@@ -144,37 +155,4 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 
     Route::post('/supplier/import', [SupplierController::class, 'import']);
     Route::apiResource('supplier', SupplierController::class)->except(['index', 'show']);
-});
-Route::get('/debug-webpush-test', function () {
-    $auth = [
-        'VAPID' => [
-            'subject' => config('webpush.vapid.subject'),
-            'publicKey' => config('webpush.vapid.public_key'),
-            'privateKey' => config('webpush.vapid.private_key'),
-        ],
-    ];
-    $webPush = new \Minishlink\WebPush\WebPush($auth);
-    $sub = DB::table('push_subscriptions')->where('subscribable_id', 1)
-        ->where('subscribable_id', 1)
-        ->where('endpoint', 'like', '%notify.windows.com%')
-        ->latest('created_at')
-        ->first();
-    $subscription = \Minishlink\WebPush\Subscription::create([
-        'endpoint' => $sub->endpoint,
-        'publicKey' => $sub->public_key,
-        'authToken' => $sub->auth_token,
-        'contentEncoding' => $sub->content_encoding ?? 'aes128gcm',
-    ]);
-    $report = $webPush->sendOneNotification(
-        $subscription,
-        json_encode(['title' => 'Test', 'body' => 'Halo dari route'])
-    );
-
-    return response()->json([
-        'uri' => (string) $report->getRequest()->getUri(),
-        'success' => $report->isSuccess(),
-        'reason' => $report->getReason(),
-        'status_code' => $report->getResponse()?->getStatusCode(),
-        'body' => (string) $report->getResponse()?->getBody(),
-    ]);
 });

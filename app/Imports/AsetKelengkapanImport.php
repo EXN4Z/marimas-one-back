@@ -41,13 +41,13 @@ use Maatwebsite\Excel\Concerns\ToCollection;
  * Departemen -- beda dengan "Lokasi Kantor" yang TIDAK dibuat otomatis
  * (harus sudah ada di data master lokasi/cabang).
  * "Status" default "tersedia" kalau kosong, harus salah satu dari
- * tersedia/dipakai/rusak/diperbaiki kalau diisi.
+ * tersedia/dipakai/rusak kalau diisi.
  */
 class AsetKelengkapanImport implements ToCollection
 {
     private const KOLOM_PENANDA_HEADER = 'kode_aset_induk';
     private const MAX_BARIS_DISCAN = 5;
-    private const STATUS_VALID = ['tersedia', 'dipakai', 'rusak', 'diperbaiki'];
+    private const STATUS_VALID = ['tersedia', 'dipakai', 'rusak'];
 
     protected int $rowCount = 0;
     protected array $errors = [];
@@ -121,7 +121,7 @@ class AsetKelengkapanImport implements ToCollection
             if ($status === '') {
                 $status = 'tersedia';
             } elseif (!in_array($status, self::STATUS_VALID, true)) {
-                $this->errors[] = "Baris data ke-{$baris}: nilai kolom \"Status\" (\"{$row['status']}\") tidak dikenali (harus tersedia/dipakai/rusak/diperbaiki), dilewati.";
+                $this->errors[] = "Baris data ke-{$baris}: nilai kolom \"Status\" (\"{$row['status']}\") tidak dikenali (harus tersedia/dipakai/rusak), dilewati.";
                 continue;
             }
 

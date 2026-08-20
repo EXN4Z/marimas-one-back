@@ -18,12 +18,11 @@ class AsetController extends Controller
      * Admin: daftar SEMUA aset (perilaku lama, gak berubah).
      * Non-admin (karyawan/cabang/manajer/hr): dibatasi cuma aset yang
      * statusnya 'tersedia' (biar tau apa yang bisa dipinjam) PLUS aset yang
-     * pernah/sedang ada hubungan pemakaian sama akun dia sendiri (lewat
-     * user_id di tabel aset_pemakai) -- sama persis pola kepemilikan yang
-     * dipakai di AsetPemakaiController::riwayat(). Aset yang lagi
-     * dipegang/riwayatnya cuma nempel ke orang lain TIDAK ikut dikirim ke
-     * non-admin sama sekali, jadi bukan cuma disembunyiin di tampilan
-     * React -- datanya memang gak nyampe ke browser mereka.
+     * LAGI dia pegang/pending sendiri (pemakaiSaatIni/pemakaiPending --
+     * bukan `pemakai()` yang isinya riwayat lengkap, biar aset yang PERNAH
+     * dia pegang tapi sekarang udah 'rusak_berat'/'dijual' gak ikut
+     * kebocor). Status 'rusak_berat' & 'dijual' juga sengaja DIKECUALIKAN
+     * total dari non-admin, bukan cuma disembunyiin di tab React.
      */
     public function index(Request $request)
     {
@@ -40,12 +39,16 @@ class AsetController extends Controller
         ])->latest();
 
         if (!$isAdmin) {
-            $query->where(function ($q) use ($user) {
-                $q->where('status', 'tersedia')
-                    ->orWhereHas('pemakai', function ($sub) use ($user) {
-                        $sub->where('user_id', $user->id);
-                    });
-            });
+            $query->whereNotIn('status', ['rusak_berat', 'dijual'])
+                ->where(function ($q) use ($user) {
+                    $q->where('status', 'tersedia')
+                        ->orWhereHas('pemakaiSaatIni', function ($sub) use ($user) {
+                            $sub->where('user_id', $user->id);
+                        })
+                        ->orWhereHas('pemakaiPending', function ($sub) use ($user) {
+                            $sub->where('user_id', $user->id);
+                        });
+                });
         }
 
         return response()->json($query->get());
@@ -54,10 +57,10 @@ class AsetController extends Controller
     /**
      * GET /api/aset/{aset}
      * Detail satu aset, termasuk riwayat lengkap (pemakai & penanganan) buat halaman detail.
-     * Non-admin cuma boleh buka detail aset yang 'tersedia' atau yang
-     * pernah/sedang berhubungan pemakaian sama dia sendiri -- sama scoping-nya
-     * kayak index(). Ini WAJIB dicek di sini juga (bukan cuma index()), soalnya
-     * endpoint ini bisa dipanggil langsung lewat ID tanpa lewat daftar/tabel.
+     * Non-admin cuma boleh buka detail aset yang 'tersedia' atau yang LAGI
+     * dia pegang/pending sendiri -- sama scoping-nya kayak index(). Ini
+     * WAJIB dicek di sini juga (bukan cuma index()), soalnya endpoint ini
+     * bisa dipanggil langsung lewat ID tanpa lewat daftar/tabel.
      */
     public function show(Request $request, Aset $aset)
     {
@@ -65,9 +68,10 @@ class AsetController extends Controller
         $isAdmin = $user?->role === 'admin';
 
         if (!$isAdmin) {
-            $terkaitUser = $aset->pemakai()
-                ->where('user_id', $user->id)
-                ->exists();
+            abort_if(in_array($aset->status, ['rusak_berat', 'dijual'], true), 403, 'Kamu tidak punya akses untuk melihat detail aset ini.');
+
+            $terkaitUser = $aset->pemakaiSaatIni()->where('user_id', $user->id)->exists()
+                || $aset->pemakaiPending()->where('user_id', $user->id)->exists();
 
             abort_unless($aset->status === 'tersedia' || $terkaitUser, 403, 'Kamu tidak punya akses untuk melihat detail aset ini.');
         }

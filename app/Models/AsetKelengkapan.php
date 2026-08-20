@@ -25,7 +25,17 @@ class AsetKelengkapan extends Model
         'no_surat_jalan',
         'no_good_receive',
         'status',
+        'tanggal_rusak',
     ];
+
+    protected $casts = [
+        'tanggal_rusak' => 'datetime',
+    ];
+
+    public function scopeRusak($query)
+    {
+        return $query->where('status', 'rusak');
+    }
 
     public function supplier()
     {
