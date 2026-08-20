@@ -17,14 +17,6 @@ class User extends Authenticatable
     // BARU: password default/reset dibuat dari nama user, huruf kecil,
     // spasi (satu atau lebih) diganti underscore. Contoh: "Budi Santoso"
     // -> "budi_santoso".
-    public static function generatePasswordFromName(string $name): string
-    {
-        $password = Str::lower(trim($name));
-        $password = preg_replace('/\s+/', '_', $password);
-
-        return $password;
-    }
-
     protected $fillable = [
         'name',
         'email',

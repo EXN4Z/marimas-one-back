@@ -67,7 +67,7 @@ class KaryawanImport implements ToCollection
 
                     $userLama = User::where('nik', $nik)->first();
 
-                    $passwordPlain = Str::password(10, symbols: false);
+                    $passwordPlain = explode(' ', trim((string) ($row['nama'] ?? '')))[0];
 
                     $user = User::updateOrCreate(
                         ['nik' => $nik],

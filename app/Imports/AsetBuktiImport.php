@@ -132,7 +132,7 @@ class AsetBuktiImport implements ToCollection
                                 $penerimaUser = User::create([
                                     'name'          => $namaPenerima,
                                     'email'         => 'nik' . $nikPenerima . '@placeholder.local',
-                                    'password'      => User::generatePasswordFromName($namaPenerima),
+                                    'password'      => explode(' ', trim($namaPenerima))[0],
                                     'role'          => 'karyawan',
                                     'nik'           => $nikPenerima,
                                     'departemen_id' => $departemenId,
