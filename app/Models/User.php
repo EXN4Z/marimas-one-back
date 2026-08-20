@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 use NotificationChannels\WebPush\HasPushSubscriptions;
 
@@ -12,6 +13,17 @@ class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasApiTokens, HasFactory, Notifiable, HasPushSubscriptions;
+
+    // BARU: password default/reset dibuat dari nama user, huruf kecil,
+    // spasi (satu atau lebih) diganti underscore. Contoh: "Budi Santoso"
+    // -> "budi_santoso".
+    public static function generatePasswordFromName(string $name): string
+    {
+        $password = Str::lower(trim($name));
+        $password = preg_replace('/\s+/', '_', $password);
+
+        return $password;
+    }
 
     protected $fillable = [
         'name',
