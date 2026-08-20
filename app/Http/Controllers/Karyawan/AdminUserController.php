@@ -43,7 +43,7 @@ class AdminUserController extends Controller
         }
 
         $validated = $request->validate([
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => ['required', 'string', 'confirmed'],
         ]);
 
         $user = User::findOrFail($id);
