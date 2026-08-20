@@ -47,6 +47,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::delete('/push-subscriptions', [PushSubscriptionController::class, 'destroy']);
 });
 Route::middleware(['auth:sanctum', 'role:admin'])->post('/admin/users/{id}/reset-password', [AdminUserController::class, 'resetPassword']);
+Route::middleware(['auth:sanctum', 'role:admin'])->post('/admin/users/{id}/set-password', [AdminUserController::class, 'setPassword']);
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
     Route::post('/aset-penanganan', [AsetPenangananController::class, 'store']); // karyawan: lapor kerusakan aset yang lagi dia pakai

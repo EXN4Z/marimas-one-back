@@ -32,4 +32,29 @@ class AdminUserController extends Controller
             'new_password' => $newPassword, // BARU: cuma muncul SEKALI di response ini, nggak disimpan plaintext di DB
         ]);
     }
+
+    // BARU: POST /api/admin/users/{id}/set-password -- admin nentuin sendiri
+    // password barunya (beda dari resetPassword yang generate random).
+    public function setPassword(Request $request, int $id)
+    {
+        // BARU: pastikan cuma admin yang bisa akses (double-check di route middleware juga)
+        if ($request->user()->role !== 'admin') {
+            return response()->json(['message' => 'Tidak diizinkan.'], 403);
+        }
+
+        $validated = $request->validate([
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $user = User::findOrFail($id);
+
+        $user->update([
+            'password' => Hash::make($validated['password']),
+        ]);
+
+        return response()->json([
+            'message' => 'Password berhasil diubah.',
+            'user' => $user->only(['id', 'name']),
+        ]);
+    }
 }
