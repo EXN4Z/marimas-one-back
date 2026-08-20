@@ -55,6 +55,7 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|unique:users,email',
             'phone' => 'nullable|string|unique:users,phone',
+            'password' => 'required|string',
             'role' => 'required|string|in:guest,karyawan,manajer,hr,admin,cabang',
             'nik' => 'required_unless:role,cabang|nullable|string|unique:users,nik',
             'departemen_id' => 'nullable|exists:departemen,id',
@@ -63,7 +64,6 @@ class UserController extends Controller
             'tanggal_masuk' => 'nullable|date',
         ]);
 
-        $plainPassword = Str::random(8);
         $isCabang = $validated['role'] === 'cabang';
 
         // BARU: gak ada lagi tabel pekerja terpisah — semua kolom karyawan
@@ -74,7 +74,7 @@ class UserController extends Controller
             'name' => $validated['name'],
             'email' => $validated['email'] ?? null,
             'phone' => $validated['phone'] ?? null,
-            'password' => Hash::make($plainPassword),
+            'password' => Hash::make($validated['password']),
             'role' => $validated['role'],
             'lokasi_kantor_id' => $isCabang ? $validated['lokasi_kantor_id'] : ($validated['lokasi_kantor_id'] ?? null),
             'nik' => $isCabang ? null : $validated['nik'],
@@ -85,7 +85,6 @@ class UserController extends Controller
         return response()->json([
             'message' => 'User berhasil dibuat.',
             'user' => $user->load('departemen', 'lokasiKantor'),
-            'password' => $plainPassword,
         ], 201);
     }
 
