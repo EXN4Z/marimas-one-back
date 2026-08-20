@@ -121,13 +121,22 @@ class AuthController extends Controller
             'password' => 'required',
         ]);
 
-        $user = User::where('email', $request->login)
+        // BARU: login sekarang bisa pakai email, no HP, ATAU nama. Nama tidak
+        // unik di tabel users, jadi kalau ada beberapa akun dengan nama yang
+        // sama, cek password ke SEMUA kandidat -- biar tetap masuk ke akun
+        // yang password-nya cocok, bukan cuma ambil satu secara acak.
+        $candidates = User::where('email', $request->login)
             ->orWhere('phone', $request->login)
-            ->first();
+            ->orWhere('name', $request->login)
+            ->get();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        $user = $candidates->first(
+            fn (User $candidate) => Hash::check($request->password, $candidate->password)
+        );
+
+        if (!$user) {
             throw ValidationException::withMessages([
-                'login' => ['Email/No HP atau password salah.'],
+                'login' => ['Email/No HP/Nama atau password salah.'],
             ]);
         }
 
