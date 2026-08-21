@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Inventaris;
+namespace App\Http\Controllers\Inventory;
 
 use App\Http\Controllers\Controller;
 
@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
-class AsetPemakaiController extends Controller
+class InventoryPemakaiController extends Controller
 {
     use GeneratesStrukNumber;
 

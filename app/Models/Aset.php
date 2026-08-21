@@ -9,6 +9,9 @@ class Aset extends Model
     protected $table = 'aset';
 
     protected $fillable = [
+        'master_kategori_id',
+        'parent_id',
+        'nama',
         'departemen_id',
         'merek',
         'tipe',
