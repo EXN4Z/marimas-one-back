@@ -48,7 +48,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 Route::middleware(['auth:sanctum', 'role:admin'])->post('/admin/users/{id}/set-password', [AdminUserController::class, 'setPassword']);
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
-    Route::post('/aset-penanganan', [InventoryPenangananController::class, 'store']); // karyawan: lapor kerusakan aset yang lagi dia pakai
+    Route::post('/inventory-penanganan', [InventoryPenangananController::class, 'store']); // karyawan: lapor kerusakan aset yang lagi dia pakai
 
     Route::prefix('dashboard')->group(function () {
         Route::get('/kpd', [DashboardController::class, 'KaryawanPerDepart']);
@@ -89,27 +89,20 @@ Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/audit-log', [AuditLogController::class, 'index']);
     Route::get('/audit-log/trash', [AuditLogController::class, 'trash']);
-    Route::post('/aset-penanganan/{asetPenanganan}/terima', [InventoryPenangananController::class, 'terima']); // admin: terima & mulai tangani laporan
-    Route::post('/aset-penanganan/{asetPenanganan}', [InventoryPenangananController::class, 'update']);
+    Route::post('/inventory-penanganan/{inventoryPenanganan}/terima', [InventoryPenangananController::class, 'terima']); // admin: terima & mulai tangani laporan
+    Route::post('/inventory-penanganan/{inventoryPenanganan}', [InventoryPenangananController::class, 'update']);
     Route::post('/import-aset', [ImportController::class, 'import']);
     Route::post('/import-karyawan', [ImportController::class, 'importKaryawan']);
-    Route::post('/import-aset-penanganan', [ImportController::class, 'importAsetPenanganan']); // import bulk laporan penanganan aset (Berhasil Diperbaiki / Rusak Berat)
-    Route::post('/aset-kelengkapan/import', [AsetKelengkapanController::class, 'import']);
+    Route::post('/import-inventory-penanganan', [ImportController::class, 'importAsetPenanganan']); // import bulk laporan penanganan aset (Berhasil Diperbaiki / Rusak Berat)
     Route::post('/aset-kelengkapan/{asetKelengkapan}/pemakai', [InventoryPemakaiController::class, 'storeKelengkapan']);
     // index & show DIPINDAH ke grup role:karyawan,manajer,hr,admin di bawah
     // (bareng /aset) -- non-admin butuh baca kelengkapan yang tersedia/lagi
     // dia pinjam sendiri, filtering-nya udah dihandle di controller.
-    Route::post('/aset-kelengkapan', [AsetKelengkapanController::class, 'store']);
-    Route::post('/aset-kelengkapan/{asetKelengkapan}', [AsetKelengkapanController::class, 'update']); // POST + _method=PUT krn ada file upload, sama pola kayak /aset
-    Route::delete('/aset-kelengkapan/{asetKelengkapan}', [AsetKelengkapanController::class, 'destroy']);
-    Route::post('/aset-kelengkapan/{aset_kelengkapan}/lapor-rusak', [AsetKelengkapanController::class, 'laporRusak']);
-    Route::post('/aset-kelengkapan/{aset_kelengkapan}/pasang-pengganti', [AsetKelengkapanController::class, 'pasangPengganti']);
-    Route::get('/aset-kelengkapan/rusak', [AsetKelengkapanController::class, 'rusak']);
 });
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
     Route::get('/aset', [InventoryController::class, 'index']);
-    Route::get('/aset/{aset}', [InventoryController::class, 'show']);
+    Route::get('/inventory/{inventory}', [InventoryController::class, 'show']);
     Route::get('/supplier', [SupplierController::class, 'index']);
 
     // BARU: non-admin (karyawan/manajer/hr) butuh liat daftar kelengkapan
@@ -117,39 +110,37 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     // dia pinjam sendiri -- scoping detail (gak boleh liat punya orang
     // lain / yang berstatus rusak) dicek DI DALAM controller, bukan cuma
     // di middleware ini.
-    Route::get('/aset-kelengkapan', [AsetKelengkapanController::class, 'index']);
-    Route::get('/aset-kelengkapan/{asetKelengkapan}', [AsetKelengkapanController::class, 'show']);
 
     // admin: riwayat GLOBAL semua aset. karyawan/manajer/hr: riwayat
     // dibatasi cuma punya sendiri (dicek & difilter di dalam controller,
     // BUKAN cuma di middleware — biar gak ada celah data orang lain bocor).
-    Route::get('/aset-pemakai/riwayat', [InventoryPemakaiController::class, 'riwayat']);
+    Route::get('/inventory-pemakai/riwayat', [InventoryPemakaiController::class, 'riwayat']);
 
     // PINDAH ke sini (dari grup admin-only) — pemakai (karyawan/cabang) yang
     // lagi pegang aset ini harus bisa ngembaliin sendiri, bukan cuma admin.
     // Otorisasi detail (harus admin ATAU pemilik pemakaian ini) dicek di
     // dalam InventoryPemakaiController::kembalikan(), bukan cuma di middleware.
-    Route::post('/aset-pemakai/{asetPemakai}/kembalikan', [InventoryPemakaiController::class, 'kembalikan']);
+    Route::post('/inventory-pemakai/{inventoryPemakai}/kembalikan', [InventoryPemakaiController::class, 'kembalikan']);
 });
 
 // BARU: dipisah ke grup admin+hr — endpoint ini nampilin SEMUA laporan
 // kerusakan dari SELURUH karyawan tanpa filter, jadi gak boleh diakses
 // karyawan/manajer biasa (data pribadi karyawan lain).
 Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
-    Route::get('/aset-penanganan', [InventoryPenangananController::class, 'index']);
-    Route::get('/aset-penanganan/foto', [InventoryPenangananController::class, 'foto']); // tab "Rusak" di halaman Foto Aset
+    Route::get('/inventory-penanganan', [InventoryPenangananController::class, 'index']);
+    Route::get('/inventory-penanganan/foto', [InventoryPenangananController::class, 'foto']); // tab "Rusak" di halaman Foto Aset
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/aset', [InventoryController::class, 'store']);
-    Route::post('/aset/{aset}', [InventoryController::class, 'update']); // pakai POST + _method=PUT dari frontend krn ada file upload
-    Route::delete('/aset/{aset}', [InventoryController::class, 'destroy']);
-    Route::get('/aset-pemakai/foto', [InventoryPemakaiController::class, 'foto']);
-    Route::post('/aset/{aset}/pemakai', [InventoryPemakaiController::class, 'store']);
+    Route::post('/inventory/{inventory}', [InventoryController::class, 'update']); // pakai POST + _method=PUT dari frontend krn ada file upload
+    Route::delete('/inventory/{inventory}', [InventoryController::class, 'destroy']);
+    Route::get('/inventory-pemakai/foto', [InventoryPemakaiController::class, 'foto']);
+    Route::post('/inventory-pemakai/{inventoryPemakai}/pemakai', [InventoryPemakaiController::class, 'store']);
 
-    Route::delete('/aset-penanganan/{asetPenanganan}', [InventoryPenangananController::class, 'destroy']);
-    Route::delete('/aset-pemakai/{asetPemakai}', [InventoryPemakaiController::class, 'destroy']);
-    Route::post('/aset/{aset}/jual', [InventoryController::class, 'jual']);
+    Route::delete('/inventory-penanganan/{inventoryPenanganan}', [InventoryPenangananController::class, 'destroy']);
+    Route::delete('/inventory-pemakai/{inventoryPemakai}', [InventoryPemakaiController::class, 'destroy']);
+    Route::post('/inventory/{inventory}/jual', [InventoryController::class, 'jual']);
 
     Route::post('/supplier/import', [SupplierController::class, 'import']);
     Route::apiResource('supplier', SupplierController::class)->except(['index', 'show']);
