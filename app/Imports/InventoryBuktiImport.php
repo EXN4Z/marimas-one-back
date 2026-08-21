@@ -3,9 +3,9 @@
 namespace App\Imports;
 
 use App\Http\Controllers\Concerns\GeneratesStrukNumber;
-use App\Models\Aset;
-use App\Models\AsetKelengkapan;
-use App\Models\AsetPemakai;
+use App\Models\Inventory;
+use App\Models\InventoryPemakai;
+use App\Models\Kategori;
 use App\Models\Departemen;
 use App\Models\Supplier;
 use App\Models\User;
@@ -14,7 +14,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-class AsetBuktiImport implements ToCollection
+class InventoryBuktiImport implements ToCollection
 {
     use GeneratesStrukNumber;
 
@@ -25,9 +25,20 @@ class AsetBuktiImport implements ToCollection
     private const KOLOM_PENANDA_HEADER = 'no_bukti';
 
     /**
-     * Nomor kolom "Nama Barang N" yang dianggap ASET UTAMA. Semua kolom
+     * Kode kategori (tabel `kategori`, kolom `kode`) yang menandai jenis
+     * baris inventory. Dulu ini enum `jenis` di tabel aset/aset_kelengkapan,
+     * sekarang jadi foreign key ke tabel kategori supaya bisa dikelola
+     * tanpa ALTER TABLE. JANGAN diubah nilainya di sini -- ini kode
+     * program, bukan label yang tampil ke user (label ada di kolom
+     * `nama` tabel kategori).
+     */
+    private const KODE_KATEGORI_BARANG_UTAMA = 'barang_utama';
+    private const KODE_KATEGORI_KELENGKAPAN = 'kelengkapan';
+
+    /**
+     * Nomor kolom "Nama Barang N" yang dianggap BARANG UTAMA. Semua kolom
      * "Nama Barang" dengan nomor lain (2, 3, dst) otomatis dianggap
-     * KELENGKAPAN dari aset utama terakhir yang diproses di baris yang
+     * KELENGKAPAN dari barang utama terakhir yang diproses di baris yang
      * sama -- terlepas dari isi namanya ("Charger", "Tas", "Modem",
      * apapun). Ini gantiin deteksi berbasis kata kunci (cocokAksesoris)
      * yang dulu dipakai, karena posisi kolom di Excel sumber sudah pasti
@@ -45,6 +56,13 @@ class AsetBuktiImport implements ToCollection
 
     private const KETERANGAN_PREFIX_DIABAIKAN = '/^\s*(model|imei|p\s*\/?\s*n)\b/i';
 
+    /**
+     * Cache id kategori 'barang_utama' & 'kelengkapan' (key = kode,
+     * value = id) supaya gak query ke tabel kategori berulang-ulang
+     * tiap baris/kolom yang diproses. Diisi lazy lewat kategoriId().
+     */
+    private array $kategoriIdCache = [];
+
     public function collection(Collection $rows)
     {
         $indexHeader = $this->cariBarisHeader($rows);
@@ -58,7 +76,7 @@ class AsetBuktiImport implements ToCollection
             ->map(fn ($h) => $this->normalisasiHeader((string) $h))
             ->toArray();
 
-        Log::info('Header Excel Bukti Aset terbaca:', $headers);
+        Log::info('Header Excel Bukti Inventory terbaca:', $headers);
 
         $nomorBarang = $this->cariNomorBarang($headers);
 
@@ -126,9 +144,9 @@ class AsetBuktiImport implements ToCollection
                                 // Pekerja::create() dulu bikin row minimal tanpa akun
                                 // login/password. Sekarang pekerja = users, jadi
                                 // User::create() butuh email/password (kolom wajib) --
-                                // email diisi dummy unik. BARU: password dibuat dari
+                                // email diisi dummy unik. Password dibuat dari
                                 // nama (huruf kecil, spasi jadi underscore), bukan
-                                // random lagi, biar user hasil import juga bisa login.
+                                // random, biar user hasil import juga bisa login.
                                 $penerimaUser = User::create([
                                     'name'          => $namaPenerima,
                                     'email'         => 'nik' . $nikPenerima . '@placeholder.local',
@@ -139,20 +157,22 @@ class AsetBuktiImport implements ToCollection
                                 ]);
                             }
                         } else {
-                            $this->errors[] = 'Baris data ke-' . ($index + 1) . ': ada nama penerima ("' . $namaPenerima . '") tapi NIK kosong, aset dibuat tanpa data pemakai.';
+                            $this->errors[] = 'Baris data ke-' . ($index + 1) . ': ada nama penerima ("' . $namaPenerima . '") tapi NIK kosong, inventory dibuat tanpa data pemakai.';
                         }
                     }
 
-                    $statusAset = $penerimaUser ? 'dipakai' : 'tersedia';
+                    $statusInventory = $penerimaUser ? 'dipakai' : 'tersedia';
 
                     $adaBarangDiproses = false;
 
-                    // Aset "utama" terakhir yang berhasil dibuat di baris ini
-                    // -- barang di kolom Nama Barang N (N != NOMOR_KOLOM_ASET_UTAMA)
-                    // yang muncul SETELAHNYA jadi baris AsetKelengkapan yang
-                    // nempel ke aset ini, dan status-nya ngikutin aset ini
-                    // (lihat buatAsetKelengkapan()).
-                    $asetUtamaTerakhir = null;
+                    // Barang utama terakhir yang berhasil dibuat di baris ini
+                    // (kategori_id = barang_utama) -- barang di kolom Nama
+                    // Barang N (N != NOMOR_KOLOM_ASET_UTAMA) yang muncul
+                    // SETELAHNYA jadi baris Inventory dengan kategori_id =
+                    // kelengkapan yang parent_id-nya nunjuk ke sini, dan
+                    // status-nya ngikutin baris ini (lihat
+                    // buatInventoryKelengkapan()).
+                    $indukTerakhir = null;
 
                     foreach ($nomorBarang as $n) {
                         $namaBarang = $row["nama_barang_{$n}"] ?? null;
@@ -165,15 +185,15 @@ class AsetBuktiImport implements ToCollection
                         $namaBarangTrim = trim($namaBarang);
                         $keteranganAsli = $row["keterangan_{$n}"] ?? null;
 
-                        // Kolom Nama Barang selain kolom aset utama (mis.
+                        // Kolom Nama Barang selain kolom barang utama (mis.
                         // Nama Barang 2, 3, dst) SELALU dianggap kelengkapan
-                        // dari aset utama terakhir yang sudah dibuat di baris
-                        // yang sama -- ditentukan murni dari POSISI KOLOM,
-                        // bukan dari kata dalam namanya.
+                        // dari barang utama terakhir yang sudah dibuat di
+                        // baris yang sama -- ditentukan murni dari POSISI
+                        // KOLOM, bukan dari kata dalam namanya.
                         if ($n !== self::NOMOR_KOLOM_ASET_UTAMA) {
-                            if ($asetUtamaTerakhir) {
-                                $asetKelengkapan = $this->buatAsetKelengkapan(
-                                    $asetUtamaTerakhir,
+                            if ($indukTerakhir) {
+                                $kelengkapan = $this->buatInventoryKelengkapan(
+                                    $indukTerakhir,
                                     $infoBukti,
                                     $supplierId,
                                     $namaBarangTrim,
@@ -181,56 +201,63 @@ class AsetBuktiImport implements ToCollection
                                 );
 
                                 if ($penerimaUser) {
-                                    $this->buatAsetPemakai($asetKelengkapan, $penerimaUser, $infoBukti['tanggal']);
+                                    $this->buatInventoryPemakai($kelengkapan, $penerimaUser, $infoBukti['tanggal']);
                                 }
                             } else {
-                                // Kolom kelengkapan terisi tapi kolom aset
+                                // Kolom kelengkapan terisi tapi kolom barang
                                 // utama (Nama Barang 1) di baris ini kosong --
-                                // tidak ada aset induk buat dijadikan acuan
-                                // status/aset_id, jadi dilewati (dicatat
-                                // sebagai warning, bukan bikin AsetKelengkapan
-                                // tanpa aset induk).
-                                $this->errors[] = 'Baris data ke-' . ($index + 1) . ': barang "' . $namaBarangTrim . '" (Nama Barang ' . $n . ') dilewati karena kolom Nama Barang ' . self::NOMOR_KOLOM_ASET_UTAMA . ' (aset utama) di baris yang sama kosong.';
+                                // tidak ada induk buat dijadikan acuan
+                                // status/parent_id, jadi dilewati (dicatat
+                                // sebagai warning, bukan bikin baris
+                                // kelengkapan tanpa induk).
+                                $this->errors[] = 'Baris data ke-' . ($index + 1) . ': barang "' . $namaBarangTrim . '" (Nama Barang ' . $n . ') dilewati karena kolom Nama Barang ' . self::NOMOR_KOLOM_ASET_UTAMA . ' (barang utama) di baris yang sama kosong.';
                             }
                             continue;
                         }
 
-                        // Jenis Aset sudah dihapus -- nama barang ("Laptop",
-                        // "Modem Telkomsel", dst) sekarang disimpan ke
-                        // `merek`, biar trigger kode_aset (yang ambil kata
-                        // pertama dari merek) tetap dapet bahan generate.
+                        // Jenis Aset (enum lama) sudah dihapus -- sekarang
+                        // jenis baris ditentukan lewat kategori_id
+                        // (barang_utama/kelengkapan). Nama barang ("Laptop",
+                        // "Modem Telkomsel", dst) disimpan seragam ke kolom
+                        // `nama`, sama seperti baris kelengkapan, karena
+                        // sekarang keduanya baris di tabel `inventory` yang
+                        // sama.
                         $hasilParse = $this->parseKeterangan($keteranganAsli);
 
-                        $aset = Aset::create(array_merge($infoBukti, [
-                            'merek'             => $namaBarangTrim,
+                        $inventory = Inventory::create(array_merge($infoBukti, [
+                            'nama'              => $namaBarangTrim,
+                            'kategori_id'       => $this->kategoriId(self::KODE_KATEGORI_BARANG_UTAMA),
+                            'parent_id'         => null,
                             'supplier_id'       => $supplierId,
                             'jumlah'            => $row["jumlah_{$n}"] ?? null,
                             'keterangan'        => $keteranganAsli,
                             'serial_number'     => $hasilParse['serial_number'],
                             'warna'             => $hasilParse['warna'],
-                            'status'            => $statusAset,
-                            // BARU: samain juga ke tanggal_pembelian (kolom yang
-                            // dipakai dashboard "Tren Pembelian Aset per Bulan").
-                            // $infoBukti['tanggal'] cuma keisi ke kolom 'tanggal'
-                            // (kolom bukti serah-terima), jadi tanpa ini
-                            // tanggal_pembelian selalu null buat aset hasil import.
+                            'status'            => $statusInventory,
+                            // Samain juga ke tanggal_pembelian (kolom yang
+                            // dipakai dashboard "Tren Pembelian per Bulan").
+                            // $infoBukti['tanggal'] cuma keisi ke kolom
+                            // 'tanggal' (kolom bukti serah-terima), jadi
+                            // tanpa ini tanggal_pembelian selalu null buat
+                            // inventory hasil import.
                             'tanggal_pembelian' => $infoBukti['tanggal'] ?? null,
                         ]));
 
-                        $asetUtamaTerakhir = $aset;
+                        $indukTerakhir = $inventory;
 
                         if ($penerimaUser) {
-                            $this->buatAsetPemakai($aset, $penerimaUser, $infoBukti['tanggal']);
+                            $this->buatInventoryPemakai($inventory, $penerimaUser, $infoBukti['tanggal']);
                         }
 
                         // Nama kelengkapan yang ke-parse dari teks Keterangan
                         // (mis. "(charger, tas)") -- sama seperti kolom Nama
-                        // Barang N lainnya, tiap nama jadi baris
-                        // AsetKelengkapan yang nempel ke aset utama ini lewat
-                        // aset_id, status-nya ngikutin aset utama ini.
+                        // Barang N lainnya, tiap nama jadi baris Inventory
+                        // ber-kategori kelengkapan yang parent_id-nya
+                        // nunjuk ke barang utama ini, status-nya ngikutin
+                        // barang utama ini.
                         foreach ($hasilParse['kelengkapan'] as $namaKelengkapan) {
-                            $asetKelengkapan = $this->buatAsetKelengkapan(
-                                $aset,
+                            $kelengkapan = $this->buatInventoryKelengkapan(
+                                $inventory,
                                 $infoBukti,
                                 $supplierId,
                                 $namaKelengkapan,
@@ -238,7 +265,7 @@ class AsetBuktiImport implements ToCollection
                             );
 
                             if ($penerimaUser) {
-                                $this->buatAsetPemakai($asetKelengkapan, $penerimaUser, $infoBukti['tanggal']);
+                                $this->buatInventoryPemakai($kelengkapan, $penerimaUser, $infoBukti['tanggal']);
                             }
                         }
                     }
@@ -258,22 +285,27 @@ class AsetBuktiImport implements ToCollection
 
     /**
      * Bikin 1 nama barang kelengkapan (mis. "Charger", "Tas", atau apapun
-     * isi kolom Nama Barang selain kolom aset utama) jadi baris
-     * AsetKelengkapan (tabel aset_kelengkapan) yang nempel ke aset induknya
-     * lewat aset_id -- BUKAN baris Aset sendiri. $keterangan (kalau ada)
-     * di-parse ulang lewat parseKeterangan() buat coba tarik serial_number
-     * & warna-nya juga, sama seperti yang dilakukan buat aset utama. Info
-     * bukti (perusahaan, tanggal) & supplier disamakan dengan aset induknya
-     * lewat $infoBukti/$supplierId yang dioper dari caller, dan status-nya
-     * ikut status aset induk saat baris ini diproses (bukan status
+     * isi kolom Nama Barang selain kolom barang utama) jadi baris
+     * `inventory` dengan kategori_id = kelengkapan dan parent_id nunjuk ke
+     * $indukInventory -- BUKAN tabel/model terpisah lagi seperti dulu
+     * (AsetKelengkapan sudah dihapus). $keterangan (kalau ada) di-parse
+     * ulang lewat parseKeterangan() buat coba tarik serial_number & warna-
+     * nya juga, sama seperti yang dilakukan buat barang utama. Info bukti
+     * (perusahaan, tanggal) & supplier disamakan dengan induknya lewat
+     * $infoBukti/$supplierId yang dioper dari caller. master_kategori_id
+     * (Elektronik/Furnitur/dst) juga diwarisi dari induk, karena
+     * kelengkapan logisnya satu kategori barang dengan induknya. status-
+     * nya ikut status induk saat baris ini diproses (bukan status
      * 'tersedia' hardcode).
      */
-    private function buatAsetKelengkapan(Aset $asetInduk, array $infoBukti, ?int $supplierId, string $namaBarang, ?string $keterangan): AsetKelengkapan
+    private function buatInventoryKelengkapan(Inventory $indukInventory, array $infoBukti, ?int $supplierId, string $namaBarang, ?string $keterangan): Inventory
     {
         $hasilParse = $this->parseKeterangan($keterangan);
 
-        return AsetKelengkapan::create([
-            'aset_id'           => $asetInduk->id,
+        return Inventory::create([
+            'parent_id'         => $indukInventory->id,
+            'kategori_id'       => $this->kategoriId(self::KODE_KATEGORI_KELENGKAPAN),
+            'master_kategori_id' => $indukInventory->master_kategori_id,
             'nama'              => $namaBarang,
             'warna'             => $hasilParse['warna'],
             'serial_number'     => $hasilParse['serial_number'],
@@ -281,43 +313,60 @@ class AsetBuktiImport implements ToCollection
             'supplier_id'       => $supplierId,
             'perusahaan'        => $infoBukti['perusahaan'] ?? null,
             'tanggal_pembelian' => $infoBukti['tanggal'] ?? null,
-            'status'            => $asetInduk->status,
+            'status'            => $indukInventory->status,
         ]);
     }
 
     /**
-     * Buat 1 baris aset_pemakai buat 1 barang (Aset utama ATAUPUN
-     * AsetKelengkapan). Tabel aset_pemakai punya kolom aset_id DAN
-     * aset_kelengkapan_id -- cuma salah satunya yang diisi tergantung tipe
-     * $item, yang lain dibiarkan null. Sama seperti
-     * AsetPemakaiController::store() -- setiap AsetPemakai WAJIB punya
-     * no_struk_penerimaan sendiri (unik per baris, di-generate ulang tiap
-     * panggilan), karena kembalikan() nanti mencocokkan input
-     * no_struk_penerimaan persis dengan kolom ini. Tanpa di-generate di
-     * sini, data hasil import punya no_struk_penerimaan = null, dan aset
-     * itu jadi TIDAK BISA PERNAH dikembalikan lewat endpoint kembalikan()
-     * (gak ada string yang bisa cocok dengan null).
+     * Buat 1 baris inventory_pemakai buat 1 baris Inventory (barang utama
+     * ATAUPUN kelengkapan -- sekarang gak perlu dibedakan lagi karena
+     * keduanya sama-sama baris tabel `inventory`, cukup 1 kolom
+     * inventory_id, gak perlu lagi kolom aset_kelengkapan_id terpisah
+     * seperti dulu). Sama seperti InventoryPemakaiController::store() --
+     * setiap InventoryPemakai WAJIB punya no_struk_penerimaan sendiri
+     * (unik per baris, di-generate ulang tiap panggilan), karena
+     * kembalikan() nanti mencocokkan input no_struk_penerimaan persis
+     * dengan kolom ini. Tanpa di-generate di sini, data hasil import
+     * punya no_struk_penerimaan = null, dan barang itu jadi TIDAK BISA
+     * PERNAH dikembalikan lewat endpoint kembalikan() (gak ada string
+     * yang bisa cocok dengan null).
      *
-     * 'diterima_at' SENGAJA tidak diisi (dibiarkan null) -- beda dari
-     * store() yang isi now() karena itu aksi live. Di sini datanya
-     * historis (dari bukti serah-terima lama), jadi biarkan riwayat()
-     * fallback ke tanggal_penerimaan (lihat komentar fallback *_at di
-     * riwayat()) supaya pengurutan waktu di Riwayat Aset tetap benar
-     * sesuai tanggal transaksi asli, bukan tanggal import dijalankan.
+     * 'diterima_at' SENGAJA tidak diisi now() -- beda dari store() yang
+     * isi now() karena itu aksi live. Di sini datanya historis (dari
+     * bukti serah-terima lama), jadi biarkan riwayat() fallback ke
+     * tanggal_penerimaan (lihat komentar fallback *_at di riwayat())
+     * supaya pengurutan waktu di Riwayat Inventory tetap benar sesuai
+     * tanggal transaksi asli, bukan tanggal import dijalankan.
      */
-    private function buatAsetPemakai(Aset|AsetKelengkapan $item, User $penerimaUser, ?string $tanggalPenerimaan): void
+    private function buatInventoryPemakai(Inventory $item, User $penerimaUser, ?string $tanggalPenerimaan): void
     {
-        $noStruk = $this->generateNoStruk('STJ', 'aset_pemakai', 'no_struk_penerimaan');
+        $noStruk = $this->generateNoStruk('STJ', 'inventory_pemakai', 'no_struk_penerimaan');
 
-        AsetPemakai::create([
-            'aset_id'             => $item instanceof Aset ? $item->id : null,
-            'aset_kelengkapan_id' => $item instanceof AsetKelengkapan ? $item->id : null,
+        InventoryPemakai::create([
+            'inventory_id'        => $item->id,
             'user_id'             => $penerimaUser->id,
             'status'              => 'disetujui',
             'no_struk_penerimaan' => $noStruk,
-            'tanggal_penerimaan' => $tanggalPenerimaan,
-            'diterima_at'  => $tanggalPenerimaan,
+            'tanggal_penerimaan'  => $tanggalPenerimaan,
+            'diterima_at'         => $tanggalPenerimaan,
         ]);
+    }
+
+    /**
+     * Ambil id kategori berdasarkan kode ('barang_utama' / 'kelengkapan'),
+     * dengan cache di $kategoriIdCache biar gak query berulang tiap baris.
+     * Sengaja pakai firstOrFail -- kalau kode kategori ini gak ada di
+     * tabel kategori, itu masalah data master yang harus ketahuan cepat
+     * (error jelas), bukan diam-diam bikin baris inventory dengan
+     * kategori_id null.
+     */
+    private function kategoriId(string $kode): int
+    {
+        if (!array_key_exists($kode, $this->kategoriIdCache)) {
+            $this->kategoriIdCache[$kode] = Kategori::where('kode', $kode)->firstOrFail()->id;
+        }
+
+        return $this->kategoriIdCache[$kode];
     }
 
     private function cariNomorBarang(array $headers): array
