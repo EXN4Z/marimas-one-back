@@ -1,8 +1,8 @@
 <?php
-// app/Models/Departemen.php
 
-namespace App\Models;
+namespace App\Models\MasterData;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 
 class Departemen extends Model
@@ -16,8 +16,8 @@ class Departemen extends Model
         return $this->hasMany(User::class, 'departemen_id');
     }
 
-    public function aset()
+    public function inventory()
     {
-        return $this->hasMany(Aset::class, 'departemen_id');
+        return $this->hasMany(Inventory::class, 'departemen_id');
     }
 }

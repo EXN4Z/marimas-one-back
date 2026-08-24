@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Http\Controllers\Inventory;
+namespace App\Http\Controllers\MasterData;
 
 use App\Http\Controllers\Controller;
 
-use App\Models\Kategori;
+use App\Models\MasterData\Kategori;
 
 /**
  * Read-only dengan sengaja: Kategori cuma 2 baris fix ("Barang Utama" &

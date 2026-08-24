@@ -1,14 +1,14 @@
 <?php
 
-namespace App\Http\Controllers\Inventory;
+namespace App\Http\Controllers\Transaksi;
 
 use App\Http\Controllers\Controller;
 
 use App\Http\Controllers\Concerns\GeneratesStrukNumber;
-use App\Models\Inventory;
-use App\Models\InventoryPemakai;
-use App\Models\InventoryPenanganan;
-use App\Models\InventoryWriteoff;
+use App\Models\MasterData\Inventory;
+use App\Models\Transaksi\InventoryPemakai;
+use App\Models\Transaksi\InventoryPenanganan;
+use App\Models\Transaksi\InventoryWriteoff;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -110,13 +110,13 @@ class InventoryPemakaiController extends Controller
             ->get()
             ->each(function ($p) use (&$events) {
                 $nama = $p->user?->name ?? '-';
-                $tipeItem = $p->inventory?->kategoriKode() === 'kelengkapan' ? 'kelengkapan' : 'aset';
+                $tipeItem = $p->inventory?->kategoriKode() === 'kelengkapan' ? 'kelengkapan' : 'barang_utama';
 
                 $events->push([
                     'type' => 'pinjam',
                     'waktu' => $p->diterima_at ?? $p->tanggal_penerimaan,
                     'nama' => $nama,
-                    'aset' => $p->inventory,
+                    'inventory' => $p->inventory,
                     'tipe_item' => $tipeItem,
                 ]);
                 if ($p->tanggal_pengembalian) {
@@ -124,7 +124,7 @@ class InventoryPemakaiController extends Controller
                         'type' => 'kembali',
                         'waktu' => $p->dikembalikan_at ?? $p->tanggal_pengembalian,
                         'nama' => $nama,
-                        'aset' => $p->inventory,
+                        'inventory' => $p->inventory,
                         'tipe_item' => $tipeItem,
                     ]);
                 }
@@ -154,8 +154,8 @@ class InventoryPemakaiController extends Controller
                     'type' => 'lapor_rusak',
                     'waktu' => $pn->lapor_at ?? $pn->tanggal_lapor,
                     'nama' => $namaPelapor,
-                    'aset' => $pn->inventory,
-                    'tipe_item' => 'aset',
+                    'inventory' => $pn->inventory,
+                    'tipe_item' => 'barang_utama',
                     'keluhan' => $pn->keluhan,
                 ]);
                 if ($pn->tanggal_diterima) {
@@ -163,8 +163,8 @@ class InventoryPemakaiController extends Controller
                         'type' => 'mulai_perbaikan',
                         'waktu' => $pn->diterima_at ?? $pn->tanggal_diterima,
                         'nama' => null,
-                        'aset' => $pn->inventory,
-                        'tipe_item' => 'aset',
+                        'inventory' => $pn->inventory,
+                        'tipe_item' => 'barang_utama',
                     ]);
                 }
                 if ($pn->tanggal_selesai) {
@@ -172,8 +172,8 @@ class InventoryPemakaiController extends Controller
                         'type' => 'selesai_perbaikan',
                         'waktu' => $pn->selesai_at ?? $pn->tanggal_selesai,
                         'nama' => null,
-                        'aset' => $pn->inventory,
-                        'tipe_item' => 'aset',
+                        'inventory' => $pn->inventory,
+                        'tipe_item' => 'barang_utama',
                         'hasil' => $pn->hasil,
                     ]);
                 }
@@ -192,8 +192,8 @@ class InventoryPemakaiController extends Controller
                         'type' => 'dijual',
                         'waktu' => $w->created_at ?? $w->tanggal_writeoff,
                         'nama' => $w->penyetuju?->name,
-                        'aset' => $w->inventory,
-                        'tipe_item' => 'aset',
+                        'inventory' => $w->inventory,
+                        'tipe_item' => 'barang_utama',
                         'keluhan' => $w->alasan,
                     ]);
                 });
@@ -210,7 +210,7 @@ class InventoryPemakaiController extends Controller
         if ($search !== '') {
             $needle = mb_strtolower($search);
             $sorted = $sorted->filter(function ($ev) use ($needle) {
-                $item = $ev['aset'] ?? null;
+                $item = $ev['inventory'] ?? null;
                 $haystack = mb_strtolower(implode(' ', array_filter([
                     $ev['nama'] ?? '',
                     $item?->kode_inventory ?? '',

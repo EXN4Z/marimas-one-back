@@ -1,7 +1,8 @@
 <?php
 
-namespace App\Models;
+namespace App\Models\Transaksi;
 
+use App\Models\MasterData\Inventory;
 use Illuminate\Database\Eloquent\Model;
 
 class InventoryPenanganan extends Model

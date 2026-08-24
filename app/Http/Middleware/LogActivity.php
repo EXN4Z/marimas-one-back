@@ -87,34 +87,34 @@ class LogActivity
             return null;
         }
 
-        $uri = $route->uri(); // contoh: "aset/{aset}/pemakai"
+        $uri = $route->uri(); // contoh: "inventory/{inventory}/pemakai"
         $method = $request->method();
         $kodeAset = $this->kodeAsetDariRoute($route);
 
         return match (true) {
-            $uri === 'aset' && $method === 'POST' => "{$nama} menambahkan aset baru" . ($request->input('merek') ? " ({$request->input('merek')} {$request->input('tipe')})" : ''),
-            $uri === 'aset/{aset}' && $method === 'POST' => "{$nama} mengubah data aset" . ($kodeAset ? " {$kodeAset}" : ''),
-            $uri === 'aset/{aset}' && $method === 'DELETE' => "{$nama} menghapus aset" . ($kodeAset ? " {$kodeAset}" : ''),
-            $uri === 'aset/{aset}/pemakai' => "{$nama} meminjamkan aset" . ($kodeAset ? " {$kodeAset}" : '') . " ke " . $this->namaPenerima($request),
-            $uri === 'aset-pemakai/{asetPemakai}/kembalikan' => "{$nama} mencatat pengembalian aset dari peminjam",
-            $uri === 'aset-pemakai/{asetPemakai}' && $method === 'DELETE' => "{$nama} menghapus riwayat pemakaian aset",
-            $uri === 'aset-penanganan' && $method === 'POST' => "{$nama} melaporkan kerusakan aset" . ($request->input('keluhan') ? ": {$request->input('keluhan')}" : ''),
-            $uri === 'aset-penanganan/{asetPenanganan}/terima' => "{$nama} mulai menangani laporan kerusakan aset",
-            $uri === 'aset-penanganan/{asetPenanganan}' && in_array($method, ['POST', 'PUT', 'PATCH'], true) => "{$nama} memperbarui status penanganan aset" . ($request->input('hasil') ? " (hasil: {$request->input('hasil')})" : ''),
-            $uri === 'aset-penanganan/{asetPenanganan}' && $method === 'DELETE' => "{$nama} menghapus laporan penanganan aset",
-            $uri === 'aset/{aset}/jual' => "{$nama} menjual/writeoff aset" . ($kodeAset ? " {$kodeAset}" : ''),
+            ($uri === 'inventory' || $uri === 'aset') && $method === 'POST' => "{$nama} menambahkan aset baru" . ($request->input('merek') ? " ({$request->input('merek')} {$request->input('tipe')})" : ''),
+            ($uri === 'inventory/{inventory}' || $uri === 'aset/{aset}') && $method === 'POST' => "{$nama} mengubah data aset" . ($kodeAset ? " {$kodeAset}" : ''),
+            ($uri === 'inventory/{inventory}' || $uri === 'aset/{aset}') && $method === 'DELETE' => "{$nama} menghapus aset" . ($kodeAset ? " {$kodeAset}" : ''),
+            $uri === 'inventory/{inventory}/pemakai' || $uri === 'aset/{aset}/pemakai' => "{$nama} meminjamkan aset" . ($kodeAset ? " {$kodeAset}" : '') . " ke " . $this->namaPenerima($request),
+            $uri === 'inventory-pemakai/{inventoryPemakai}/kembalikan' || $uri === 'aset-pemakai/{asetPemakai}/kembalikan' => "{$nama} mencatat pengembalian aset dari peminjam",
+            ($uri === 'inventory-pemakai/{inventoryPemakai}' || $uri === 'aset-pemakai/{asetPemakai}') && $method === 'DELETE' => "{$nama} menghapus riwayat pemakaian aset",
+            ($uri === 'inventory-penanganan' || $uri === 'aset-penanganan') && $method === 'POST' => "{$nama} melaporkan kerusakan aset" . ($request->input('keluhan') ? ": {$request->input('keluhan')}" : ''),
+            $uri === 'inventory-penanganan/{inventoryPenanganan}/terima' || $uri === 'aset-penanganan/{asetPenanganan}/terima' => "{$nama} mulai menangani laporan kerusakan aset",
+            ($uri === 'inventory-penanganan/{inventoryPenanganan}' || $uri === 'aset-penanganan/{asetPenanganan}') && in_array($method, ['POST', 'PUT', 'PATCH'], true) => "{$nama} memperbarui status penanganan aset" . ($request->input('hasil') ? " (hasil: {$request->input('hasil')})" : ''),
+            ($uri === 'inventory-penanganan/{inventoryPenanganan}' || $uri === 'aset-penanganan/{asetPenanganan}') && $method === 'DELETE' => "{$nama} menghapus laporan penanganan aset",
+            $uri === 'inventory/{inventory}/jual' || $uri === 'aset/{aset}/jual' => "{$nama} menjual/writeoff aset" . ($kodeAset ? " {$kodeAset}" : ''),
             default => null,
         };
     }
 
-    // Ambil kode_aset dari model Aset yang udah di-resolve lewat route model
+    // Ambil kode_inventory dari model yang udah di-resolve lewat route model
     // binding (aman dipanggil setelah $next($request), binding-nya udah pasti
     // selesai karena controller sudah jalan duluan).
     protected function kodeAsetDariRoute($route): ?string
     {
-        $aset = $route->parameter('aset');
-        if ($aset instanceof \App\Models\Aset) {
-            return $aset->kode_aset;
+        $item = $route->parameter('inventory') ?? $route->parameter('aset');
+        if ($item instanceof \App\Models\MasterData\Inventory) {
+            return $item->kode_inventory;
         }
 
         return null;

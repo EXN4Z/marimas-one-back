@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Http\Controllers\Inventory;
+namespace App\Http\Controllers\MasterData;
 
 use App\Http\Controllers\Controller;
 
-use App\Models\MasterKategori;
+use App\Models\MasterData\MasterKategori;
 use Illuminate\Http\Request;
 
 class MasterKategoriController extends Controller

@@ -1,7 +1,11 @@
 <?php
 
-namespace App\Models;
+namespace App\Models\MasterData;
 
+use App\Models\LokasiKantor;
+use App\Models\Transaksi\InventoryPemakai;
+use App\Models\Transaksi\InventoryPenanganan;
+use App\Models\Transaksi\InventoryWriteoff;
 use Illuminate\Database\Eloquent\Model;
 
 class Inventory extends Model

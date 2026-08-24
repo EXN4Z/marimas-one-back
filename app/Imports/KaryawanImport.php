@@ -2,7 +2,7 @@
 
 namespace App\Imports;
 
-use App\Models\Departemen;
+use App\Models\MasterData\Departemen;
 use App\Models\User;
 use App\Notifications\PasswordAkunBaru;
 use Illuminate\Support\Str;

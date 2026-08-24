@@ -2,7 +2,7 @@
 
 namespace App\Imports;
 
-use App\Models\Departemen;
+use App\Models\MasterData\Departemen;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
 

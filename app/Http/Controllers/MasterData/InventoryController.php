@@ -1,13 +1,13 @@
 <?php
 
-namespace App\Http\Controllers\Inventory;
+namespace App\Http\Controllers\MasterData;
 
 use App\Http\Controllers\Controller;
 
-use App\Models\Inventory;
-use App\Models\InventoryPemakai;
-use App\Models\InventoryWriteoff;
-use App\Models\MasterKategori;
+use App\Models\MasterData\Inventory;
+use App\Models\MasterData\MasterKategori;
+use App\Models\Transaksi\InventoryPemakai;
+use App\Models\Transaksi\InventoryWriteoff;
 use App\Models\User;
 use App\Notifications\AsetKelengkapanKerusakanDilaporkan;
 use Illuminate\Http\Request;

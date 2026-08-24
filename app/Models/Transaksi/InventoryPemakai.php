@@ -1,7 +1,9 @@
 <?php
 
-namespace App\Models;
+namespace App\Models\Transaksi;
 
+use App\Models\MasterData\Inventory;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 
 class InventoryPemakai extends Model

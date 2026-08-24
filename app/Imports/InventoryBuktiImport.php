@@ -3,11 +3,11 @@
 namespace App\Imports;
 
 use App\Http\Controllers\Concerns\GeneratesStrukNumber;
-use App\Models\Inventory;
-use App\Models\InventoryPemakai;
-use App\Models\Kategori;
-use App\Models\Departemen;
-use App\Models\Supplier;
+use App\Models\MasterData\Inventory;
+use App\Models\MasterData\Kategori;
+use App\Models\MasterData\Departemen;
+use App\Models\MasterData\Supplier;
+use App\Models\Transaksi\InventoryPemakai;
 use App\Models\User;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Illuminate\Support\Collection;

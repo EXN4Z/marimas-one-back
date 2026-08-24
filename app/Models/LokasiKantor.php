@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\MasterData\Inventory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -32,10 +33,9 @@ class LokasiKantor extends Model
         return $this->hasMany(User::class, 'lokasi_kantor_id');
     }
 
-    // Kelengkapan aset yang berdiri sendiri (tanpa aset induk) dan
-    // ditempatkan di lokasi ini.
-    public function asetKelengkapan(): HasMany
+    // Item inventory (kelengkapan berdiri sendiri) yang ditempatkan di lokasi ini.
+    public function inventory(): HasMany
     {
-        return $this->hasMany(AsetKelengkapan::class, 'lokasi_kantor_id');
+        return $this->hasMany(Inventory::class, 'lokasi_kantor_id');
     }
 }

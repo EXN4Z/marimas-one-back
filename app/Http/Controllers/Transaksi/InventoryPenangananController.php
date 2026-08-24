@@ -1,13 +1,13 @@
 <?php
 
-namespace App\Http\Controllers\Inventory;
+namespace App\Http\Controllers\Transaksi;
 
 use App\Http\Controllers\Controller;
 
 use App\Http\Controllers\Concerns\GeneratesStrukNumber;
-use App\Models\Inventory;
-use App\Models\InventoryPemakai;
-use App\Models\InventoryPenanganan;
+use App\Models\MasterData\Inventory;
+use App\Models\Transaksi\InventoryPemakai;
+use App\Models\Transaksi\InventoryPenanganan;
 use App\Models\User;
 use App\Notifications\AsetKerusakanDilaporkan;
 use App\Notifications\AsetKerusakanSelesai;

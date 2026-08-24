@@ -2,7 +2,7 @@
 
 namespace App\Notifications;
 
-use App\Models\AsetKelengkapan;
+use App\Models\MasterData\Inventory;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Notification;
@@ -13,11 +13,11 @@ class AsetKelengkapanKerusakanDilaporkan extends Notification
 {
     use Queueable;
 
-    // $asetIndukLabel & $pelaporName ditangkap sebelum aset_kelengkapan.aset_id
-    // dikosongin di controller -- begitu lapor rusak selesai, kelengkapan udah
-    // lepas dari induknya jadi relasi aset gak bisa diandalkan lagi di sini.
+    // $asetIndukLabel & $pelaporName ditangkap sebelum parent_id dikosongin
+    // di controller — begitu lapor rusak selesai, kelengkapan udah lepas
+    // dari induknya jadi relasi parent gak bisa diandalkan lagi di sini.
     public function __construct(
-        protected AsetKelengkapan $kelengkapan,
+        protected Inventory $kelengkapan,
         protected ?string $asetIndukLabel,
         protected string $pelaporName
     ) {
@@ -35,7 +35,7 @@ class AsetKelengkapanKerusakanDilaporkan extends Notification
     {
         return $this->kelengkapan->nama
             ?: trim(($this->kelengkapan->merek ?? '') . ' ' . ($this->kelengkapan->tipe ?? ''))
-            ?: $this->kelengkapan->kode_kelengkapan;
+            ?: $this->kelengkapan->kode_inventory;
     }
 
     protected function pesan(): string
@@ -48,9 +48,9 @@ class AsetKelengkapanKerusakanDilaporkan extends Notification
     {
         return [
             'type' => 'aset_kelengkapan_kerusakan',
-            'aset_kelengkapan_id' => $this->kelengkapan->id,
+            'inventory_id' => $this->kelengkapan->id,
             'message' => $this->pesan(),
-            'url' => '/inventaris?tab=kelengkapan_aset',
+            'url' => '/master-data?tab=kelengkapan_aset',
         ];
     }
 
@@ -65,7 +65,7 @@ class AsetKelengkapanKerusakanDilaporkan extends Notification
             ->title('Laporan Kerusakan Kelengkapan')
             ->icon('/logo.png')
             ->body($this->pesan())
-            ->data(['url' => '/inventaris?tab=kelengkapan_aset'])
+            ->data(['url' => '/master-data?tab=kelengkapan_aset'])
             ->options(['TTL' => 300]);
     }
 }

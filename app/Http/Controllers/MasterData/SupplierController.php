@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Http\Controllers\Inventaris;
+namespace App\Http\Controllers\MasterData;
 
 use App\Http\Controllers\Controller;
 
 use App\Imports\SupplierImport;
-use App\Models\Supplier;
+use App\Models\MasterData\Supplier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;

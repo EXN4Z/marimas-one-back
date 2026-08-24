@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Models;
+namespace App\Models\MasterData;
 
 use Illuminate\Database\Eloquent\Model;
 
@@ -10,8 +10,8 @@ class Supplier extends Model
 
     protected $fillable = ['nama', 'alamat', 'telepon'];
 
-    public function aset()
+    public function inventory()
     {
-        return $this->hasMany(Aset::class, 'supplier_id');
+        return $this->hasMany(Inventory::class, 'supplier_id');
     }
 }

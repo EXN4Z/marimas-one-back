@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Organisasi;
 use App\Http\Controllers\Controller;
 
 use App\Imports\DepartemenImport;
-use App\Models\Departemen;
+use App\Models\MasterData\Departemen;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;

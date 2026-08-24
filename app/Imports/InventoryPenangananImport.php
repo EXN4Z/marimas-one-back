@@ -3,63 +3,28 @@
 namespace App\Imports;
 
 use App\Http\Controllers\Concerns\GeneratesStrukNumber;
-use App\Models\Aset;
-use App\Models\AsetPemakai;
-use App\Models\AsetPenanganan;
+use App\Models\MasterData\Inventory;
+use App\Models\Transaksi\InventoryPemakai;
+use App\Models\Transaksi\InventoryPenanganan;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\ToCollection;
 
 /**
- * Import laporan penanganan aset yang SUDAH SELESAI (bulk import data
- * historis) -- HANYA untuk 2 hasil akhir: "diperbaiki" (tab Berhasil
- * Diperbaiki) & "rusak_berat" (tab Rusak Berat). Dipakai dari tombol
- * Import di 2 tab itu saja di Forum Penanganan Aset -- BUKAN buat bikin
- * laporan baru yang masih perlu diterima/diproses admin, karena Hasil &
- * Tanggal Selesai WAJIB diisi, jadi tiap baris langsung tercatat
- * "selesai" begitu diimport (setara hasil dari form "Selesaikan
- * Perbaikan" di UI, cuma lewat Excel & banyak baris sekaligus).
+ * Import laporan penanganan yang SUDAH SELESAI (bulk import data historis)
+ * — HANYA untuk 2 hasil akhir: "diperbaiki" & "rusak_berat".
  *
- * Kolom yang diharapkan (nama header bebas huruf besar/kecil & spasi,
- * dinormalisasi otomatis) -- SATU BARIS = SATU LAPORAN:
- *   Kode Aset | Jenis Kerusakan | Keluhan | Pelapor | Tanggal Lapor
- *   | Tanggal Diterima | Tanggal Selesai | Hasil | Biaya Komponen
- *   | Biaya Jasa | Catatan
- *
- * - Kode Aset: WAJIB, harus sudah ada di tabel aset (dicocokkan exact,
- *   case-insensitive).
- * - Jenis Kerusakan: WAJIB, "software" atau "hardware".
- * - Keluhan: WAJIB.
- * - Pelapor: OPSIONAL, teks bebas (nama) -- gak ada kolom khusus di
- *   tabel aset_penanganan buat ini (kolom aset_pemakai_id butuh relasi
- *   peminjaman yang riskan salah tempel kalau dicocokkan otomatis dari
- *   Excel), jadi cuma ditempel sebagai baris tambahan di `catatan`.
- * - Tanggal Lapor / Tanggal Diterima: OPSIONAL, fallback ke Tanggal
- *   Selesai kalau kosong (buat rekonstruksi data lama yang gak lengkap).
- * - Tanggal Selesai: WAJIB -- inilah yang bikin laporan otomatis masuk
- *   kategori "selesai" begitu diimport.
- * - Hasil: WAJIB, terima "diperbaiki"/"berhasil diperbaiki" ATAU
- *   "rusak berat"/"rusak_berat" (dinormalisasi, gak case sensitive).
- * - Biaya Komponen / Biaya Jasa: WAJIB kalau Hasil = diperbaiki (rusak
- *   berat gak ada biaya perbaikan, sama seperti aturan form UI).
- * - Catatan: OPSIONAL.
- *
- * Efek ke tabel `aset`: kalau Hasil = rusak_berat, status aset dipaksa
- * jadi 'rusak_berat' & pemakaian aktif (kalau ada) ditutup otomatis --
- * SAMA seperti alur normal lewat form UI (lihat
- * AsetPenangananController::update()). Kalau Hasil = diperbaiki, status
- * aset SENGAJA TIDAK diutak-atik -- ini data historis, status aset saat
- * ini dianggap sudah benar apa adanya (beda dari alur form UI yang
- * memang lagi live mindahin status).
+ * Kolom (header dinormalisasi): Kode Aset/Kode Inventory | Jenis Kerusakan
+ * | Keluhan | Pelapor | Tanggal Lapor | Tanggal Diterima | Tanggal Selesai
+ * | Hasil | Biaya Komponen | Biaya Jasa | Catatan
  */
-class AsetPenangananImport implements ToCollection
+class InventoryPenangananImport implements ToCollection
 {
     use GeneratesStrukNumber;
 
     protected $rowCount = 0;
     protected $errors = [];
 
-    /** Alias yang diterima buat kolom Hasil -> key resmi di tabel */
     private const HASIL_ALIAS = [
         'diperbaiki' => 'diperbaiki',
         'berhasil_diperbaiki' => 'diperbaiki',
@@ -77,12 +42,11 @@ class AsetPenangananImport implements ToCollection
         $dataRows = $rows->slice(1);
 
         foreach ($dataRows as $index => $rawRow) {
-            // +2: index 0 di $dataRows = baris ke-2 di Excel (baris 1 = header)
             $nomorBaris = $index + 2;
 
             $rowArray = $rawRow->toArray();
             if (count(array_filter($rowArray, fn ($v) => $v !== null && $v !== '')) === 0) {
-                continue; // baris kosong total, lewati diam-diam (bukan error)
+                continue;
             }
 
             $row = array_combine($headers, array_pad($rowArray, count($headers), null));
@@ -100,15 +64,15 @@ class AsetPenangananImport implements ToCollection
 
     private function prosesBaris(array $row, int $nomorBaris): bool
     {
-        $kodeAset = trim((string) ($row['kode_aset'] ?? ''));
-        if ($kodeAset === '') {
-            $this->errors[] = "Baris {$nomorBaris}: Kode Aset kosong, dilewati.";
+        $kode = trim((string) ($row['kode_inventory'] ?? $row['kode_aset'] ?? ''));
+        if ($kode === '') {
+            $this->errors[] = "Baris {$nomorBaris}: Kode Inventory kosong, dilewati.";
             return false;
         }
 
-        $aset = Aset::whereRaw('LOWER(kode_aset) = ?', [strtolower($kodeAset)])->first();
-        if (!$aset) {
-            $this->errors[] = "Baris {$nomorBaris}: Kode Aset \"{$kodeAset}\" tidak ditemukan, dilewati.";
+        $inventory = Inventory::whereRaw('LOWER(kode_inventory) = ?', [strtolower($kode)])->first();
+        if (!$inventory) {
+            $this->errors[] = "Baris {$nomorBaris}: Kode Inventory \"{$kode}\" tidak ditemukan, dilewati.";
             return false;
         }
 
@@ -166,11 +130,11 @@ class AsetPenangananImport implements ToCollection
             $catatan = trim($catatan . ($catatan !== '' ? "\n" : '') . "Pelapor (import): {$pelapor}");
         }
 
-        $noStruk = $this->generateNoStruk('PNG', 'aset_penanganan', 'no_struk');
+        $noStruk = $this->generateNoStruk('PNG', 'inventory_penanganan', 'no_struk');
 
-        AsetPenanganan::create([
-            'aset_id' => $aset->id,
-            'aset_pemakai_id' => null,
+        InventoryPenanganan::create([
+            'inventory_id' => $inventory->id,
+            'inventory_pemakai_id' => null,
             'jenis_kerusakan' => $jenisKerusakan,
             'keluhan' => $keluhan,
             'tanggal_lapor' => $tanggalLapor,
@@ -187,18 +151,15 @@ class AsetPenangananImport implements ToCollection
         ]);
 
         if ($hasil === 'rusak_berat') {
-            $aset->update(['status' => 'rusak_berat']);
+            $inventory->update(['status' => 'rusak_berat']);
 
-            // sama seperti AsetPenangananController::update(): tutup paksa
-            // pemakaian yang masih aktif biar "Dipakai Oleh" & riwayat
-            // peminjaman ikut konsisten begitu aset dinyatakan rusak berat.
-            AsetPemakai::where('aset_id', $aset->id)
+            InventoryPemakai::where('inventory_id', $inventory->id)
                 ->where('status', 'disetujui')
                 ->whereNull('tanggal_pengembalian')
                 ->update([
                     'tanggal_pengembalian' => $tanggalSelesai,
                     'dikembalikan_at' => now(),
-                    'catatan_pengembalian' => 'Dikembalikan otomatis — aset dinyatakan rusak berat (import).',
+                    'catatan_pengembalian' => 'Dikembalikan otomatis — inventory dinyatakan rusak berat (import).',
                 ]);
         }
 
@@ -213,12 +174,6 @@ class AsetPenangananImport implements ToCollection
         return trim($header, '_');
     }
 
-    /**
-     * Sama persis logicnya dengan AsetBuktiRapiImport::parseTanggal() --
-     * tanggal teks format Indonesia (DD/MM/YYYY) DIPAKSA diparse duluan
-     * sebelum fallback ke Carbon::parse(), supaya "06/01/2026" gak salah
-     * kebaca gaya Amerika (Juni 1, padahal maksudnya 6 Januari).
-     */
     private function parseTanggal($value): ?string
     {
         if (empty($value)) {

@@ -2,7 +2,7 @@
 
 namespace App\Notifications;
 
-use App\Models\AsetPenanganan;
+use App\Models\Transaksi\InventoryPenanganan;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Notification;
@@ -13,7 +13,7 @@ class AsetKerusakanSelesai extends Notification
 {
     use Queueable;
 
-    public function __construct(protected AsetPenanganan $penanganan)
+    public function __construct(protected InventoryPenanganan $penanganan)
     {
     }
 
@@ -27,12 +27,12 @@ class AsetKerusakanSelesai extends Notification
 
     protected function namaAset(): string
     {
-        $aset = $this->penanganan->aset;
-        if (!$aset) {
+        $item = $this->penanganan->inventory;
+        if (!$item) {
             return 'Aset';
         }
 
-        return trim(($aset->merek ?? 'Aset') . ' ' . ($aset->tipe ?? ''));
+        return trim(($item->merek ?? 'Aset') . ' ' . ($item->tipe ?? ''));
     }
 
     protected function pesan(): string
@@ -46,12 +46,12 @@ class AsetKerusakanSelesai extends Notification
     {
         return [
             'type' => 'aset_kerusakan_selesai',
-            'aset_penanganan_id' => $this->penanganan->id,
-            'aset_id' => $this->penanganan->aset_id,
+            'inventory_penanganan_id' => $this->penanganan->id,
+            'inventory_id' => $this->penanganan->inventory_id,
             'jenis_kerusakan' => $this->penanganan->jenis_kerusakan,
             'hasil' => $this->penanganan->hasil,
             'message' => $this->pesan(),
-            'url' => '/inventaris?tab=penanganan',
+            'url' => '/penanganan-aset',
         ];
     }
 
@@ -66,7 +66,7 @@ class AsetKerusakanSelesai extends Notification
             ->title($this->penanganan->hasil === 'rusak_berat' ? 'Aset Dinyatakan Rusak Berat' : 'Aset Sudah Bisa Digunakan')
             ->icon('/logo.png')
             ->body($this->pesan())
-            ->data(['url' => '/inventaris?tab=penanganan'])
+            ->data(['url' => '/penanganan-aset'])
             ->options(['TTL' => 300]);
     }
 }
