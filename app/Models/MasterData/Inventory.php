@@ -14,7 +14,7 @@ class Inventory extends Model
 
     protected $fillable = [
         'parent_id',
-        'master_kategori_id',
+        'kategori_id',
         'departemen_id',
         'lokasi_kantor_id',
         'nama',
@@ -52,46 +52,39 @@ class Inventory extends Model
 
     // ================= Relasi kategori =================
 
-    public function masterKategori()
+    public function kategori()
     {
-        return $this->belongsTo(MasterKategori::class, 'master_kategori_id');
+        return $this->belongsTo(Kategori::class, 'kategori_id');
     }
 
     /**
-     * Shortcut buat baca kode kategori (barang_utama / kelengkapan) tanpa
-     * harus manggil relasi dua tingkat di banyak tempat. Kalau
-     * masterKategori/kategori-nya belum di-eager-load, ini bakal lazy-load
-     * (2 query) -- di controller yang butuh dipanggil berkali-kali (mis.
-     * dalam loop), pastikan eager-load 'masterKategori.kategori' dulu.
+     * Kalau kategori-nya belum di-eager-load, ini bakal lazy-load -- di
+     * controller yang butuh dipanggil berkali-kali (mis. dalam loop),
+     * pastikan eager-load 'kategori' dulu.
      */
-    public function kategoriKode(): ?string
-    {
-        return $this->masterKategori?->kategori?->kode;
-    }
-
     public function isBarangUtama(): bool
     {
-        return $this->kategoriKode() === 'barang_utama';
+        return $this->kategori?->nama === 'Barang Utama';
     }
 
     public function isKelengkapan(): bool
     {
-        return $this->kategoriKode() === 'kelengkapan';
+        return $this->kategori?->nama === 'Kelengkapan';
     }
 
     public function scopeBarangUtama($query)
     {
         return $query->whereHas(
-            'masterKategori.kategori',
-            fn ($q) => $q->where('kode', 'barang_utama')
+            'kategori',
+            fn ($q) => $q->where('nama', 'Barang Utama')
         );
     }
 
     public function scopeKelengkapan($query)
     {
         return $query->whereHas(
-            'masterKategori.kategori',
-            fn ($q) => $q->where('kode', 'kelengkapan')
+            'kategori',
+            fn ($q) => $q->where('nama', 'Kelengkapan')
         );
     }
 
