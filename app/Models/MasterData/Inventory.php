@@ -14,7 +14,7 @@ class Inventory extends Model
 
     protected $fillable = [
         'parent_id',
-        'master_kategori_id',
+        'kategori_id',
         'departemen_id',
         'lokasi_kantor_id',
         'nama',
@@ -52,9 +52,9 @@ class Inventory extends Model
 
     // ================= Relasi kategori =================
 
-    public function masterKategori()
+    public function kategori()
     {
-        return $this->belongsTo(MasterKategori::class, 'master_kategori_id');
+        return $this->belongsTo(Kategori::class, 'kategori_id');
     }
 
     /**
@@ -66,7 +66,7 @@ class Inventory extends Model
      */
     public function kategoriKode(): ?string
     {
-        return $this->masterKategori?->kategori?->kode;
+        return $this->kategori?->kode;
     }
 
     public function isBarangUtama(): bool
@@ -82,7 +82,7 @@ class Inventory extends Model
     public function scopeBarangUtama($query)
     {
         return $query->whereHas(
-            'masterKategori.kategori',
+            'kategori',
             fn ($q) => $q->where('kode', 'barang_utama')
         );
     }
@@ -90,7 +90,7 @@ class Inventory extends Model
     public function scopeKelengkapan($query)
     {
         return $query->whereHas(
-            'masterKategori.kategori',
+            'kategori',
             fn ($q) => $q->where('kode', 'kelengkapan')
         );
     }
