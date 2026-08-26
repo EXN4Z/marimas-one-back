@@ -5,7 +5,7 @@ namespace App\Http\Controllers\MasterData;
 use App\Http\Controllers\Controller;
 
 use App\Models\MasterData\Inventory;
-use App\Models\MasterData\MasterKategori;
+use App\Models\MasterData\Kategori;
 use App\Models\Transaksi\InventoryPemakai;
 use App\Models\Transaksi\InventoryWriteoff;
 use App\Models\User;
@@ -32,7 +32,7 @@ class InventoryController extends Controller
      *
      * Filter opsional:
      * - ?kategori=barang_utama|kelengkapan -- filter berdasar Kategori
-     *   (lewat master_kategori.kategori.kode), BUKAN ada/tidaknya parent_id.
+     *   (lewat kategori.nama), BUKAN ada/tidaknya parent_id.
      * - ?parent_id=123 -- kelengkapan yang nempel ke barang utama tertentu
      *   (dipakai buat expand/nested view di tabel).
      */
@@ -42,7 +42,7 @@ class InventoryController extends Controller
         $isAdmin = $user?->role === 'admin';
 
         $query = Inventory::with([
-            'masterKategori.kategori',
+            'kategori',
             'departemen',
             'lokasiKantor',
             'supplier',
@@ -102,7 +102,7 @@ class InventoryController extends Controller
         }
 
         $inventory->load([
-            'masterKategori.kategori',
+            'kategori',
             'departemen',
             'lokasiKantor',
             'supplier',
@@ -137,7 +137,7 @@ class InventoryController extends Controller
         });
 
         return response()->json(
-            $inventory->load('masterKategori.kategori', 'departemen', 'lokasiKantor', 'supplier', 'parent'),
+            $inventory->load('kategori', 'departemen', 'lokasiKantor', 'supplier', 'parent'),
             201
         );
     }
@@ -163,7 +163,7 @@ class InventoryController extends Controller
         });
 
         return response()->json(
-            $inventory->fresh()->load('masterKategori.kategori', 'departemen', 'lokasiKantor', 'supplier', 'parent')
+            $inventory->fresh()->load('kategori', 'departemen', 'lokasiKantor', 'supplier', 'parent')
         );
     }
 
@@ -267,7 +267,7 @@ class InventoryController extends Controller
         });
 
         return response()->json($inventory->fresh()->load([
-            'masterKategori.kategori',
+            'kategori',
             'departemen',
             'supplier',
             'pemakaiSaatIni',
@@ -366,7 +366,7 @@ class InventoryController extends Controller
             'parent_id' => 'required|exists:inventory,id',
         ]);
 
-        $parent = Inventory::with('masterKategori.kategori')->findOrFail($validated['parent_id']);
+        $parent = Inventory::with('kategori')->findOrFail($validated['parent_id']);
         abort_unless($parent->isBarangUtama(), 422, 'parent_id harus menunjuk ke Barang Utama.');
 
         DB::transaction(function () use ($inventory, $parent) {
@@ -428,14 +428,14 @@ class InventoryController extends Controller
         $request->merge([
             'serial_number' => $request->serial_number === '' ? null : $request->serial_number,
             'parent_id' => $request->parent_id === '' ? null : $request->parent_id,
-            'master_kategori_id' => $request->master_kategori_id === '' ? null : $request->master_kategori_id,
+            'kategori_id' => $request->kategori_id === '' ? null : $request->kategori_id,
             'departemen_id' => $request->departemen_id === '' ? null : $request->departemen_id,
             'lokasi_kantor_id' => $request->lokasi_kantor_id === '' ? null : $request->lokasi_kantor_id,
         ]);
 
         $validated = $request->validate([
             'parent_id' => 'nullable|exists:inventory,id',
-            'master_kategori_id' => 'nullable|exists:master_kategori,id',
+            'kategori_id' => 'nullable|exists:kategori,id',
             'departemen_id' => 'nullable|exists:departemen,id',
             'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
             'nama' => 'nullable|string|max:255',
@@ -481,17 +481,15 @@ class InventoryController extends Controller
             return;
         }
 
-        $masterKategoriId = array_key_exists('master_kategori_id', $validated)
-            ? $validated['master_kategori_id']
-            : $inventory?->master_kategori_id;
+        $kategoriId = array_key_exists('kategori_id', $validated)
+            ? $validated['kategori_id']
+            : $inventory?->kategori_id;
 
-        $kategoriKodeSelf = $masterKategoriId
-            ? MasterKategori::with('kategori')->find($masterKategoriId)?->kategori?->kode
-            : null;
+        $kategoriSelf = $kategoriId ? Kategori::find($kategoriId) : null;
 
-        abort_if($kategoriKodeSelf === 'barang_utama', 422, 'Barang Utama tidak boleh menempel ke item lain (parent_id harus kosong).');
+        abort_if($kategoriSelf?->isBarangUtama(), 422, 'Barang Utama tidak boleh menempel ke item lain (parent_id harus kosong).');
 
-        $parent = Inventory::with('masterKategori.kategori')->find($validated['parent_id']);
+        $parent = Inventory::with('kategori')->find($validated['parent_id']);
         abort_unless($parent && $parent->isBarangUtama(), 422, 'parent_id harus menunjuk ke Barang Utama.');
     }
 }
