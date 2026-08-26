@@ -72,7 +72,7 @@ class InventoryPenangananController extends Controller
         ]);
 
         $user = $request->user();
-        $inventory = Inventory::with('masterKategori.kategori')->findOrFail($validated['inventory_id']);
+        $inventory = Inventory::with('kategori')->findOrFail($validated['inventory_id']);
 
         abort_unless($inventory->isBarangUtama(), 422, 'Laporan kerusakan lewat endpoint ini hanya berlaku untuk Barang Utama. Untuk Kelengkapan, gunakan endpoint lapor-rusak-kelengkapan.');
 
