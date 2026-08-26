@@ -278,14 +278,18 @@ class InventoryController extends Controller
     /**
      * POST /api/inventory/{inventory}/lapor-rusak-kelengkapan
      * eks AsetKelengkapanController@laporRusak. Cuma berlaku buat
-     * Kelengkapan. Lepas otomatis dari parent (kalau ada), tutup paksa
-     * peminjaman aktif yang nempel di kelengkapan ini, status -> 'rusak'.
-     * Final, gak ada opsi "diperbaiki" buat kelengkapan. Status barang utama
-     * TIDAK terpengaruh sama sekali (keputusan #1 di dokumen migrasi).
+     * Kelengkapan yang MASIH NEMPEL ke induk (parent_id terisi) -- admin
+     * lepas paksa dari induk sekaligus tandai rusak, final, gak ada opsi
+     * "diperbaiki". Kelengkapan yang berdiri sendiri TIDAK lagi lewat sini --
+     * dia sekarang ikut alur InventoryPenanganan yang sama kaya Barang Utama
+     * (peminjam lapor -> admin terima -> proses perbaikan -> selesai), lihat
+     * InventoryPenangananController@store. Status barang utama induk TIDAK
+     * terpengaruh sama sekali (keputusan #1 di dokumen migrasi).
      */
     public function laporRusakKelengkapan(Inventory $inventory)
     {
         abort_unless($inventory->isKelengkapan(), 422, 'Hanya Kelengkapan yang bisa dilaporkan lewat endpoint ini.');
+        abort_unless($inventory->parent_id, 422, 'Kelengkapan ini berdiri sendiri -- gunakan alur lapor kerusakan yang sama seperti Barang Utama, bukan endpoint ini.');
 
         if ($inventory->status === 'rusak') {
             return response()->json([
