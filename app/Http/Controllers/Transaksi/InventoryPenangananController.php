@@ -56,8 +56,11 @@ class InventoryPenangananController extends Controller
         return response()->json($data);
     }
 
-    // peminjam lapor kerusakan barang utama yang sedang dia pakai.
-    // Kelengkapan TIDAK lewat sini -- lihat InventoryController@laporRusakKelengkapan.
+    // peminjam lapor kerusakan barang yang sedang dia pakai -- berlaku buat
+    // Barang Utama MAUPUN Kelengkapan yang berdiri sendiri (parent_id null).
+    // Kelengkapan yang masih nempel ke induk TIDAK lewat sini -- lihat
+    // InventoryController@laporRusakKelengkapan (dia gak boleh lapor rusak
+    // sendirian selama masih nempel, ikutin induknya).
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -74,7 +77,10 @@ class InventoryPenangananController extends Controller
         $user = $request->user();
         $inventory = Inventory::with('kategori')->findOrFail($validated['inventory_id']);
 
-        abort_unless($inventory->isBarangUtama(), 422, 'Laporan kerusakan lewat endpoint ini hanya berlaku untuk Barang Utama. Untuk Kelengkapan, gunakan endpoint lapor-rusak-kelengkapan.');
+        $bolehLaporLewatSini = $inventory->isBarangUtama()
+            || ($inventory->isKelengkapan() && !$inventory->parent_id);
+
+        abort_unless($bolehLaporLewatSini, 422, 'Laporan kerusakan lewat endpoint ini hanya berlaku untuk Barang Utama atau Kelengkapan yang berdiri sendiri. Kelengkapan yang masih nempel ke induk tidak bisa lapor rusak sendirian.');
 
         // cegah lapor dobel kalau item ini masih ada laporan yang belum
         // selesai ditangani (baik yang masih menunggu diterima admin,
