@@ -59,6 +59,17 @@ class InventoryBuktiImport implements ToCollection
     private const KETERANGAN_PREFIX_DIABAIKAN = '/^\s*(model|imei|p\s*\/?\s*n)\b/i';
 
     /**
+     * Nilai yang sering dipakai di Excel sumber buat nandain "tidak ada
+     * data" di kolom Nama Barang (mis. sel cuma diisi "-" biar nggak
+     * kosong secara visual / gampang ke-scroll), TAPI bukan nama barang
+     * beneran. Tanpa ditangani khusus, nilai-nilai ini lolos empty() check
+     * (string non-kosong) dan kebikin jadi baris Inventory dengan nama
+     * literal "-" dsb. Dicocokkan case-insensitive & setelah di-trim
+     * lewat namaBarangKosong().
+     */
+    private const NILAI_PLACEHOLDER_NAMA_KOSONG = ['-', '--', '---', 'n/a', 'na', '.', 'kosong'];
+
+    /**
      * Cache id kategori 'Barang Utama' & 'Kelengkapan' (key = nama,
      * value = id) supaya gak query ke tabel kategori berulang-ulang
      * tiap baris/kolom yang diproses. Diisi lazy lewat kategoriId().
@@ -179,7 +190,7 @@ class InventoryBuktiImport implements ToCollection
                     foreach ($nomorBarang as $n) {
                         $namaBarang = $row["nama_barang_{$n}"] ?? null;
 
-                        if (empty($namaBarang)) {
+                        if ($this->namaBarangKosong($namaBarang)) {
                             continue;
                         }
 
@@ -366,6 +377,24 @@ class InventoryBuktiImport implements ToCollection
         }
 
         return $this->kategoriIdCache[$nama];
+    }
+
+    /**
+     * True kalau isi kolom "Nama Barang N" harus dianggap TIDAK ADA data
+     * beneran -- baik karena benar-benar kosong (null/''), maupun karena
+     * cuma placeholder yang lazim dipakai di Excel sumber buat nandain
+     * "sel ini sengaja gak diisi" (mis. "-"). Tanpa ini, nilai seperti "-"
+     * lolos empty() check (string "-" itu non-empty di PHP) dan kepakai
+     * apa adanya sebagai `nama` baris Inventory (barang utama maupun
+     * kelengkapan), sehingga muncul barang dengan nama literal "-".
+     */
+    private function namaBarangKosong(?string $nama): bool
+    {
+        if (empty($nama)) {
+            return true;
+        }
+
+        return in_array(strtolower(trim($nama)), self::NILAI_PLACEHOLDER_NAMA_KOSONG, true);
     }
 
     private function cariNomorBarang(array $headers): array

@@ -18,8 +18,6 @@ class Inventory extends Model
         'departemen_id',
         'lokasi_kantor_id',
         'nama',
-        'merek',
-        'tipe',
         'warna',
         'serial_number',
         'jumlah',
