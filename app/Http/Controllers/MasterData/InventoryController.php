@@ -435,7 +435,7 @@ class InventoryController extends Controller
 
         $validated = $request->validate([
             'parent_id' => 'nullable|exists:inventory,id',
-            'kategori_id' => 'nullable|exists:kategori,id',
+            'kategori_id' => 'required|exists:kategori,id',
             'departemen_id' => 'nullable|exists:departemen,id',
             'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
             'nama' => 'nullable|string|max:255',

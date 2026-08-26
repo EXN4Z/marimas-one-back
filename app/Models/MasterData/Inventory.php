@@ -57,16 +57,6 @@ class Inventory extends Model
         return $this->belongsTo(Kategori::class, 'kategori_id');
     }
 
-    /**
-     * Kalau kategori-nya belum di-eager-load, ini bakal lazy-load -- di
-     * controller yang butuh dipanggil berkali-kali (mis. dalam loop),
-     * pastikan eager-load 'kategori' dulu.
-     */
-    public function kategoriKode(): ?string
-    {
-        return $this->kategori?->kode;
-    }
-
     public function isBarangUtama(): bool
     {
         return $this->kategori?->nama === 'Barang Utama';

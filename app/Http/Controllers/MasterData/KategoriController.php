@@ -27,7 +27,6 @@ class KategoriController extends Controller
     {
         $validated = $request->validate([
             'nama' => 'required|string|max:255',
-            'kode' => 'nullable|string|max:10',
         ]);
 
         $kategori = Kategori::create($validated);
@@ -39,7 +38,6 @@ class KategoriController extends Controller
     {
         $validated = $request->validate([
             'nama' => 'required|string|max:255',
-            'kode' => 'nullable|string|max:10',
         ]);
 
         $kategori->update($validated);
@@ -49,10 +47,10 @@ class KategoriController extends Controller
 
     /**
      * DELETE /api/kategori/{kategori}
-     * FK ke inventory.kategori_id pakai nullOnDelete di DB, jadi dicek
-     * manual dulu di sini biar pesan errornya jelas buat user (bukan
-     * malah diam-diam nge-null-in kategori_id inventory yang masih
-     * make baris ini).
+     * FK ke inventory.kategori_id pakai restrictOnDelete di DB (bakal
+     * error kalau dipaksa hapus lewat SQL langsung), jadi dicek manual
+     * dulu di sini biar pesan errornya jelas & rapi buat user (422,
+     * bukan error SQL constraint mentah).
      */
     public function destroy(Kategori $kategori)
     {
