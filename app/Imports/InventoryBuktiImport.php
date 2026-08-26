@@ -25,15 +25,17 @@ class InventoryBuktiImport implements ToCollection
     private const KOLOM_PENANDA_HEADER = 'no_bukti';
 
     /**
-     * Kode kategori (tabel `kategori`, kolom `kode`) yang menandai jenis
-     * baris inventory. Dulu ini enum `jenis` di tabel aset/aset_kelengkapan,
-     * sekarang jadi foreign key ke tabel kategori supaya bisa dikelola
-     * tanpa ALTER TABLE. JANGAN diubah nilainya di sini -- ini kode
-     * program, bukan label yang tampil ke user (label ada di kolom
-     * `nama` tabel kategori).
+     * Nama kategori (tabel `kategori`, kolom `nama`) yang menandai jenis
+     * baris inventory. Dulu diidentifikasi lewat `kategori.kode` (enum-style,
+     * lihat riwayat git), sekarang tabel `kategori` sudah digabung dengan
+     * `master_kategori` lama dan `kode`-nya jadi abbreviation opsional biasa
+     * (bukan enum lagi) -- jadi identifikasi jenis baris sekarang langsung
+     * dari `nama` ("Barang Utama" / "Kelengkapan"). JANGAN diubah nilainya
+     * di sini -- ini kode program, string ini harus persis sama dengan nama
+     * baris kategori yang di-seed lewat migration.
      */
-    private const KODE_KATEGORI_BARANG_UTAMA = 'barang_utama';
-    private const KODE_KATEGORI_KELENGKAPAN = 'kelengkapan';
+    private const NAMA_KATEGORI_BARANG_UTAMA = 'Barang Utama';
+    private const NAMA_KATEGORI_KELENGKAPAN = 'Kelengkapan';
 
     /**
      * Nomor kolom "Nama Barang N" yang dianggap BARANG UTAMA. Semua kolom
@@ -57,7 +59,7 @@ class InventoryBuktiImport implements ToCollection
     private const KETERANGAN_PREFIX_DIABAIKAN = '/^\s*(model|imei|p\s*\/?\s*n)\b/i';
 
     /**
-     * Cache id kategori 'barang_utama' & 'kelengkapan' (key = kode,
+     * Cache id kategori 'Barang Utama' & 'Kelengkapan' (key = nama,
      * value = id) supaya gak query ke tabel kategori berulang-ulang
      * tiap baris/kolom yang diproses. Diisi lazy lewat kategoriId().
      */
@@ -226,7 +228,7 @@ class InventoryBuktiImport implements ToCollection
 
                         $inventory = Inventory::create(array_merge($infoBukti, [
                             'nama'              => $namaBarangTrim,
-                            'kategori_id'       => $this->kategoriId(self::KODE_KATEGORI_BARANG_UTAMA),
+                            'kategori_id'       => $this->kategoriId(self::NAMA_KATEGORI_BARANG_UTAMA),
                             'parent_id'         => null,
                             'supplier_id'       => $supplierId,
                             'jumlah'            => $row["jumlah_{$n}"] ?? null,
@@ -292,11 +294,9 @@ class InventoryBuktiImport implements ToCollection
      * ulang lewat parseKeterangan() buat coba tarik serial_number & warna-
      * nya juga, sama seperti yang dilakukan buat barang utama. Info bukti
      * (perusahaan, tanggal) & supplier disamakan dengan induknya lewat
-     * $infoBukti/$supplierId yang dioper dari caller. master_kategori_id
-     * (Elektronik/Furnitur/dst) juga diwarisi dari induk, karena
-     * kelengkapan logisnya satu kategori barang dengan induknya. status-
-     * nya ikut status induk saat baris ini diproses (bukan status
-     * 'tersedia' hardcode).
+     * $infoBukti/$supplierId yang dioper dari caller. status-nya ikut
+     * status induk saat baris ini diproses (bukan status 'tersedia'
+     * hardcode).
      */
     private function buatInventoryKelengkapan(Inventory $indukInventory, array $infoBukti, ?int $supplierId, string $namaBarang, ?string $keterangan): Inventory
     {
@@ -304,8 +304,7 @@ class InventoryBuktiImport implements ToCollection
 
         return Inventory::create([
             'parent_id'         => $indukInventory->id,
-            'kategori_id'       => $this->kategoriId(self::KODE_KATEGORI_KELENGKAPAN),
-            'master_kategori_id' => $indukInventory->master_kategori_id,
+            'kategori_id'       => $this->kategoriId(self::NAMA_KATEGORI_KELENGKAPAN),
             'nama'              => $namaBarang,
             'warna'             => $hasilParse['warna'],
             'serial_number'     => $hasilParse['serial_number'],
@@ -353,20 +352,20 @@ class InventoryBuktiImport implements ToCollection
     }
 
     /**
-     * Ambil id kategori berdasarkan kode ('barang_utama' / 'kelengkapan'),
+     * Ambil id kategori berdasarkan nama ('Barang Utama' / 'Kelengkapan'),
      * dengan cache di $kategoriIdCache biar gak query berulang tiap baris.
-     * Sengaja pakai firstOrFail -- kalau kode kategori ini gak ada di
+     * Sengaja pakai firstOrFail -- kalau nama kategori ini gak ada di
      * tabel kategori, itu masalah data master yang harus ketahuan cepat
      * (error jelas), bukan diam-diam bikin baris inventory dengan
      * kategori_id null.
      */
-    private function kategoriId(string $kode): int
+    private function kategoriId(string $nama): int
     {
-        if (!array_key_exists($kode, $this->kategoriIdCache)) {
-            $this->kategoriIdCache[$kode] = Kategori::where('kode', $kode)->firstOrFail()->id;
+        if (!array_key_exists($nama, $this->kategoriIdCache)) {
+            $this->kategoriIdCache[$nama] = Kategori::where('nama', $nama)->firstOrFail()->id;
         }
 
-        return $this->kategoriIdCache[$kode];
+        return $this->kategoriIdCache[$nama];
     }
 
     private function cariNomorBarang(array $headers): array

@@ -58,11 +58,9 @@ class Inventory extends Model
     }
 
     /**
-     * Shortcut buat baca kode kategori (barang_utama / kelengkapan) tanpa
-     * harus manggil relasi dua tingkat di banyak tempat. Kalau
-     * masterKategori/kategori-nya belum di-eager-load, ini bakal lazy-load
-     * (2 query) -- di controller yang butuh dipanggil berkali-kali (mis.
-     * dalam loop), pastikan eager-load 'masterKategori.kategori' dulu.
+     * Kalau kategori-nya belum di-eager-load, ini bakal lazy-load -- di
+     * controller yang butuh dipanggil berkali-kali (mis. dalam loop),
+     * pastikan eager-load 'kategori' dulu.
      */
     public function kategoriKode(): ?string
     {
@@ -71,19 +69,19 @@ class Inventory extends Model
 
     public function isBarangUtama(): bool
     {
-        return $this->kategoriKode() === 'barang_utama';
+        return $this->kategori?->nama === 'Barang Utama';
     }
 
     public function isKelengkapan(): bool
     {
-        return $this->kategoriKode() === 'kelengkapan';
+        return $this->kategori?->nama === 'Kelengkapan';
     }
 
     public function scopeBarangUtama($query)
     {
         return $query->whereHas(
             'kategori',
-            fn ($q) => $q->where('kode', 'barang_utama')
+            fn ($q) => $q->where('nama', 'Barang Utama')
         );
     }
 
@@ -91,7 +89,7 @@ class Inventory extends Model
     {
         return $query->whereHas(
             'kategori',
-            fn ($q) => $q->where('kode', 'kelengkapan')
+            fn ($q) => $q->where('nama', 'Kelengkapan')
         );
     }
 

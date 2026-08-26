@@ -13,7 +13,6 @@ use App\Http\Controllers\Karyawan\AdminUserController;
 use App\Http\Controllers\MasterData\SupplierController;
 use App\Http\Controllers\MasterData\InventoryController;
 use App\Http\Controllers\MasterData\KategoriController;
-use App\Http\Controllers\MasterData\MasterKategoriController;
 use App\Http\Controllers\Transaksi\InventoryPemakaiController;
 use App\Http\Controllers\Transaksi\InventoryPenangananController;
 use App\Http\Controllers\Organisasi\CabangController;
@@ -156,11 +155,8 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/supplier/import', [SupplierController::class, 'import']);
     Route::apiResource('supplier', SupplierController::class)->except(['index', 'show']);
 
-    // Kategori cuma 2 baris fix (barang_utama/kelengkapan), read-only --
-    // dipakai buat dropdown pilih Kategori waktu bikin/edit Master Kategori.
-    Route::get('/kategori', [KategoriController::class, 'index']);
-
-    // Master Kategori: jenis/tipe barang (Laptop, Proyektor, Charger, dst),
-    // dikelola admin lewat Master Data. ?kategori_id= buat filter dropdown.
-    Route::apiResource('master-kategori', MasterKategoriController::class)->except(['show']);
+    // Kategori: jenis kategori barang di Inventory (Barang Utama,
+    // Kelengkapan, dst), dikelola admin lewat Master Data -- dipakai buat
+    // dropdown pilih Kategori waktu bikin/edit Inventory.
+    Route::apiResource('kategori', KategoriController::class)->except(['show']);
 });

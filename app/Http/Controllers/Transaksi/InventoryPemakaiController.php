@@ -95,8 +95,8 @@ class InventoryPemakaiController extends Controller
         };
 
         $pemakaiQuery = InventoryPemakai::with([
-            'inventory:id,kode_inventory,merek,tipe,nama,master_kategori_id',
-            'inventory.masterKategori.kategori:id,kode',
+            'inventory:id,kode_inventory,merek,tipe,nama,kategori_id',
+            'inventory.kategori:id,nama',
             'user:id,name',
         ])->where('status', 'disetujui');
 
@@ -110,7 +110,7 @@ class InventoryPemakaiController extends Controller
             ->get()
             ->each(function ($p) use (&$events) {
                 $nama = $p->user?->name ?? '-';
-                $tipeItem = $p->inventory?->kategoriKode() === 'kelengkapan' ? 'kelengkapan' : 'barang_utama';
+                $tipeItem = $p->inventory?->isKelengkapan() ? 'kelengkapan' : 'barang_utama';
 
                 $events->push([
                     'type' => 'pinjam',
