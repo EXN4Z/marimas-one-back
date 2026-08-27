@@ -283,21 +283,12 @@ class InventoryPenangananController extends Controller
                 $hasilAkhir = $validated['hasil'] ?? $inventoryPenanganan->hasil;
 
                 if ($hasilAkhir === 'rusak_berat') {
-                    $updateData = ['status' => 'rusak_berat'];
-
-                    // BARU: Kelengkapan yang masih nempel ke induk -- kalau
-                    // gagal diperbaiki (rusak_berat), otomatis dicopot dari
-                    // induknya (parent_id null) juga, bukan cuma diganti
-                    // status. Barang Utama gak kena ini (parent_id dia emang
-                    // selalu null). Kelengkapan yang BERHASIL diperbaiki
-                    // ('diperbaiki', cabang else di bawah) parent_id-nya
-                    // TIDAK disentuh -- tetap nempel ke induknya.
-                    $itemRusak = Inventory::find($inventoryPenanganan->inventory_id);
-                    if ($itemRusak && $itemRusak->isKelengkapan() && $itemRusak->parent_id) {
-                        $updateData['parent_id'] = null;
-                    }
-
-                    Inventory::whereKey($inventoryPenanganan->inventory_id)->update($updateData);
+                    // Kelengkapan yang masih nempel ke induk TIDAK dicopot
+                    // otomatis di sini walaupun hasilnya rusak_berat --
+                    // parent_id cuma boleh diubah lewat aksi manual admin
+                    // (lihat InventoryController::lepasDariInduk()). Barang
+                    // Utama gak kena ini (parent_id dia emang selalu null).
+                    Inventory::whereKey($inventoryPenanganan->inventory_id)->update(['status' => 'rusak_berat']);
 
                     // rusak berat = item gak dipakai siapa-siapa lagi. Tutup
                     // paksa record inventory_pemakai yang masih aktif (belum

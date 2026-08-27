@@ -166,6 +166,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     // utama yang lewat inventory-penanganan).
     Route::post('/inventory/{inventory}/lapor-rusak-kelengkapan', [InventoryController::class, 'laporRusakKelengkapan']);
     Route::post('/inventory/{inventory}/pasang-pengganti-kelengkapan', [InventoryController::class, 'pasangPenggantiKelengkapan']);
+    Route::post('/inventory/{inventory}/lepas-dari-induk', [InventoryController::class, 'lepasDariInduk']);
 
     Route::post('/supplier/import', [SupplierController::class, 'import']);
     Route::apiResource('supplier', SupplierController::class)->except(['index', 'show']);

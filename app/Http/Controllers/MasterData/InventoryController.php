@@ -10,11 +10,13 @@ use App\Models\Transaksi\InventoryPemakai;
 use App\Models\Transaksi\InventoryWriteoff;
 use App\Models\User;
 use App\Notifications\AsetKelengkapanKerusakanDilaporkan;
+use App\Notifications\KelengkapanDilepasDariInduk;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class InventoryController extends Controller
 {
@@ -223,6 +225,18 @@ class InventoryController extends Controller
     {
         abort_unless($inventory->isBarangUtama(), 422, 'Hanya Barang Utama yang bisa dijual/writeoff.');
 
+        abort_if(
+            $inventory->children()->exists(),
+            422,
+            'Item ini masih punya kelengkapan yang menempel. Lepas dulu kelengkapannya sebelum menjual/writeoff item ini.'
+        );
+
+        abort_if(
+            $inventory->parent_id,
+            422,
+            'Item ini masih menempel ke induk. Lepas dulu dari induknya sebelum menjual/writeoff item ini.'
+        );
+
         if ($inventory->status !== 'rusak_berat' && $inventory->status !== 'tersedia') {
             return response()->json([
                 'message' => 'Item hanya bisa dijual jika statusnya Rusak Berat.',
@@ -400,6 +414,81 @@ class InventoryController extends Controller
 
         return response()->json(
             $inventory->fresh()->load(['parent', 'lokasiKantor', 'supplier'])
+        );
+    }
+
+    /**
+     * POST /api/inventory/{inventory}/lepas-dari-induk
+     * Satu-satunya jalan buat ngosongin parent_id Kelengkapan yang lagi
+     * nempel -- manual oleh admin, TIDAK ada proses otomatis lain (termasuk
+     * lapor rusak / hasil penanganan rusak_berat) yang boleh ngelakuin ini.
+     * `dipakai` & `dijual` sengaja gak masuk opsi status_baru: 'dipakai'
+     * seharusnya lewat InventoryPemakai resmi, 'dijual' punya alur
+     * writeoff sendiri (jual()).
+     */
+    public function lepasDariInduk(Request $request, Inventory $inventory)
+    {
+        abort_unless($inventory->isKelengkapan(), 422, 'Hanya Kelengkapan yang bisa dilepas dari induk.');
+        abort_unless($inventory->parent_id, 422, 'Kelengkapan ini tidak sedang menempel ke induk manapun.');
+
+        $validated = $request->validate([
+            'status_baru' => ['required', Rule::in(['tersedia', 'rusak', 'rusak_berat', 'menunggu_perbaikan', 'diperbaiki'])],
+            'keterangan' => 'nullable|string',
+        ]);
+
+        // tangkep dulu sebelum parent_id dikosongin di transaksi bawah --
+        // butuh buat isi pesan notif ("sebelumnya terpasang di ...").
+        $indukLabel = null;
+        $parent = $inventory->load('parent')->parent;
+        if ($parent) {
+            $indukLabel = trim(($parent->kode_inventory ?? '') . ' ' . ($parent->nama ?? ''));
+        }
+
+        DB::transaction(function () use ($inventory, $validated) {
+            $inventory->update([
+                'parent_id' => null,
+                'status' => $validated['status_baru'],
+                'tanggal_rusak' => in_array($validated['status_baru'], ['rusak', 'rusak_berat'])
+                    ? now()
+                    : $inventory->tanggal_rusak,
+            ]);
+
+            InventoryPemakai::where('inventory_id', $inventory->id)
+                ->where('status', 'disetujui')
+                ->whereNull('tanggal_pengembalian')
+                ->update([
+                    'tanggal_pengembalian' => now(),
+                    'dikembalikan_at' => now(),
+                    'catatan_pengembalian' => 'Dikembalikan otomatis — kelengkapan dilepas dari induk oleh admin.',
+                ]);
+        });
+
+        // notif ke manajer/hr/admin, exclude admin yang ngelakuin aksi ini
+        // sendiri. try-catch: aksi lepas yang SUDAH tersimpan di atas jangan
+        // ikut gagal kalau notif error.
+        try {
+            Notification::send(
+                User::whereIn('role', ['manajer', 'hr', 'admin'])
+                    ->where('id', '!=', auth()->id())
+                    ->get(),
+                new KelengkapanDilepasDariInduk(
+                    $inventory,
+                    $indukLabel,
+                    $validated['status_baru'],
+                    $validated['keterangan'] ?? null,
+                    auth()->user()->name
+                )
+            );
+        } catch (\Throwable $e) {
+            Log::error('Gagal mengirim notifikasi lepas kelengkapan dari induk', [
+                'inventory_id' => $inventory->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
+
+        return response()->json(
+            $inventory->fresh()->load(['kategori', 'lokasiKantor', 'supplier'])
         );
     }
 
