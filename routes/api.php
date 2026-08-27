@@ -142,7 +142,17 @@ Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/inventory', [InventoryController::class, 'store']);
-    Route::post('/inventory/{inventory}', [InventoryController::class, 'update']); // pakai POST + _method=PUT dari frontend krn ada file upload
+    // Route ini WAJIB didaftarkan sebagai PUT, meskipun frontend ngirim raw
+    // HTTP method POST (lihat updateInventory() di api/masterData/inventory.ts:
+    // FormData + field _method=PUT -- trik standar krn PHP gak bisa parse body
+    // multipart kalau method aslinya PUT, jadi verb asli dibikin POST). Begitu
+    // Laravel baca _method=PUT itu, request->method() langsung KEBACA "PUT" buat
+    // urusan routing (bukan cuma buat isMethod() checks) -- makanya route yang
+    // dicocokkan router HARUS PUT, walau HTTP verb yang beneran dikirim ke
+    // server itu POST. Kalau didaftarkan sebagai POST malah salah: router bakal
+    // nyari route PUT (krn override), gak ketemu di antara method POST yang
+    // terdaftar, lempar 405 "PUT method not supported".
+    Route::put('/inventory/{inventory}', [InventoryController::class, 'update']);
     Route::delete('/inventory/{inventory}', [InventoryController::class, 'destroy']);
     Route::get('/inventory-pemakai/foto', [InventoryPemakaiController::class, 'foto']);
     Route::post('/inventory/{inventory}/pemakai', [InventoryPemakaiController::class, 'store']);
