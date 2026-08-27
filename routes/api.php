@@ -48,7 +48,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 Route::middleware(['auth:sanctum', 'role:admin'])->post('/admin/users/{id}/set-password', [AdminUserController::class, 'setPassword']);
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
-    Route::post('/inventory-penanganan', [InventoryPenangananController::class, 'store']); // karyawan: lapor kerusakan aset yang lagi dia pakai
+    Route::post('/inventory-penanganan', [InventoryPenangananController::class, 'store']); // karyawan: lapor kerusakan barang yang lagi dia pakai; admin: lapor kerusakan kelengkapan yang masih nempel ke induk
 
     Route::prefix('dashboard')->group(function () {
         Route::get('/kpd', [DashboardController::class, 'KaryawanPerDepart']);

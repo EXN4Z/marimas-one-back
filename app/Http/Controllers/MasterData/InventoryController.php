@@ -286,6 +286,19 @@ class InventoryController extends Controller
      * InventoryPenangananController@store. Status barang utama induk TIDAK
      * terpengaruh sama sekali (keputusan #1 di dokumen migrasi).
      */
+    /**
+     * POST /api/inventory/{inventory}/lapor-rusak-kelengkapan
+     * eks AsetKelengkapanController@laporRusak.
+     *
+     * LEGACY -- sudah TIDAK dipanggil dari frontend lagi. Kelengkapan yang
+     * nempel ke induk sekarang lapor kerusakan lewat endpoint yang sama
+     * kaya Barang Utama (InventoryPenanganan::store(), lihat komentar di
+     * sana), biar bisa lewat proses "diperbaiki" dulu -- bukan langsung
+     * final kaya endpoint ini. Endpoint ini dibiarkan hidup (gak dihapus)
+     * buat jaga-jaga ada integrasi lama yang masih manggil, tapi jangan
+     * dipakai buat fitur baru. Aman dihapus kalau nanti dipastikan gak ada
+     * pemanggil lain selain frontend yang sudah diubah ini.
+     */
     public function laporRusakKelengkapan(Inventory $inventory)
     {
         abort_unless($inventory->isKelengkapan(), 422, 'Hanya Kelengkapan yang bisa dilaporkan lewat endpoint ini.');

@@ -73,11 +73,16 @@ class InventoryPenangananController extends Controller
         return response()->json($data);
     }
 
-    // peminjam lapor kerusakan barang yang sedang dia pakai -- berlaku buat
-    // Barang Utama MAUPUN Kelengkapan yang berdiri sendiri (parent_id null).
-    // Kelengkapan yang masih nempel ke induk TIDAK lewat sini -- lihat
-    // InventoryController@laporRusakKelengkapan (dia gak boleh lapor rusak
-    // sendirian selama masih nempel, ikutin induknya).
+    // peminjam ATAU admin lapor kerusakan barang -- berlaku buat Barang Utama
+    // MAUPUN Kelengkapan, baik yang berdiri sendiri maupun yang masih nempel
+    // ke induk. Kelengkapan yang nempel dulu punya jalur sendiri yang
+    // langsung final (InventoryController@laporRusakKelengkapan, gak ada
+    // opsi "diperbaiki") -- sekarang disatukan ke sini biar konsisten:
+    // lapor -> menunggu_perbaikan -> terima -> diperbaiki -> selesai (hasil
+    // 'diperbaiki' ATAU 'rusak_berat'). Kalau hasilnya 'rusak_berat', baru di
+    // situ kelengkapan yang nempel otomatis dicopot dari induk + otomatis
+    // dikembalikan (lihat update() di bawah). Kalau berhasil 'diperbaiki',
+    // parent_id TIDAK disentuh -- tetap nempel ke induknya.
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -94,10 +99,9 @@ class InventoryPenangananController extends Controller
         $user = $request->user();
         $inventory = Inventory::with('kategori')->findOrFail($validated['inventory_id']);
 
-        $bolehLaporLewatSini = $inventory->isBarangUtama()
-            || ($inventory->isKelengkapan() && !$inventory->parent_id);
+        $bolehLaporLewatSini = $inventory->isBarangUtama() || $inventory->isKelengkapan();
 
-        abort_unless($bolehLaporLewatSini, 422, 'Laporan kerusakan lewat endpoint ini hanya berlaku untuk Barang Utama atau Kelengkapan yang berdiri sendiri. Kelengkapan yang masih nempel ke induk tidak bisa lapor rusak sendirian.');
+        abort_unless($bolehLaporLewatSini, 422, 'Laporan kerusakan lewat endpoint ini hanya berlaku untuk Barang Utama atau Kelengkapan.');
 
         // cegah lapor dobel kalau item ini masih ada laporan yang belum
         // selesai ditangani (baik yang masih menunggu diterima admin,
@@ -266,7 +270,21 @@ class InventoryPenangananController extends Controller
                 $hasilAkhir = $validated['hasil'] ?? $inventoryPenanganan->hasil;
 
                 if ($hasilAkhir === 'rusak_berat') {
-                    Inventory::whereKey($inventoryPenanganan->inventory_id)->update(['status' => 'rusak_berat']);
+                    $updateData = ['status' => 'rusak_berat'];
+
+                    // BARU: Kelengkapan yang masih nempel ke induk -- kalau
+                    // gagal diperbaiki (rusak_berat), otomatis dicopot dari
+                    // induknya (parent_id null) juga, bukan cuma diganti
+                    // status. Barang Utama gak kena ini (parent_id dia emang
+                    // selalu null). Kelengkapan yang BERHASIL diperbaiki
+                    // ('diperbaiki', cabang else di bawah) parent_id-nya
+                    // TIDAK disentuh -- tetap nempel ke induknya.
+                    $itemRusak = Inventory::find($inventoryPenanganan->inventory_id);
+                    if ($itemRusak && $itemRusak->isKelengkapan() && $itemRusak->parent_id) {
+                        $updateData['parent_id'] = null;
+                    }
+
+                    Inventory::whereKey($inventoryPenanganan->inventory_id)->update($updateData);
 
                     // rusak berat = item gak dipakai siapa-siapa lagi. Tutup
                     // paksa record inventory_pemakai yang masih aktif (belum
