@@ -70,15 +70,23 @@ class InventoryPenangananImport implements ToCollection
             return false;
         }
 
-        $inventory = Inventory::whereRaw('LOWER(kode_inventory) = ?', [strtolower($kode)])->first();
+        $inventory = Inventory::with('kategori')->whereRaw('LOWER(kode_inventory) = ?', [strtolower($kode)])->first();
         if (!$inventory) {
             $this->errors[] = "Baris {$nomorBaris}: Kode Inventory \"{$kode}\" tidak ditemukan, dilewati.";
             return false;
         }
 
+        // opsi jenis kerusakan beda per kategori -- Kelengkapan (charger,
+        // tas, kabel, dll) gak punya sisi "software" sama sekali, jadi
+        // dikasih opsi sendiri. Lihat juga InventoryPenangananController@store.
+        $opsiJenisKerusakan = $inventory->isKelengkapan()
+            ? ['tidak_berfungsi', 'hancur', 'terputus_sobek']
+            : ['software', 'hardware'];
+
         $jenisKerusakan = strtolower(trim((string) ($row['jenis_kerusakan'] ?? '')));
-        if (!in_array($jenisKerusakan, ['software', 'hardware'], true)) {
-            $this->errors[] = "Baris {$nomorBaris}: Jenis Kerusakan harus \"software\" atau \"hardware\", dilewati.";
+        $jenisKerusakan = str_replace([' ', '-', '/'], '_', $jenisKerusakan);
+        if (!in_array($jenisKerusakan, $opsiJenisKerusakan, true)) {
+            $this->errors[] = "Baris {$nomorBaris}: Jenis Kerusakan harus salah satu dari \"" . implode('", "', $opsiJenisKerusakan) . "\" untuk kategori barang ini, dilewati.";
             return false;
         }
 

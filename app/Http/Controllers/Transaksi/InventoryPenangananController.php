@@ -85,23 +85,36 @@ class InventoryPenangananController extends Controller
     // parent_id TIDAK disentuh -- tetap nempel ke induknya.
     public function store(Request $request)
     {
+        // inventory_id + kategorinya perlu diketahui duluan sebelum validasi
+        // jenis_kerusakan, karena pilihan yang valid beda antara Barang Utama
+        // (software/hardware) dan Kelengkapan (tidak_berfungsi/hancur/
+        // terputus_sobek) -- Kelengkapan gak punya sisi "software" sama sekali.
+        $request->validate([
+            'inventory_id' => 'required|exists:inventory,id',
+        ]);
+
+        $user = $request->user();
+        $inventory = Inventory::with('kategori')->findOrFail($request->input('inventory_id'));
+
+        $bolehLaporLewatSini = $inventory->isBarangUtama() || $inventory->isKelengkapan();
+
+        abort_unless($bolehLaporLewatSini, 422, 'Laporan kerusakan lewat endpoint ini hanya berlaku untuk Barang Utama atau Kelengkapan.');
+
+        $opsiJenisKerusakan = $inventory->isKelengkapan()
+            ? ['tidak_berfungsi', 'hancur', 'terputus_sobek']
+            : ['software', 'hardware'];
+
         $validated = $request->validate([
             'inventory_id' => 'required|exists:inventory,id',
-            'jenis_kerusakan' => 'required|in:software,hardware',
+            'jenis_kerusakan' => ['required', 'in:' . implode(',', $opsiJenisKerusakan)],
             'keluhan' => 'required|string',
             'foto' => 'required|image|mimes:jpg,jpeg,png,webp|max:1024',
         ], [
             'foto.required' => 'foto harus diisi',
             'foto.max' => 'Size foto maksimal 1MB',
             'foto.mimes' => 'foto harus berupa jpg,jpeg,png,webp',
+            'jenis_kerusakan.in' => 'Jenis kerusakan tidak valid untuk kategori barang ini.',
         ]);
-
-        $user = $request->user();
-        $inventory = Inventory::with('kategori')->findOrFail($validated['inventory_id']);
-
-        $bolehLaporLewatSini = $inventory->isBarangUtama() || $inventory->isKelengkapan();
-
-        abort_unless($bolehLaporLewatSini, 422, 'Laporan kerusakan lewat endpoint ini hanya berlaku untuk Barang Utama atau Kelengkapan.');
 
         // cegah lapor dobel kalau item ini masih ada laporan yang belum
         // selesai ditangani (baik yang masih menunggu diterima admin,
