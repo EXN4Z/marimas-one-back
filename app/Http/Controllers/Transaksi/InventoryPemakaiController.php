@@ -95,7 +95,7 @@ class InventoryPemakaiController extends Controller
         };
 
         $pemakaiQuery = InventoryPemakai::with([
-            'inventory:id,kode_inventory,merek,tipe,nama,kategori_id',
+            'inventory:id,kode_inventory,nama,kategori_id',
             'inventory.kategori:id,nama',
             'user:id,name',
         ])->where('status', 'disetujui');
@@ -131,7 +131,7 @@ class InventoryPemakaiController extends Controller
             });
 
         $penangananQuery = InventoryPenanganan::with([
-            'inventory:id,kode_inventory,merek,tipe,nama',
+            'inventory:id,kode_inventory,nama',
             'pemakai.user:id,name',
         ]);
 
@@ -183,7 +183,7 @@ class InventoryPemakaiController extends Controller
         // pribadi karyawan mana pun, gak relevan buat riwayat pribadinya.
         // Writeoff/jual cuma dikenal buat Barang Utama.
         if ($isAdmin) {
-            InventoryWriteoff::with(['inventory:id,kode_inventory,merek,tipe,nama', 'penyetuju:id,name'])
+            InventoryWriteoff::with(['inventory:id,kode_inventory,nama', 'penyetuju:id,name'])
                 ->latest('tanggal_writeoff')
                 ->limit($ambil)
                 ->get()
@@ -214,8 +214,6 @@ class InventoryPemakaiController extends Controller
                 $haystack = mb_strtolower(implode(' ', array_filter([
                     $ev['nama'] ?? '',
                     $item?->kode_inventory ?? '',
-                    $item?->merek ?? '',
-                    $item?->tipe ?? '',
                     $item?->nama ?? '',
                 ])));
 
@@ -270,8 +268,6 @@ class InventoryPemakaiController extends Controller
         if ($search = $request->input('search')) {
             $query->whereHas('inventory', function ($qq) use ($search) {
                 $qq->where('kode_inventory', 'like', "%{$search}%")
-                    ->orWhere('merek', 'like', "%{$search}%")
-                    ->orWhere('tipe', 'like', "%{$search}%")
                     ->orWhere('nama', 'like', "%{$search}%");
             });
         }

@@ -45,8 +45,7 @@ class InventoryPenangananController extends Controller
         if ($search = $request->input('search')) {
             $query->whereHas('inventory', function ($q) use ($search) {
                 $q->where('kode_inventory', 'like', "%{$search}%")
-                    ->orWhere('merek', 'like', "%{$search}%")
-                    ->orWhere('tipe', 'like', "%{$search}%");
+                    ->orWhere('nama', 'like', "%{$search}%");
             });
         }
 

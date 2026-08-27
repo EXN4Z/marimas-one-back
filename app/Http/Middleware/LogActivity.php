@@ -92,7 +92,7 @@ class LogActivity
         $kodeAset = $this->kodeAsetDariRoute($route);
 
         return match (true) {
-            ($uri === 'inventory' || $uri === 'aset') && $method === 'POST' => "{$nama} menambahkan aset baru" . ($request->input('merek') ? " ({$request->input('merek')} {$request->input('tipe')})" : ''),
+            ($uri === 'inventory' || $uri === 'aset') && $method === 'POST' => "{$nama} menambahkan aset baru" . ($request->input('nama') ? " ({$request->input('nama')})" : ''),
             ($uri === 'inventory/{inventory}' || $uri === 'aset/{aset}') && $method === 'POST' => "{$nama} mengubah data aset" . ($kodeAset ? " {$kodeAset}" : ''),
             ($uri === 'inventory/{inventory}' || $uri === 'aset/{aset}') && $method === 'DELETE' => "{$nama} menghapus aset" . ($kodeAset ? " {$kodeAset}" : ''),
             $uri === 'inventory/{inventory}/pemakai' || $uri === 'aset/{aset}/pemakai' => "{$nama} meminjamkan aset" . ($kodeAset ? " {$kodeAset}" : '') . " ke " . $this->namaPenerima($request),

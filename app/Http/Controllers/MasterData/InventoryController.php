@@ -46,7 +46,7 @@ class InventoryController extends Controller
             'departemen',
             'lokasiKantor',
             'supplier',
-            'parent:id,kode_inventory,merek,tipe,nama',
+            'parent:id,kode_inventory,nama',
             'pemakaiSaatIni.user.departemen',
             'pemakaiPending.user.departemen',
             'penangananAktif',
@@ -303,7 +303,7 @@ class InventoryController extends Controller
         if ($inventory->parent_id) {
             $parent = $inventory->load('parent')->parent;
             if ($parent) {
-                $parentLabel = trim(($parent->kode_inventory ?? '') . ' ' . ($parent->merek ?? ''));
+                $parentLabel = trim(($parent->kode_inventory ?? '') . ' ' . ($parent->nama ?? ''));
             }
         }
 
@@ -405,8 +405,7 @@ class InventoryController extends Controller
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('kode_inventory', 'like', "%{$search}%")
-                    ->orWhere('nama', 'like', "%{$search}%")
-                    ->orWhere('merek', 'like', "%{$search}%");
+                    ->orWhere('nama', 'like', "%{$search}%");
             });
         }
 
@@ -443,8 +442,6 @@ class InventoryController extends Controller
             'departemen_id' => 'nullable|exists:departemen,id',
             'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
             'nama' => 'nullable|string|max:255',
-            'merek' => 'nullable|string|max:255',
-            'tipe' => 'nullable|string|max:255',
             'warna' => 'nullable|string|max:255',
             'serial_number' => [
                 'nullable',

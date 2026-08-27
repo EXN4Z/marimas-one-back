@@ -38,7 +38,7 @@ class AsetKerusakanDilaporkan extends Notification
             return 'Aset';
         }
 
-        return trim(($item->merek ?? 'Aset') . ' ' . ($item->tipe ?? ''));
+        return $item->nama ?: 'Aset';
     }
 
     public function toDatabase($notifiable): array

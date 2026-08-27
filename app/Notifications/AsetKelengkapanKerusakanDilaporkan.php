@@ -33,9 +33,7 @@ class AsetKelengkapanKerusakanDilaporkan extends Notification
 
     protected function namaKelengkapan(): string
     {
-        return $this->kelengkapan->nama
-            ?: trim(($this->kelengkapan->merek ?? '') . ' ' . ($this->kelengkapan->tipe ?? ''))
-            ?: $this->kelengkapan->kode_inventory;
+        return $this->kelengkapan->nama ?: $this->kelengkapan->kode_inventory;
     }
 
     protected function pesan(): string
