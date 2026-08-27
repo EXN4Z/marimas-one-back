@@ -109,6 +109,12 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     Route::get('/inventory/{inventory}', [InventoryController::class, 'show']);
     Route::get('/supplier', [SupplierController::class, 'index']);
 
+    // BARU: dibuka buat karyawan/manajer juga (dulu admin+hr only) -- non-
+    // admin/hr cuma boleh liat laporan penanganan yang terkait pemakaian dia
+    // sendiri, discoping DI DALAM controller (InventoryPenangananController::index()),
+    // BUKAN cuma di middleware ini -- biar gak ada celah data karyawan lain bocor.
+    Route::get('/inventory-penanganan', [InventoryPenangananController::class, 'index']);
+
     // BARU: non-admin (karyawan/manajer/hr) butuh liat daftar kelengkapan
     // aset (charger, tas, dll) buat tau apa yang tersedia & apa yang lagi
     // dia pinjam sendiri -- scoping detail (gak boleh liat punya orang
@@ -127,12 +133,11 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
     Route::post('/inventory-pemakai/{inventoryPemakai}/kembalikan', [InventoryPemakaiController::class, 'kembalikan']);
 });
 
-// BARU: dipisah ke grup admin+hr — endpoint ini nampilin SEMUA laporan
-// kerusakan dari SELURUH karyawan tanpa filter, jadi gak boleh diakses
-// karyawan/manajer biasa (data pribadi karyawan lain).
+// endpoint ini nampilin SEMUA laporan kerusakan dari SELURUH karyawan tanpa
+// filter (tab "Rusak" di halaman Foto Aset) -- tetap admin+hr only, beda dari
+// /inventory-penanganan (index) di atas yang sekarang sudah self-scoping.
 Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
-    Route::get('/inventory-penanganan', [InventoryPenangananController::class, 'index']);
-    Route::get('/inventory-penanganan/foto', [InventoryPenangananController::class, 'foto']); // tab "Rusak" di halaman Foto Aset
+    Route::get('/inventory-penanganan/foto', [InventoryPenangananController::class, 'foto']);
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {

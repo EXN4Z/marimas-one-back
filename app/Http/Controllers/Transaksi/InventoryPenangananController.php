@@ -22,14 +22,32 @@ class InventoryPenangananController extends Controller
 {
     use GeneratesStrukNumber;
 
-    // admin only (dicek di route middleware, lihat routes/api.php)
-    public function index()
+    /**
+     * GET /api/inventory-penanganan
+     * Admin & HR: semua laporan penanganan, lintas karyawan (perilaku lama,
+     * gak berubah).
+     * Non-admin/HR (karyawan/manajer): dibatasi cuma laporan yang terkait
+     * pemakaian dia sendiri (inventory_pemakai.user_id == dia), biar
+     * karyawan gak bisa lihat laporan kerusakan/riwayat perbaikan milik
+     * karyawan lain. Discoping DI SINI (bukan cuma di middleware
+     * routes/api.php), soalnya middleware cuma ngatur SIAPA yang boleh
+     * manggil endpoint-nya, bukan DATA APA yang boleh dia lihat.
+     */
+    public function index(Request $request)
     {
-        $data = InventoryPenanganan::with(['inventory', 'pemakai.user'])
-            ->orderByDesc('tanggal_lapor')
-            ->get();
+        $user = $request->user();
+        $isAdminAtauHr = in_array($user?->role, ['admin', 'hr'], true);
 
-        return response()->json($data);
+        $query = InventoryPenanganan::with(['inventory', 'pemakai.user'])
+            ->orderByDesc('tanggal_lapor');
+
+        if (!$isAdminAtauHr) {
+            $query->whereHas('pemakai', function ($q) use ($user) {
+                $q->where('user_id', $user->id);
+            });
+        }
+
+        return response()->json($query->get());
     }
 
     // Tab "Rusak" di halaman Foto Inventory — versi paginated & bisa
