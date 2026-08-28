@@ -160,6 +160,15 @@ class InventoryController extends Controller
      * biasa maupun endpoint khusus pasang-pengganti) konsisten. Tanpa ini,
      * kelengkapan yang di-attach lewat form Edit akan nyangkut di status
      * 'tersedia' walau induknya udah dipinjam orang.
+     *
+     * CATATAN: status akhir kelengkapan ('dipakai'/'tersedia') sendiri
+     * sekarang selalu diselaraskan otomatis dari ada/tidaknya parent_id
+     * lewat selaraskanStatusKelengkapan() di dalam validasi() -- terlepas
+     * dari apakah induknya lagi ada pemakaian aktif atau tidak. Blok
+     * ikutkanKelengkapanKePemakaianInduk()/lepasKelengkapanDariPemakaianAktif()
+     * di bawah ini TETAP dijalankan, tapi sekarang cuma tanggung jawab buat
+     * catatan riwayat InventoryPemakai (siapa yang "pegang" kelengkapan ini
+     * ikut induknya) -- bukan lagi yang nentuin status.
      */
     public function update(Request $request, Inventory $inventory)
     {
@@ -174,21 +183,41 @@ class InventoryController extends Controller
             }
 
             // Tangkep parent_id LAMA sebelum update() -- dipakai buat
-            // bedain "baru di-attach sekarang" vs "form disubmit ulang
-            // dengan parent_id yang sama seperti sebelumnya" (misal admin
-            // cuma ubah field lain, parent_id-nya gak berubah). Tanpa
-            // pembanding ini, tiap submit form Edit akan selalu bikin
-            // record InventoryPemakai baru berulang-ulang.
+            // bedain "baru di-attach sekarang" / "baru dilepas sekarang"
+            // vs "form disubmit ulang dengan parent_id yang sama seperti
+            // sebelumnya" (misal admin cuma ubah field lain, parent_id-nya
+            // gak berubah). Tanpa pembanding ini, tiap submit form Edit
+            // akan selalu bikin/nutup record InventoryPemakai berulang-ulang.
             $parentIdLama = $inventory->parent_id;
+            $isKelengkapanSebelumUpdate = $inventory->isKelengkapan();
 
             $inventory->update($validated);
 
-            $parentBaruDiattach = $inventory->isKelengkapan()
+            $parentBaruDiattach = $isKelengkapanSebelumUpdate
                 && $inventory->parent_id
                 && $inventory->parent_id != $parentIdLama;
 
+            $parentBaruDilepas = $isKelengkapanSebelumUpdate
+                && $parentIdLama
+                && !$inventory->parent_id;
+
             if ($parentBaruDiattach) {
                 $this->ikutkanKelengkapanKePemakaianInduk($inventory);
+            }
+
+            // BARU: simetris dengan attach di atas -- kalau parent_id
+            // dilepas lewat form Edit ini (bukan lewat tombol khusus
+            // "Lepas dari Induk"/lepasDariInduk()), kelengkapan ini juga
+            // harus ikut ditutup pemakaian aktifnya. (Status sendiri udah
+            // dipaksa balik 'tersedia' lebih awal lewat
+            // selaraskanStatusKelengkapan() di validasi() -- baris ini
+            // sekarang murni beres-beres riwayat InventoryPemakai.) Tanpa
+            // ini, riwayat pemakaian kelengkapan yang tadinya ikut induknya
+            // bakal nyangkut "aktif" (tanggal_pengembalian kosong)
+            // selamanya walau parent_id-nya udah kosong & statusnya udah
+            // 'tersedia'.
+            if ($parentBaruDilepas) {
+                $this->lepasKelengkapanDariPemakaianAktif($inventory, 'Dikembalikan otomatis — kelengkapan dilepas dari induk lewat form edit.');
             }
         });
 
@@ -234,7 +263,17 @@ class InventoryController extends Controller
             // force=1 lepas dulu kelengkapan anak (jadi berdiri sendiri, bukan
             // ikut kehapus) sebelum baris induknya dihapus -- biar gak ada FK
             // yang mental atau anak yang ikut lenyap padahal masih valid.
-            $inventory->children()->update(['parent_id' => null]);
+            //
+            // BARU: query builder di sini gak lewat validasi()/update() model
+            // Eloquent, jadi selaraskanStatusKelengkapan() gak ikut kepanggil
+            // otomatis -- status HARUS disamakan manual di sini juga, biar
+            // invariant "parent_id null => status tersedia" tetap konsisten
+            // walau parent-nya dihapus paksa lewat force=1. 'rusak'
+            // dikecualikan, sama seperti di selaraskanStatusKelengkapan().
+            $inventory->children()->where('status', '!=', 'rusak')
+                ->update(['parent_id' => null, 'status' => 'tersedia']);
+            $inventory->children()->where('status', 'rusak')
+                ->update(['parent_id' => null]);
         }
 
         $kodeInventory = $inventory->kode_inventory;
@@ -329,6 +368,11 @@ class InventoryController extends Controller
      * buat jaga-jaga ada integrasi lama yang masih manggil, tapi jangan
      * dipakai buat fitur baru. Aman dihapus kalau nanti dipastikan gak ada
      * pemanggil lain selain frontend yang sudah diubah ini.
+     *
+     * CATATAN: status di sini disetel manual ke 'rusak' (bukan lewat
+     * selaraskanStatusKelengkapan()), dan itu memang sengaja dikecualikan
+     * dari invariant parent_id<->status -- lihat catatan 'rusak' di
+     * selaraskanStatusKelengkapan().
      */
     public function laporRusakKelengkapan(Inventory $inventory)
     {
@@ -406,6 +450,11 @@ class InventoryController extends Controller
      * doang, gak ada riwayat pemakai yang tercatat, dan gak akan ke-cover
      * pas induknya dikembalikan lewat InventoryPemakaiController::kembalikan()
      * yang query-nya berdasarkan tabel inventory_pemakai).
+     *
+     * CATATAN: status 'dipakai' di sini sekarang di-set duluan (manual,
+     * tepat setelah parent_id di-attach) biar konsisten dengan invariant
+     * parent_id<->status, terlepas dari ikutkanKelengkapanKePemakaianInduk()
+     * nemu pemakaian aktif induk atau tidak.
      */
     public function pasangPenggantiKelengkapan(Request $request, Inventory $inventory)
     {
@@ -425,7 +474,7 @@ class InventoryController extends Controller
         abort_unless($parent->isBarangUtama(), 422, 'parent_id harus menunjuk ke Barang Utama.');
 
         DB::transaction(function () use ($inventory, $parent) {
-            $inventory->update(['parent_id' => $parent->id]);
+            $inventory->update(['parent_id' => $parent->id, 'status' => 'dipakai']);
 
             $this->ikutkanKelengkapanKePemakaianInduk($inventory);
         });
@@ -440,9 +489,15 @@ class InventoryController extends Controller
      * induk dari $inventory (Kelengkapan yang baru di-attach) lagi punya
      * pemakaian aktif (status 'disetujui', belum dikembalikan), buatkan
      * $inventory ini record InventoryPemakai yang senasib (user_id, foto
-     * penerimaan sama seperti induknya) dan setel statusnya 'dipakai'.
-     * Kalau induknya lagi 'tersedia' (gak ada pemakaian aktif),
-     * $inventory dibiarkan apa adanya -- gak ada perubahan.
+     * penerimaan sama seperti induknya). Kalau induknya lagi 'tersedia'
+     * (gak ada pemakaian aktif), $inventory dibiarkan apa adanya -- gak ada
+     * riwayat InventoryPemakai baru yang dibuat.
+     *
+     * CATATAN: helper ini TIDAK LAGI yang nentuin status 'dipakai' --
+     * itu sekarang tanggung jawab selaraskanStatusKelengkapan() (via
+     * validasi()) atau di-set manual tepat setelah attach (lihat
+     * pasangPenggantiKelengkapan()), berlaku terlepas dari induknya lagi
+     * dipakai orang atau tidak. Helper ini murni soal riwayat pemakaian.
      *
      * Dipanggil di DALAM DB::transaction masing-masing caller.
      */
@@ -470,25 +525,60 @@ class InventoryController extends Controller
             'catatan_penerimaan' => 'Ditambahkan & dipinjamkan otomatis -- menempel ke barang utama yang sedang dipakai.',
             'foto_penerimaan' => $pemakaiAktifInduk->foto_penerimaan,
         ]);
+    }
 
-        $inventory->update(['status' => 'dipakai']);
+    /**
+     * Helper bareng buat update() & lepasDariInduk(): tutup pemakaian aktif
+     * $inventory (Kelengkapan yang baru dilepas dari induknya) kalau ada --
+     * simetris dengan ikutkanKelengkapanKePemakaianInduk() di atas. Kalau
+     * $inventory kebetulan gak punya pemakaian aktif (misal statusnya emang
+     * udah 'tersedia' dari awal, gak pernah ikut kepakai induknya), fungsi
+     * ini idempotent -- query InventoryPemakai-nya otomatis gak nemu
+     * apa-apa.
+     *
+     * CATATAN: status 'tersedia' sendiri TIDAK LAGI diset di sini --
+     * itu sekarang tanggung jawab selaraskanStatusKelengkapan() (via
+     * validasi(), dipanggil sebelum helper ini di update()) atau di-set
+     * manual tepat sebelum/sesudah detach di caller lain
+     * (lepasDariInduk()). Helper ini murni beres-beres riwayat
+     * InventoryPemakai. 'rusak' tetap gak boleh ketimpa -- itu udah
+     * dijamin di level pemanggil (selaraskanStatusKelengkapan() &
+     * lepasDariInduk() sama-sama ngecek status 'rusak' sebelum maksa
+     * 'tersedia').
+     *
+     * Dipanggil di DALAM DB::transaction masing-masing caller.
+     */
+    protected function lepasKelengkapanDariPemakaianAktif(Inventory $inventory, string $catatanPengembalian): void
+    {
+        InventoryPemakai::where('inventory_id', $inventory->id)
+            ->where('status', 'disetujui')
+            ->whereNull('tanggal_pengembalian')
+            ->update([
+                'tanggal_pengembalian' => now(),
+                'dikembalikan_at' => now(),
+                'catatan_pengembalian' => $catatanPengembalian,
+            ]);
     }
 
     /**
      * POST /api/inventory/{inventory}/lepas-dari-induk
-     * Satu-satunya jalan buat ngosongin parent_id Kelengkapan yang lagi
-     * nempel -- manual oleh admin, TIDAK ada proses otomatis lain (termasuk
-     * lapor rusak / hasil penanganan rusak_berat) yang boleh ngelakuin ini.
+     * Satu-satunya jalan RESMI buat ngosongin parent_id Kelengkapan yang
+     * lagi nempel -- manual oleh admin, TIDAK ada proses otomatis lain
+     * (termasuk lapor rusak / hasil penanganan rusak_berat) yang boleh
+     * ngelakuin ini secara implisit. (update() lewat form Edit generik
+     * SEKARANG JUGA bisa ngosongin parent_id -- lihat komentar
+     * $parentBaruDilepas di update() -- endpoint ini tetap dipertahankan
+     * sebagai jalur cepat khusus dari tombol "Lepas dari Induk".)
      *
-     * Endpoint ini MURNI mutusin hubungan parent_id -- status TIDAK disentuh
-     * sama sekali. Status kelengkapan udah sepenuhnya dipegang event lain:
-     * InventoryPemakai (dipakai/tersedia), InventoryPenanganan
-     * (rusak/menunggu_perbaikan/diperbaiki/rusak_berak, termasuk buat
-     * kelengkapan yang masih nempel -- lihat komentar di
-     * InventoryPenangananController@update), atau jual() (dijual). Apa pun
-     * statusnya sekarang, itu yang kebawa apa adanya pas dilepas -- gak ada
-     * pilihan status baru di sini, biar gak ada celah nimpa status yang udah
-     * resmi tercatat lewat proses lain.
+     * REVISI: dulu endpoint ini murni mutusin parent_id + nutup pemakaian
+     * aktif TANPA nyentuh status (dibiarkan apa adanya). Itu bikin bug --
+     * begitu ada attach otomatis yang nyetel status 'dipakai' terikat ke
+     * pemakaian induk, kelengkapan yang dilepas dari sini nyangkut
+     * selamanya di status 'dipakai' meski udah gak nempel ke mana-mana --
+     * gak bisa diserahkan/dipinjam lagi. Sekarang status dipaksa balik ke
+     * 'tersedia' langsung di sini (kecuali lagi 'rusak', itu tetap
+     * dipertahankan apa adanya) -- SEJALAN dengan invariant di
+     * selaraskanStatusKelengkapan(): parent_id null => status tersedia.
      */
     public function lepasDariInduk(Request $request, Inventory $inventory)
     {
@@ -510,16 +600,10 @@ class InventoryController extends Controller
         DB::transaction(function () use ($inventory) {
             $inventory->update([
                 'parent_id' => null,
+                'status' => $inventory->status === 'rusak' ? 'rusak' : 'tersedia',
             ]);
 
-            InventoryPemakai::where('inventory_id', $inventory->id)
-                ->where('status', 'disetujui')
-                ->whereNull('tanggal_pengembalian')
-                ->update([
-                    'tanggal_pengembalian' => now(),
-                    'dikembalikan_at' => now(),
-                    'catatan_pengembalian' => 'Dikembalikan otomatis — kelengkapan dilepas dari induk oleh admin.',
-                ]);
+            $this->lepasKelengkapanDariPemakaianAktif($inventory, 'Dikembalikan otomatis — kelengkapan dilepas dari induk oleh admin.');
         });
 
         // notif ke manajer/hr/admin, exclude admin yang ngelakuin aksi ini
@@ -589,9 +673,26 @@ class InventoryController extends Controller
      */
     protected function validasi(Request $request, ?Inventory $inventory = null): array
     {
+        // PENTING: normalisasi parent_id HARUS dicek $request->has() dulu --
+        // beda dengan field lain di bawah (yang emang selalu dikirim FE tiap
+        // submit), parent_id kadang gak ikut disertakan sama sekali di
+        // payload kalau admin cuma edit field lain (nama, warna, dst) dari
+        // form yang sama. Kalau langsung di-merge tanpa cek has() dulu,
+        // $request->parent_id pada field yang gak dikirim otomatis kebaca
+        // null, lalu merge() ini bakal MEMAKSA parent_id jadi null di
+        // request -- $validated jadi selalu punya 'parent_id' => null
+        // walau field itu gak pernah disentuh sama sekali. Efeknya:
+        // $parentBaruDilepas di update() salah kedeteksi true (dikira admin
+        // baru aja lepas parent_id), padahal admin cuma edit field lain --
+        // status kelengkapan ke-reset ke 'tersedia' secara gak sengaja.
+        if ($request->has('parent_id')) {
+            $request->merge([
+                'parent_id' => $request->parent_id === '' ? null : $request->parent_id,
+            ]);
+        }
+
         $request->merge([
             'serial_number' => $request->serial_number === '' ? null : $request->serial_number,
-            'parent_id' => $request->parent_id === '' ? null : $request->parent_id,
             'kategori_id' => $request->kategori_id === '' ? null : $request->kategori_id,
             'departemen_id' => $request->departemen_id === '' ? null : $request->departemen_id,
             'lokasi_kantor_id' => $request->lokasi_kantor_id === '' ? null : $request->lokasi_kantor_id,
@@ -626,6 +727,7 @@ class InventoryController extends Controller
         ]);
 
         $this->validasiParent($validated, $inventory);
+        $this->selaraskanStatusKelengkapan($validated, $inventory);
 
         return $validated;
     }
@@ -653,5 +755,50 @@ class InventoryController extends Controller
 
         $parent = Inventory::with('kategori')->find($validated['parent_id']);
         abort_unless($parent && $parent->isBarangUtama(), 422, 'parent_id harus menunjuk ke Barang Utama.');
+    }
+
+    /**
+     * Invariant: Kelengkapan yang punya parent_id (nempel ke Barang Utama)
+     * statusnya HARUS 'dipakai', dan yang parent_id-nya kosong HARUS
+     * 'tersedia' -- terlepas dari apakah induknya sendiri lagi dipinjam
+     * orang atau tidak. Dipanggil dari validasi() biar otomatis kepakai di
+     * store() (kelengkapan baru dibuat langsung nempel) maupun update()
+     * (attach/detach lewat form Edit generik), tanpa perlu diulang manual
+     * di masing-masing caller.
+     *
+     * Hanya berlaku buat kategori Kelengkapan -- Barang Utama gak disentuh
+     * (statusnya emang gak pernah ngikutin parent_id, wong Barang Utama
+     * gak boleh punya parent_id sama sekali, lihat validasiParent()).
+     *
+     * 'rusak' dikecualikan dari invariant ini -- itu state final yang cuma
+     * boleh diset lewat alur lapor rusak (laporRusakKelengkapan() /
+     * InventoryPenanganan::store()), jangan ketimpa sinkronisasi otomatis
+     * di sini.
+     */
+    protected function selaraskanStatusKelengkapan(array &$validated, ?Inventory $inventory): void
+    {
+        $kategoriId = array_key_exists('kategori_id', $validated)
+            ? $validated['kategori_id']
+            : $inventory?->kategori_id;
+
+        $kategori = $kategoriId ? Kategori::find($kategoriId) : null;
+
+        if (!$kategori?->isKelengkapan()) {
+            return;
+        }
+
+        $statusSaatIni = array_key_exists('status', $validated)
+            ? $validated['status']
+            : $inventory?->status;
+
+        if ($statusSaatIni === 'rusak') {
+            return;
+        }
+
+        $parentId = array_key_exists('parent_id', $validated)
+            ? $validated['parent_id']
+            : $inventory?->parent_id;
+
+        $validated['status'] = $parentId ? 'dipakai' : 'tersedia';
     }
 }
