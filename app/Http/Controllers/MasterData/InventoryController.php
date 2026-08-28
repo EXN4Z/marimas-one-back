@@ -4,6 +4,7 @@ namespace App\Http\Controllers\MasterData;
 
 use App\Http\Controllers\Controller;
 
+use App\Http\Controllers\Concerns\GeneratesStrukNumber;
 use App\Models\MasterData\Inventory;
 use App\Models\MasterData\Kategori;
 use App\Models\Transaksi\InventoryPemakai;
@@ -19,6 +20,8 @@ use Illuminate\Support\Facades\Storage;
 
 class InventoryController extends Controller
 {
+    use GeneratesStrukNumber;
+
     /**
      * GET /api/inventory
      * Admin: daftar SEMUA inventory (perilaku lama AsetController@index,
@@ -147,6 +150,16 @@ class InventoryController extends Controller
      * POST /api/inventory/{inventory} (+ _method=PUT dari frontend, krn ada
      * file upload)
      * Foto lama dihapus dari storage kalau diganti foto baru.
+     *
+     * BARU: kalau lewat form ini sebuah Kelengkapan baru di-attach ke induk
+     * (parent_id berubah dari kosong/beda jadi terisi) dan induknya
+     * kebetulan lagi berstatus 'dipakai' (ada pemakaian aktif), kelengkapan
+     * ini otomatis ikut disetel 'dipakai' + dibuatkan riwayat
+     * InventoryPemakai -- sinkron dengan logic yang sama di
+     * pasangPenggantiKelengkapan(), supaya kedua jalur attach (form Edit
+     * biasa maupun endpoint khusus pasang-pengganti) konsisten. Tanpa ini,
+     * kelengkapan yang di-attach lewat form Edit akan nyangkut di status
+     * 'tersedia' walau induknya udah dipinjam orang.
      */
     public function update(Request $request, Inventory $inventory)
     {
@@ -160,7 +173,23 @@ class InventoryController extends Controller
                 $validated['foto'] = $request->file('foto')->store('inventory', 'public');
             }
 
+            // Tangkep parent_id LAMA sebelum update() -- dipakai buat
+            // bedain "baru di-attach sekarang" vs "form disubmit ulang
+            // dengan parent_id yang sama seperti sebelumnya" (misal admin
+            // cuma ubah field lain, parent_id-nya gak berubah). Tanpa
+            // pembanding ini, tiap submit form Edit akan selalu bikin
+            // record InventoryPemakai baru berulang-ulang.
+            $parentIdLama = $inventory->parent_id;
+
             $inventory->update($validated);
+
+            $parentBaruDiattach = $inventory->isKelengkapan()
+                && $inventory->parent_id
+                && $inventory->parent_id != $parentIdLama;
+
+            if ($parentBaruDiattach) {
+                $this->ikutkanKelengkapanKePemakaianInduk($inventory);
+            }
         });
 
         return response()->json(
@@ -290,17 +319,6 @@ class InventoryController extends Controller
 
     /**
      * POST /api/inventory/{inventory}/lapor-rusak-kelengkapan
-     * eks AsetKelengkapanController@laporRusak. Cuma berlaku buat
-     * Kelengkapan yang MASIH NEMPEL ke induk (parent_id terisi) -- admin
-     * lepas paksa dari induk sekaligus tandai rusak, final, gak ada opsi
-     * "diperbaiki". Kelengkapan yang berdiri sendiri TIDAK lagi lewat sini --
-     * dia sekarang ikut alur InventoryPenanganan yang sama kaya Barang Utama
-     * (peminjam lapor -> admin terima -> proses perbaikan -> selesai), lihat
-     * InventoryPenangananController@store. Status barang utama induk TIDAK
-     * terpengaruh sama sekali (keputusan #1 di dokumen migrasi).
-     */
-    /**
-     * POST /api/inventory/{inventory}/lapor-rusak-kelengkapan
      * eks AsetKelengkapanController@laporRusak.
      *
      * LEGACY -- sudah TIDAK dipanggil dari frontend lagi. Kelengkapan yang
@@ -381,6 +399,13 @@ class InventoryController extends Controller
      * POST /api/inventory/{inventory}/pasang-pengganti-kelengkapan
      * eks AsetKelengkapanController@pasangPengganti. Nempelin kelengkapan
      * yang 'tersedia' ke barang utama tertentu.
+     *
+     * BARU: sekarang pakai helper ikutkanKelengkapanKePemakaianInduk() yang
+     * sama dengan update() -- selain nyetel status 'dipakai', juga bikin
+     * record InventoryPemakai buat kelengkapan ini (dulu cuma ganti status
+     * doang, gak ada riwayat pemakai yang tercatat, dan gak akan ke-cover
+     * pas induknya dikembalikan lewat InventoryPemakaiController::kembalikan()
+     * yang query-nya berdasarkan tabel inventory_pemakai).
      */
     public function pasangPenggantiKelengkapan(Request $request, Inventory $inventory)
     {
@@ -400,20 +425,53 @@ class InventoryController extends Controller
         abort_unless($parent->isBarangUtama(), 422, 'parent_id harus menunjuk ke Barang Utama.');
 
         DB::transaction(function () use ($inventory, $parent) {
-            $adaPemakaiAktif = InventoryPemakai::where('inventory_id', $parent->id)
-                ->where('status', 'disetujui')
-                ->whereNull('tanggal_pengembalian')
-                ->exists();
+            $inventory->update(['parent_id' => $parent->id]);
 
-            $inventory->update([
-                'parent_id' => $parent->id,
-                'status'  => $adaPemakaiAktif ? 'dipakai' : 'tersedia',
-            ]);
+            $this->ikutkanKelengkapanKePemakaianInduk($inventory);
         });
 
         return response()->json(
             $inventory->fresh()->load(['parent', 'lokasiKantor', 'supplier'])
         );
+    }
+
+    /**
+     * Helper bareng buat update() & pasangPenggantiKelengkapan(): kalau
+     * induk dari $inventory (Kelengkapan yang baru di-attach) lagi punya
+     * pemakaian aktif (status 'disetujui', belum dikembalikan), buatkan
+     * $inventory ini record InventoryPemakai yang senasib (user_id, foto
+     * penerimaan sama seperti induknya) dan setel statusnya 'dipakai'.
+     * Kalau induknya lagi 'tersedia' (gak ada pemakaian aktif),
+     * $inventory dibiarkan apa adanya -- gak ada perubahan.
+     *
+     * Dipanggil di DALAM DB::transaction masing-masing caller.
+     */
+    protected function ikutkanKelengkapanKePemakaianInduk(Inventory $inventory): void
+    {
+        $pemakaiAktifInduk = InventoryPemakai::where('inventory_id', $inventory->parent_id)
+            ->where('status', 'disetujui')
+            ->whereNull('tanggal_pengembalian')
+            ->latest('tanggal_penerimaan')
+            ->first();
+
+        if (!$pemakaiAktifInduk) {
+            return;
+        }
+
+        $noStrukAnak = $this->generateNoStruk('STJ', 'inventory_pemakai', 'no_struk_penerimaan');
+
+        InventoryPemakai::create([
+            'inventory_id' => $inventory->id,
+            'user_id' => $pemakaiAktifInduk->user_id,
+            'status' => 'disetujui',
+            'no_struk_penerimaan' => $noStrukAnak,
+            'tanggal_penerimaan' => now()->toDateString(),
+            'diterima_at' => now(),
+            'catatan_penerimaan' => 'Ditambahkan & dipinjamkan otomatis -- menempel ke barang utama yang sedang dipakai.',
+            'foto_penerimaan' => $pemakaiAktifInduk->foto_penerimaan,
+        ]);
+
+        $inventory->update(['status' => 'dipakai']);
     }
 
     /**
