@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Transaksi;
 use App\Http\Controllers\Controller;
 
 use App\Http\Controllers\Concerns\GeneratesStrukNumber;
+use App\Http\Controllers\Concerns\SimpanFotoBukti;
 use App\Models\MasterData\Inventory;
 use App\Models\Transaksi\InventoryPemakai;
 use App\Models\Transaksi\InventoryPenanganan;
@@ -16,38 +17,7 @@ use Illuminate\Validation\ValidationException;
 class InventoryPemakaiController extends Controller
 {
     use GeneratesStrukNumber;
-
-    /**
-     * Disk tempat foto bukti serah-terima disimpan. Dipisah jadi konstanta
-     * biar gampang diubah/di-swap tanpa nyari-nyari string 'public' di
-     * banyak tempat.
-     *
-     * TETAP pakai disk 'public' (bukan S3) -- keputusan sadar, bukan lupa
-     * diganti. Foldernya (storage/app/public, atau seluruh storage/)
-     * di-mount ke Railway Volume supaya persisten antar-redeploy. Lihat
-     * catatan lengkap di versi lama (AsetPemakaiController) soal syarat
-     * volume + storage:link + kenapa harus tetap 1 replica.
-     */
-    private const DISK_FOTO_BUKTI = 'public';
-
-    /**
-     * Simpan array file upload ke disk (default: 'public', lihat
-     * DISK_FOTO_BUKTI di atas) dan kembalikan array path-nya. Dipakai bareng
-     * buat foto_penerimaan (store) & foto_pengembalian (kembalikan) --
-     * keduanya sama-sama "bukti serah terima" dalam bentuk array foto,
-     * maksimal 3, disimpan sebagai JSON di kolom terkait.
-     */
-    private function simpanFotoBukti(Request $request, string $field, string $folder): array
-    {
-        $disk = config('filesystems.disk_aset', self::DISK_FOTO_BUKTI);
-
-        $paths = [];
-        foreach ($request->file($field, []) as $file) {
-            $paths[] = $file->store($folder, $disk);
-        }
-
-        return $paths;
-    }
+    use SimpanFotoBukti;
 
     /**
      * GET /api/inventory-pemakai/riwayat
