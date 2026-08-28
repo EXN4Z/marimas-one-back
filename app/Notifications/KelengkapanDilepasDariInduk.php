@@ -16,10 +16,15 @@ class KelengkapanDilepasDariInduk extends Notification
     // $indukLabel ditangkap sebelum parent_id dikosongin di controller --
     // begitu lepas dari induk selesai, kelengkapan udah lepas dari induknya
     // jadi relasi parent gak bisa diandalkan lagi di sini.
+    //
+    // $statusSaatIni cuma buat informasi di pesan notif -- lepasDariInduk()
+    // TIDAK mengubah status, jadi ini adalah status yang udah ada dari
+    // sebelumnya (hasil InventoryPemakai/InventoryPenanganan/jual), bukan
+    // status baru yang di-set lewat aksi lepas ini.
     public function __construct(
         protected Inventory $kelengkapan,
         protected ?string $indukLabel,
-        protected string $statusBaru,
+        protected string $statusSaatIni,
         protected ?string $keterangan,
         protected string $pelaporName
     ) {
@@ -43,7 +48,7 @@ class KelengkapanDilepasDariInduk extends Notification
         $lokasi = $this->indukLabel ? " (sebelumnya terpasang di {$this->indukLabel})" : '';
         $keterangan = $this->keterangan ? " Keterangan: {$this->keterangan}" : '';
 
-        return "{$this->pelaporName} melepas kelengkapan {$this->namaKelengkapan()}{$lokasi} dari induknya, status diubah jadi {$this->statusBaru}.{$keterangan}";
+        return "{$this->pelaporName} melepas kelengkapan {$this->namaKelengkapan()}{$lokasi} dari induknya (status saat ini: {$this->statusSaatIni}).{$keterangan}";
     }
 
     public function toDatabase($notifiable): array

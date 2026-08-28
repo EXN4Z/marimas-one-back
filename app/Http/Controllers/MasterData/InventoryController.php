@@ -16,7 +16,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\Rule;
 
 class InventoryController extends Controller
 {
@@ -422,9 +421,16 @@ class InventoryController extends Controller
      * Satu-satunya jalan buat ngosongin parent_id Kelengkapan yang lagi
      * nempel -- manual oleh admin, TIDAK ada proses otomatis lain (termasuk
      * lapor rusak / hasil penanganan rusak_berat) yang boleh ngelakuin ini.
-     * `dipakai` & `dijual` sengaja gak masuk opsi status_baru: 'dipakai'
-     * seharusnya lewat InventoryPemakai resmi, 'dijual' punya alur
-     * writeoff sendiri (jual()).
+     *
+     * Endpoint ini MURNI mutusin hubungan parent_id -- status TIDAK disentuh
+     * sama sekali. Status kelengkapan udah sepenuhnya dipegang event lain:
+     * InventoryPemakai (dipakai/tersedia), InventoryPenanganan
+     * (rusak/menunggu_perbaikan/diperbaiki/rusak_berak, termasuk buat
+     * kelengkapan yang masih nempel -- lihat komentar di
+     * InventoryPenangananController@update), atau jual() (dijual). Apa pun
+     * statusnya sekarang, itu yang kebawa apa adanya pas dilepas -- gak ada
+     * pilihan status baru di sini, biar gak ada celah nimpa status yang udah
+     * resmi tercatat lewat proses lain.
      */
     public function lepasDariInduk(Request $request, Inventory $inventory)
     {
@@ -432,7 +438,6 @@ class InventoryController extends Controller
         abort_unless($inventory->parent_id, 422, 'Kelengkapan ini tidak sedang menempel ke induk manapun.');
 
         $validated = $request->validate([
-            'status_baru' => ['required', Rule::in(['tersedia', 'rusak', 'rusak_berat', 'menunggu_perbaikan', 'diperbaiki'])],
             'keterangan' => 'nullable|string',
         ]);
 
@@ -444,13 +449,9 @@ class InventoryController extends Controller
             $indukLabel = trim(($parent->kode_inventory ?? '') . ' ' . ($parent->nama ?? ''));
         }
 
-        DB::transaction(function () use ($inventory, $validated) {
+        DB::transaction(function () use ($inventory) {
             $inventory->update([
                 'parent_id' => null,
-                'status' => $validated['status_baru'],
-                'tanggal_rusak' => in_array($validated['status_baru'], ['rusak', 'rusak_berat'])
-                    ? now()
-                    : $inventory->tanggal_rusak,
             ]);
 
             InventoryPemakai::where('inventory_id', $inventory->id)
@@ -474,7 +475,7 @@ class InventoryController extends Controller
                 new KelengkapanDilepasDariInduk(
                     $inventory,
                     $indukLabel,
-                    $validated['status_baru'],
+                    $inventory->status,
                     $validated['keterangan'] ?? null,
                     auth()->user()->name
                 )
