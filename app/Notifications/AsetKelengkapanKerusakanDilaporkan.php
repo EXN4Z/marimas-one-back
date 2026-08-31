@@ -33,7 +33,9 @@ class AsetKelengkapanKerusakanDilaporkan extends Notification
 
     protected function namaKelengkapan(): string
     {
-        return $this->kelengkapan->nama ?: $this->kelengkapan->kode_inventory;
+        return $this->kelengkapan->nama
+            ?: trim(($this->kelengkapan->merek ?? '') . ' ' . ($this->kelengkapan->tipe ?? ''))
+            ?: $this->kelengkapan->kode_inventory;
     }
 
     protected function pesan(): string
@@ -48,7 +50,7 @@ class AsetKelengkapanKerusakanDilaporkan extends Notification
             'type' => 'aset_kelengkapan_kerusakan',
             'inventory_id' => $this->kelengkapan->id,
             'message' => $this->pesan(),
-            'url' => '/master-data?tab=kelengkapan_aset',
+            'url' => '/master-data?tab=kelengkapan_inventory',
         ];
     }
 
@@ -63,7 +65,7 @@ class AsetKelengkapanKerusakanDilaporkan extends Notification
             ->title('Laporan Kerusakan Kelengkapan')
             ->icon('/logo.png')
             ->body($this->pesan())
-            ->data(['url' => '/master-data?tab=kelengkapan_aset'])
+            ->data(['url' => '/master-data?tab=kelengkapan_inventory'])
             ->options(['TTL' => 300]);
     }
 }

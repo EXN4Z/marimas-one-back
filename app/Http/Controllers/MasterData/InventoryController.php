@@ -5,6 +5,7 @@ namespace App\Http\Controllers\MasterData;
 use App\Http\Controllers\Controller;
 
 use App\Http\Controllers\Concerns\GeneratesStrukNumber;
+use App\Http\Controllers\Concerns\SimpanFotoBukti;
 use App\Models\MasterData\Inventory;
 use App\Models\MasterData\Kategori;
 use App\Models\Transaksi\InventoryPemakai;
@@ -21,7 +22,7 @@ use Illuminate\Support\Facades\Storage;
 class InventoryController extends Controller
 {
     use GeneratesStrukNumber;
-
+    use SimpanFotoBukti;
     /**
      * GET /api/inventory
      * Admin: daftar SEMUA inventory (perilaku lama AsetController@index,
@@ -444,17 +445,16 @@ class InventoryController extends Controller
      * eks AsetKelengkapanController@pasangPengganti. Nempelin kelengkapan
      * yang 'tersedia' ke barang utama tertentu.
      *
-     * BARU: sekarang pakai helper ikutkanKelengkapanKePemakaianInduk() yang
-     * sama dengan update() -- selain nyetel status 'dipakai', juga bikin
-     * record InventoryPemakai buat kelengkapan ini (dulu cuma ganti status
-     * doang, gak ada riwayat pemakai yang tercatat, dan gak akan ke-cover
-     * pas induknya dikembalikan lewat InventoryPemakaiController::kembalikan()
-     * yang query-nya berdasarkan tabel inventory_pemakai).
-     *
-     * CATATAN: status 'dipakai' di sini sekarang di-set duluan (manual,
-     * tepat setelah parent_id di-attach) biar konsisten dengan invariant
-     * parent_id<->status, terlepas dari ikutkanKelengkapanKePemakaianInduk()
-     * nemu pemakaian aktif induk atau tidak.
+     * Kalau barang utama tujuan lagi ada pemakaian aktif (dipinjam),
+     * kelengkapan ini ikut dianggap "dipinjam" ke pemakai yang sama --
+     * BUKAN cuma status di-flip jadi 'dipakai', tapi beneran dibikinin
+     * record InventoryPemakai sendiri (dengan foto_penerimaan wajib, sama
+     * kayak serah-terima biasa di InventoryPemakaiController::store()).
+     * Ini penting biar: (1) ada jejak siapa yang pegang & sejak kapan,
+     * (2) item ini ke-cover cascade InventoryPemakaiController::kembalikan()
+     * pas barang utama induknya dikembalikan nanti -- tanpa record ini,
+     * status 'dipakai' bakal nyangkut selamanya karena cascade itu jalan
+     * lewat query ke tabel InventoryPemakai, bukan cuma liat kolom status.
      */
     public function pasangPenggantiKelengkapan(Request $request, Inventory $inventory)
     {
@@ -466,17 +466,56 @@ class InventoryController extends Controller
             ], 422);
         }
 
-        $validated = $request->validate([
+        $request->validate([
             'parent_id' => 'required|exists:inventory,id',
         ]);
 
-        $parent = Inventory::with('kategori')->findOrFail($validated['parent_id']);
+        $parent = Inventory::with('kategori')->findOrFail($request->input('parent_id'));
         abort_unless($parent->isBarangUtama(), 422, 'parent_id harus menunjuk ke Barang Utama.');
 
-        DB::transaction(function () use ($inventory, $parent) {
-            $inventory->update(['parent_id' => $parent->id, 'status' => 'dipakai']);
+        // cek dulu SEBELUM validasi foto -- foto cuma wajib kalau induknya
+        // beneran lagi dipinjam (baru di situ ada record InventoryPemakai
+        // yang perlu dibikin). Kalau induknya nganggur, gak ada apa-apa yang
+        // perlu dicatat, jadi gak perlu maksa admin upload foto buat itu.
+        $pemakaiIndukAktif = InventoryPemakai::where('inventory_id', $parent->id)
+            ->where('status', 'disetujui')
+            ->whereNull('tanggal_pengembalian')
+            ->first();
 
-            $this->ikutkanKelengkapanKePemakaianInduk($inventory);
+        $rules = ['catatan_penerimaan' => 'nullable|string'];
+        if ($pemakaiIndukAktif) {
+            $rules['foto_penerimaan'] = 'required|array|min:1|max:3';
+            $rules['foto_penerimaan.*'] = 'image|mimes:jpg,jpeg,png,webp|max:1024';
+        }
+
+        $validated = $request->validate($rules, [
+            'foto_penerimaan.*.max' => 'Maksimal size foto adalah 1MB',
+            'foto_penerimaan.required' => 'Foto penerimaan wajib diisi karena barang utama ini sedang dipinjam.',
+        ]);
+
+        DB::transaction(function () use ($inventory, $parent, $request, $validated, $pemakaiIndukAktif) {
+            $inventory->update([
+                'parent_id' => $parent->id,
+                'status'  => $pemakaiIndukAktif ? 'dipakai' : 'tersedia',
+            ]);
+
+            if ($pemakaiIndukAktif) {
+                $noStruk = $this->generateNoStruk('STJ', 'inventory_pemakai', 'no_struk_penerimaan');
+                $fotoPaths = $this->simpanFotoBukti($request, 'foto_penerimaan', 'inventory-pemakai/penerimaan');
+
+                InventoryPemakai::create([
+                    'inventory_id' => $inventory->id,
+                    'user_id' => $pemakaiIndukAktif->user_id,
+                    'status' => 'disetujui',
+                    'requested_by_user_id' => $request->user()?->id,
+                    'no_struk_penerimaan' => $noStruk,
+                    'tanggal_penerimaan' => now()->toDateString(),
+                    'diterima_at' => now(),
+                    'catatan_penerimaan' => $validated['catatan_penerimaan']
+                        ?? 'Dipasang susulan -- mengikuti barang utama yang sedang dipinjam.',
+                    'foto_penerimaan' => $fotoPaths,
+                ]);
+            }
         });
 
         return response()->json(
