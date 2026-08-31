@@ -29,14 +29,17 @@ class InventoryPemakaiController extends Controller
      * personal ke satu karyawan (itu keputusan admin di level barang), jadi
      * cuma muncul buat admin.
      *
-     * Event pinjam/kembali sekarang mencakup baik Barang Utama maupun
-     * Kelengkapan lewat satu relasi `inventory` yang sama (dulu dipisah
-     * lewat kolom aset_kelengkapan_id) -- `tipe_item` di payload diturunkan
-     * dari kategori item itu sendiri. Event
-     * lapor_rusak/mulai_perbaikan/selesai_perbaikan/dijual TETAP khusus
-     * Barang Utama saja -- Kelengkapan yang rusak cukup diubah statusnya
-     * lewat InventoryController::laporRusakKelengkapan(), tidak lewat alur
-     * InventoryPenanganan/InventoryWriteoff.
+     * Event pinjam/kembali mencakup semua item lewat satu relasi
+     * `inventory` yang sama (dulu dipisah lewat kolom aset_kelengkapan_id)
+     * -- `tipe_item` di payload diturunkan dari posisi struktural item itu
+     * sendiri (induk vs menempel/parent_id, BUKAN lagi dari kategori).
+     * Event lapor_rusak/mulai_perbaikan/selesai_perbaikan/dijual: REVISI
+     * Fase 2 -- dulu ("khusus Barang Utama saja", Kelengkapan yang rusak
+     * diubah statusnya lewat InventoryController::laporRusakKelengkapan()
+     * yang langsung final tanpa opsi "diperbaiki") sudah tidak berlaku.
+     * laporRusakKelengkapan() sudah dihapus total; sekarang SEMUA item lewat
+     * satu alur yang sama (InventoryPenanganan, lihat
+     * InventoryPenangananController::store()), apapun kategori/posisinya.
      *
      * PENTING soal waktu: kolom tanggal_penerimaan/tanggal_pengembalian dan
      * tanggal_lapor/tanggal_diterima/tanggal_selesai cuma nyimpen TANGGAL
@@ -46,6 +49,16 @@ class InventoryPemakaiController extends Controller
      * lengkap) yang dicatat programnya sendiri, dengan fallback ke kolom
      * tanggal_* lama buat data lama yang belum punya *_at.
      */
+
+    public function index()
+    {
+        $data = InventoryPemakai::with(['inventory', 'user'])
+            ->orderByDesc('created_at')
+            ->get();
+
+        return response()->json($data);
+    }
+
     public function riwayat(Request $request)
     {
         $user = $request->user();
@@ -65,7 +78,11 @@ class InventoryPemakaiController extends Controller
         };
 
         $pemakaiQuery = InventoryPemakai::with([
-            'inventory:id,kode_inventory,nama,kategori_id',
+            // parent_id WAJIB ikut di-select -- isChild() di bawah baca kolom
+            // ini, dan tanpa di-select Eloquent balikin null diam-diam
+            // (bukan exception), jadi isChild() bakal selalu false kalau
+            // kolomnya kelewat.
+            'inventory:id,kode_inventory,nama,kategori_id,parent_id',
             'inventory.kategori:id,nama',
             'user:id,name',
         ])->where('status', 'disetujui');
@@ -80,7 +97,7 @@ class InventoryPemakaiController extends Controller
             ->get()
             ->each(function ($p) use (&$events) {
                 $nama = $p->user?->name ?? '-';
-                $tipeItem = $p->inventory?->isKelengkapan() ? 'kelengkapan' : 'barang_utama';
+                $tipeItem = $p->inventory?->isChild() ? 'kelengkapan' : 'barang_utama';
 
                 $events->push([
                     'type' => 'pinjam',
@@ -101,7 +118,10 @@ class InventoryPemakaiController extends Controller
             });
 
         $penangananQuery = InventoryPenanganan::with([
-            'inventory:id,kode_inventory,nama',
+            // parent_id ditambahin biar isChild() di bawah (dipakai nentuin
+            // tipe_item lapor_rusak/mulai_perbaikan/selesai_perbaikan) punya
+            // data yang dibutuhkan -- sama kayak alasan di pemakaiQuery di atas.
+            'inventory:id,kode_inventory,nama,parent_id',
             'pemakai.user:id,name',
         ]);
 
@@ -119,13 +139,18 @@ class InventoryPemakaiController extends Controller
             ->get()
             ->each(function ($pn) use (&$events) {
                 $namaPelapor = $pn->pemakai?->user?->name ?? null;
+                // REVISI: sejak Fase 2, alur InventoryPenanganan berlaku buat
+                // item apapun (induk maupun menempel), jadi tipe_item gak
+                // boleh hardcode -- diturunkan dari isChild() sama kayak
+                // block pinjam/kembali di atas.
+                $tipeItemPn = $pn->inventory?->isChild() ? 'kelengkapan' : 'barang_utama';
 
                 $events->push([
                     'type' => 'lapor_rusak',
                     'waktu' => $pn->lapor_at ?? $pn->tanggal_lapor,
                     'nama' => $namaPelapor,
                     'inventory' => $pn->inventory,
-                    'tipe_item' => 'barang_utama',
+                    'tipe_item' => $tipeItemPn,
                     'keluhan' => $pn->keluhan,
                 ]);
                 if ($pn->tanggal_diterima) {
@@ -134,7 +159,7 @@ class InventoryPemakaiController extends Controller
                         'waktu' => $pn->diterima_at ?? $pn->tanggal_diterima,
                         'nama' => null,
                         'inventory' => $pn->inventory,
-                        'tipe_item' => 'barang_utama',
+                        'tipe_item' => $tipeItemPn,
                     ]);
                 }
                 if ($pn->tanggal_selesai) {
@@ -143,7 +168,7 @@ class InventoryPemakaiController extends Controller
                         'waktu' => $pn->selesai_at ?? $pn->tanggal_selesai,
                         'nama' => null,
                         'inventory' => $pn->inventory,
-                        'tipe_item' => 'barang_utama',
+                        'tipe_item' => $tipeItemPn,
                         'hasil' => $pn->hasil,
                     ]);
                 }
@@ -251,15 +276,17 @@ class InventoryPemakaiController extends Controller
     /**
      * POST /api/inventory/{inventory}/pemakai
      * Admin serah-terima item langsung ke karyawan ATAU akun cabang (tanpa
-     * lewat alur request/approve). Bisa dipakai buat Barang Utama maupun
-     * Kelengkapan yang berdiri sendiri (parent_id null) -- Kelengkapan yang
-     * sudah menempel ke Barang Utama (parent_id terisi) DITOLAK di sini,
-     * karena dia cuma boleh ikut pinjam bareng induknya (lihat rule #1 di
-     * dokumen migrasi).
+     * lewat alur request/approve). Bisa dipakai buat item apapun kategorinya
+     * selama dia berdiri sendiri (parent_id null) -- item yang sudah
+     * menempel ke item lain (parent_id terisi) DITOLAK di sini, karena dia
+     * cuma boleh ikut pinjam bareng induknya (lihat rule #1 di dokumen
+     * migrasi).
      */
     public function store(Request $request, Inventory $inventory)
     {
-        if ($inventory->isKelengkapan() && $inventory->parent_id) {
+        // item yang lagi menempel ke item lain (parent_id terisi) gak boleh
+        // dipinjam sendirian -- cuma boleh ikut pinjam bareng induknya.
+        if ($inventory->parent_id) {
             return response()->json([
                 'message' => 'Kelengkapan ini menempel ke barang utama dan tidak bisa dipinjam sendirian. Pinjamkan barang utamanya -- kelengkapan yang tersedia akan otomatis ikut dipinjamkan.',
             ], 422);
@@ -298,15 +325,16 @@ class InventoryPemakaiController extends Controller
 
             $inventory->update(['status' => 'dipakai']);
 
-            // Kelengkapan yang nempel (children) ikut aset induknya --
-            // begitu induk dipinjamkan, semua kelengkapan miliknya yang
-            // masih 'tersedia' otomatis ikut dipinjamkan ke pemakai yang
-            // sama, pakai foto bukti & tanggal serah-terima yang sama juga
-            // (satu kejadian serah-terima fisik, bukan kejadian
-            // terpisah-pisah). Kalau $inventory ini sendiri Kelengkapan
-            // berdiri sendiri, children() bakal selalu kosong (kelengkapan
-            // gak boleh punya anak, ditegakkan di InventoryController), jadi
-            // aman dipanggil tanpa pengecekan isBarangUtama() tambahan.
+            // Item yang menempel (children) ikut induknya -- begitu induk
+            // dipinjamkan, semua item yang menempel padanya dan masih
+            // 'tersedia' otomatis ikut dipinjamkan ke pemakai yang sama,
+            // pakai foto bukti & tanggal serah-terima yang sama juga (satu
+            // kejadian serah-terima fisik, bukan kejadian terpisah-pisah).
+            // Kalau $inventory ini sendiri lagi menempel ke item lain,
+            // children() bakal selalu kosong (item yang sudah punya parent
+            // gak boleh sekaligus punya child sendiri -- ditegakkan di
+            // InventoryController::validasiParent()), jadi aman dipanggil
+            // tanpa pengecekan tambahan.
             $inventory->children()
                 ->where('status', 'tersedia')
                 ->get()

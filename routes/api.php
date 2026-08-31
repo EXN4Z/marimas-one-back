@@ -48,7 +48,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 Route::middleware(['auth:sanctum', 'role:admin'])->post('/admin/users/{id}/set-password', [AdminUserController::class, 'setPassword']);
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
-    Route::post('/inventory-penanganan', [InventoryPenangananController::class, 'store']); // karyawan: lapor kerusakan barang yang lagi dia pakai; admin: lapor kerusakan kelengkapan yang masih nempel ke induk
+    Route::post('/inventory-penanganan', [InventoryPenangananController::class, 'store']); // lapor kerusakan barang -- berlaku buat semua item, apapun kategori/posisinya
 
     Route::prefix('dashboard')->group(function () {
         Route::get('/kpd', [DashboardController::class, 'KaryawanPerDepart']);
@@ -97,11 +97,15 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 });
 
 Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
-    // eks AsetKelengkapanController@rusak — daftar kelengkapan rusak lintas
-    // karyawan (alasan privasi sama kayak inventory-penanganan/foto di
-    // bawah). HARUS didaftarin SEBELUM wildcard GET /inventory/{inventory}
-    // di bawah, kalau kagak "kelengkapan" bakal ketangkep jadi {inventory}.
+    // eks AsetKelengkapanController@rusak — daftar SEMUA item berstatus
+    // 'rusak' lintas karyawan (alasan privasi sama kayak
+    // inventory-penanganan/foto di bawah; dulu difilter khusus kategori
+    // Kelengkapan, sekarang digabung semua kategori/posisi -- lihat
+    // komentar InventoryController::rusakKelengkapan()). HARUS didaftarin
+    // SEBELUM wildcard GET /inventory/{inventory} di bawah, kalau kagak
+    // "kelengkapan" bakal ketangkep jadi {inventory}.
     Route::get('/inventory/kelengkapan/rusak', [InventoryController::class, 'rusakKelengkapan']);
+    Route::get('/inventory-pemakai', [InventoryPemakaiController::class, 'index']);
 });
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
@@ -161,18 +165,16 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::delete('/inventory-pemakai/{inventoryPemakai}', [InventoryPemakaiController::class, 'destroy']);
     Route::post('/inventory/{inventory}/jual', [InventoryController::class, 'jual']);
 
-    // eks AsetKelengkapanController@laporRusak / pasangPengganti — final,
-    // gak ada opsi "diperbaiki" buat kelengkapan (beda alur sama barang
-    // utama yang lewat inventory-penanganan).
-    Route::post('/inventory/{inventory}/lapor-rusak-kelengkapan', [InventoryController::class, 'laporRusakKelengkapan']);
+    // eks AsetKelengkapanController@pasangPengganti.
     Route::post('/inventory/{inventory}/pasang-pengganti-kelengkapan', [InventoryController::class, 'pasangPenggantiKelengkapan']);
     Route::post('/inventory/{inventory}/lepas-dari-induk', [InventoryController::class, 'lepasDariInduk']);
 
     Route::post('/supplier/import', [SupplierController::class, 'import']);
     Route::apiResource('supplier', SupplierController::class)->except(['index', 'show']);
 
-    // Kategori: jenis kategori barang di Inventory (Barang Utama,
-    // Kelengkapan, dst), dikelola admin lewat Master Data -- dipakai buat
-    // dropdown pilih Kategori waktu bikin/edit Inventory.
+    // Kategori: jenis kategori barang di Inventory (Laptop, Charger, dst
+    // -- 13 kategori, bebas nama apa saja), dikelola admin lewat Master
+    // Data -- dipakai buat dropdown pilih Kategori waktu bikin/edit
+    // Inventory. Kategori TIDAK LAGI menentukan struktur induk/menempel.
     Route::apiResource('kategori', KategoriController::class)->except(['show']);
 });
