@@ -76,6 +76,16 @@ class InventoryPemakaiController extends Controller
      * lengkap) yang dicatat programnya sendiri, dengan fallback ke kolom
      * tanggal_* lama buat data lama yang belum punya *_at.
      */
+
+    public function index()
+    {
+        $data = InventoryPemakai::with(['inventory', 'user'])
+            ->orderByDesc('created_at')
+            ->get();
+
+        return response()->json($data);
+    }
+
     public function riwayat(Request $request)
     {
         $user = $request->user();

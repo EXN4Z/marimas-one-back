@@ -102,6 +102,7 @@ Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
     // bawah). HARUS didaftarin SEBELUM wildcard GET /inventory/{inventory}
     // di bawah, kalau kagak "kelengkapan" bakal ketangkep jadi {inventory}.
     Route::get('/inventory/kelengkapan/rusak', [InventoryController::class, 'rusakKelengkapan']);
+    Route::get('/inventory-pemakai', [InventoryPemakaiController::class, 'index']);
 });
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
