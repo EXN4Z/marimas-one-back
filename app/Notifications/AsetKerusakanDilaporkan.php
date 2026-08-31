@@ -38,7 +38,7 @@ class AsetKerusakanDilaporkan extends Notification
             return 'Aset';
         }
 
-        return $item->nama ?: 'Aset';
+        return trim(($item->merek ?? 'Aset') . ' ' . ($item->tipe ?? ''));
     }
 
     public function toDatabase($notifiable): array
@@ -49,7 +49,7 @@ class AsetKerusakanDilaporkan extends Notification
             'inventory_id' => $this->penanganan->inventory_id,
             'jenis_kerusakan' => $this->penanganan->jenis_kerusakan,
             'message' => "{$this->namaPelapor()} melaporkan kerusakan {$this->penanganan->jenis_kerusakan} pada {$this->namaAset()}.",
-            'url' => '/penanganan-aset',
+            'url' => '/penanganan-inventory',
         ];
     }
 
@@ -64,7 +64,7 @@ class AsetKerusakanDilaporkan extends Notification
             ->title('Laporan Kerusakan Aset')
             ->icon('/logo.png')
             ->body("{$this->namaPelapor()} melaporkan kerusakan {$this->penanganan->jenis_kerusakan} pada {$this->namaAset()}.")
-            ->data(['url' => '/penanganan-aset'])
+            ->data(['url' => '/penanganan-inventory'])
             ->options(['TTL' => 300]);
     }
 }
