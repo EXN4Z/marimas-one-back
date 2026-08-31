@@ -32,7 +32,7 @@ class AsetKerusakanSelesai extends Notification
             return 'Aset';
         }
 
-        return $item->nama ?: 'Aset';
+        return trim(($item->merek ?? 'Aset') . ' ' . ($item->tipe ?? ''));
     }
 
     protected function pesan(): string
@@ -51,7 +51,7 @@ class AsetKerusakanSelesai extends Notification
             'jenis_kerusakan' => $this->penanganan->jenis_kerusakan,
             'hasil' => $this->penanganan->hasil,
             'message' => $this->pesan(),
-            'url' => '/penanganan-aset',
+            'url' => '/penanganan-inventory',
         ];
     }
 
@@ -66,7 +66,7 @@ class AsetKerusakanSelesai extends Notification
             ->title($this->penanganan->hasil === 'rusak_berat' ? 'Aset Dinyatakan Rusak Berat' : 'Aset Sudah Bisa Digunakan')
             ->icon('/logo.png')
             ->body($this->pesan())
-            ->data(['url' => '/penanganan-aset'])
+            ->data(['url' => '/penanganan-inventory'])
             ->options(['TTL' => 300]);
     }
 }
