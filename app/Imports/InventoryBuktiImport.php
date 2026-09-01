@@ -41,17 +41,25 @@ class InventoryBuktiImport implements ToCollection
     private const KOLOM_NAMA_FLAT = 'nama';
 
     /**
-     * Nama kategori (tabel `kategori`, kolom `nama`) yang menandai jenis
-     * baris inventory. Dulu diidentifikasi lewat `kategori.kode` (enum-style,
-     * lihat riwayat git), sekarang tabel `kategori` sudah digabung dengan
-     * `master_kategori` lama dan `kode`-nya jadi abbreviation opsional biasa
-     * (bukan enum lagi) -- jadi identifikasi jenis baris sekarang langsung
-     * dari `nama` ("Barang Utama" / "Kelengkapan"). JANGAN diubah nilainya
-     * di sini -- ini kode program, string ini harus persis sama dengan nama
-     * baris kategori yang di-seed lewat migration.
+     * REVISI (refactor kategori bebas): dulu di sini ada 2 konstanta nama
+     * kategori ("Barang Utama"/"Kelengkapan") yang dipakai buat nge-lookup
+     * kategori_id lewat Kategori::where('nama', ...)->firstOrFail(). Sejak
+     * migration `reset_and_seed_kategori_baru` (Fase 0 refactor kategori
+     * bebas), 2 baris kategori itu SUDAH DIHAPUS dari tabel `kategori` --
+     * jadi kode lama itu bakal selalu throw ModelNotFoundException tiap
+     * baris diimport (bug, sudah kejadian, sekarang difix).
+     *
+     * Excel sumber file bukti serah-terima gak punya kolom "Kategori" sama
+     * sekali -- struktur induk/kelengkapan cuma bisa ditentukan dari POSISI
+     * KOLOM (lihat NOMOR_KOLOM_ASET_UTAMA), bukan dari nama kategori. Karena
+     * kategori sekarang cuma label bebas yang gak menentukan struktur data
+     * apa pun, dan kita gak punya info kategori sebenarnya dari Excel-nya,
+     * semua baris hasil import (barang utama maupun kelengkapan) untuk
+     * sementara ditaruh di 1 kategori fallback ini (get-or-create, gak akan
+     * pernah throw). Admin bisa recategorize manual belakangan lewat
+     * halaman Inventory kalau perlu.
      */
-    private const NAMA_KATEGORI_BARANG_UTAMA = 'Barang Utama';
-    private const NAMA_KATEGORI_KELENGKAPAN = 'Kelengkapan';
+    private const NAMA_KATEGORI_FALLBACK_IMPORT = 'Belum Dikategorikan';
 
     /**
      * Nomor kolom "Nama Barang N" yang dianggap BARANG UTAMA. Semua kolom
@@ -86,11 +94,11 @@ class InventoryBuktiImport implements ToCollection
     private const NILAI_PLACEHOLDER_NAMA_KOSONG = ['-', '--', '---', 'n/a', 'na', '.', 'kosong'];
 
     /**
-     * Cache id kategori 'Barang Utama' & 'Kelengkapan' (key = nama,
-     * value = id) supaya gak query ke tabel kategori berulang-ulang
-     * tiap baris/kolom yang diproses. Diisi lazy lewat kategoriId().
+     * Cache id kategori fallback (NAMA_KATEGORI_FALLBACK_IMPORT) supaya gak
+     * query/create ke tabel kategori berulang-ulang tiap baris/kolom yang
+     * diproses dalam satu proses import. Diisi lazy lewat kategoriIdFallback().
      */
-    private array $kategoriIdCache = [];
+    private ?int $kategoriIdFallbackCache = null;
 
     public function collection(Collection $rows)
     {
@@ -217,11 +225,10 @@ class InventoryBuktiImport implements ToCollection
                     $adaBarangDiproses = false;
 
                     // Barang utama terakhir yang berhasil dibuat di baris ini
-                    // (kategori_id = barang_utama) -- barang di kolom Nama
-                    // Barang N (N != NOMOR_KOLOM_ASET_UTAMA) yang muncul
-                    // SETELAHNYA jadi baris Inventory dengan kategori_id =
-                    // kelengkapan yang parent_id-nya nunjuk ke sini, dan
-                    // status-nya ngikutin baris ini (lihat
+                    // (parent_id = null) -- barang di kolom Nama Barang N
+                    // (N != NOMOR_KOLOM_ASET_UTAMA) yang muncul SETELAHNYA
+                    // jadi baris Inventory dengan parent_id nunjuk ke sini,
+                    // dan status-nya ngikutin baris ini (lihat
                     // buatInventoryKelengkapan()).
                     $indukTerakhir = null;
 
@@ -266,18 +273,22 @@ class InventoryBuktiImport implements ToCollection
                             continue;
                         }
 
-                        // Jenis Aset (enum lama) sudah dihapus -- sekarang
-                        // jenis baris ditentukan lewat kategori_id
-                        // (barang_utama/kelengkapan). Nama barang ("Laptop",
-                        // "Modem Telkomsel", dst) disimpan seragam ke kolom
-                        // `nama`, sama seperti baris kelengkapan, karena
-                        // sekarang keduanya baris di tabel `inventory` yang
-                        // sama.
+                        // Jenis Aset (enum lama) sudah dihapus. Struktur
+                        // induk/kelengkapan sekarang murni dari parent_id
+                        // (ditentukan dari posisi kolom, lihat komentar
+                        // NOMOR_KOLOM_ASET_UTAMA), BUKAN dari kategori_id --
+                        // kategori_id di sini cuma fallback karena Excel
+                        // sumber gak punya info kategori sebenarnya (lihat
+                        // komentar NAMA_KATEGORI_FALLBACK_IMPORT). Nama
+                        // barang ("Laptop", "Modem Telkomsel", dst) disimpan
+                        // seragam ke kolom `nama`, sama seperti baris
+                        // kelengkapan, karena sekarang keduanya baris di
+                        // tabel `inventory` yang sama.
                         $hasilParse = $this->parseKeterangan($keteranganAsli);
 
                         $inventory = Inventory::create(array_merge($infoBukti, [
                             'nama'              => $namaBarangTrim,
-                            'kategori_id'       => $this->kategoriId(self::NAMA_KATEGORI_BARANG_UTAMA),
+                            'kategori_id'       => $this->kategoriIdFallback(),
                             'parent_id'         => null,
                             'supplier_id'       => $supplierId,
                             'jumlah'            => $row["jumlah_{$n}"] ?? null,
@@ -441,8 +452,9 @@ class InventoryBuktiImport implements ToCollection
     /**
      * Bikin 1 nama barang kelengkapan (mis. "Charger", "Tas", atau apapun
      * isi kolom Nama Barang selain kolom barang utama) jadi baris
-     * `inventory` dengan kategori_id = kelengkapan dan parent_id nunjuk ke
-     * $indukInventory -- BUKAN tabel/model terpisah lagi seperti dulu
+     * `inventory` dengan parent_id nunjuk ke $indukInventory (kategori_id
+     * cuma fallback, lihat NAMA_KATEGORI_FALLBACK_IMPORT) -- BUKAN
+     * tabel/model terpisah lagi seperti dulu
      * (AsetKelengkapan sudah dihapus). $keterangan (kalau ada) di-parse
      * ulang lewat parseKeterangan() buat coba tarik serial_number & warna-
      * nya juga, sama seperti yang dilakukan buat barang utama. Info bukti
@@ -457,7 +469,7 @@ class InventoryBuktiImport implements ToCollection
 
         return Inventory::create([
             'parent_id'         => $indukInventory->id,
-            'kategori_id'       => $this->kategoriId(self::NAMA_KATEGORI_KELENGKAPAN),
+            'kategori_id'       => $this->kategoriIdFallback(),
             'nama'              => $namaBarang,
             'warna'             => $hasilParse['warna'],
             'serial_number'     => $hasilParse['serial_number'],
@@ -505,20 +517,21 @@ class InventoryBuktiImport implements ToCollection
     }
 
     /**
-     * Ambil id kategori berdasarkan nama ('Barang Utama' / 'Kelengkapan'),
-     * dengan cache di $kategoriIdCache biar gak query berulang tiap baris.
-     * Sengaja pakai firstOrFail -- kalau nama kategori ini gak ada di
-     * tabel kategori, itu masalah data master yang harus ketahuan cepat
-     * (error jelas), bukan diam-diam bikin baris inventory dengan
-     * kategori_id null.
+     * Ambil id kategori fallback (NAMA_KATEGORI_FALLBACK_IMPORT), bikin
+     * kalau belum ada (firstOrCreate -- BEDA dari firstOrFail versi lama
+     * yang throw kalau kategori gak ketemu). Ini kategori bebas biasa,
+     * bukan lagi baris "spesial" yang divalidasi khusus di tempat lain,
+     * jadi aman dibikin otomatis di sini.
      */
-    private function kategoriId(string $nama): int
+    private function kategoriIdFallback(): int
     {
-        if (!array_key_exists($nama, $this->kategoriIdCache)) {
-            $this->kategoriIdCache[$nama] = Kategori::where('nama', $nama)->firstOrFail()->id;
+        if ($this->kategoriIdFallbackCache === null) {
+            $this->kategoriIdFallbackCache = Kategori::firstOrCreate(
+                ['nama' => self::NAMA_KATEGORI_FALLBACK_IMPORT]
+            )->id;
         }
 
-        return $this->kategoriIdCache[$nama];
+        return $this->kategoriIdFallbackCache;
     }
 
     /**

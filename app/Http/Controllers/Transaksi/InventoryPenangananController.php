@@ -73,36 +73,34 @@ class InventoryPenangananController extends Controller
         return response()->json($data);
     }
 
-    // peminjam ATAU admin lapor kerusakan barang -- berlaku buat Barang Utama
-    // MAUPUN Kelengkapan, baik yang berdiri sendiri maupun yang masih nempel
-    // ke induk. Kelengkapan yang nempel dulu punya jalur sendiri yang
-    // langsung final (InventoryController@laporRusakKelengkapan, gak ada
-    // opsi "diperbaiki") -- sekarang disatukan ke sini biar konsisten:
-    // lapor -> menunggu_perbaikan -> terima -> diperbaiki -> selesai (hasil
-    // 'diperbaiki' ATAU 'rusak_berat'). Kalau hasilnya 'rusak_berat', baru di
-    // situ kelengkapan yang nempel otomatis dicopot dari induk + otomatis
-    // dikembalikan (lihat update() di bawah). Kalau berhasil 'diperbaiki',
-    // parent_id TIDAK disentuh -- tetap nempel ke induknya.
+    // peminjam ATAU admin lapor kerusakan barang -- berlaku buat SEMUA item
+    // apapun kategorinya & posisinya (induk maupun yang lagi menempel ke
+    // item lain). Dulu ada 2 jalur terpisah (item yang menempel ke induk
+    // eks-Kelengkapan punya jalur sendiri yang langsung final, dulu lewat
+    // InventoryController@laporRusakKelengkapan -- endpoint itu sudah
+    // dihapus total di Fase 2, gak ada opsi "diperbaiki") -- sekarang
+    // disatukan ke sini biar konsisten: lapor -> menunggu_perbaikan ->
+    // terima -> diperbaiki -> selesai (hasil 'diperbaiki' ATAU
+    // 'rusak_berat'). Kalau hasilnya 'rusak_berat', item yang lagi
+    // menempel ke induk TIDAK otomatis dicopot -- itu tetap aksi manual
+    // admin lewat InventoryController::lepasDariInduk() (lihat update()
+    // di bawah).
     public function store(Request $request)
     {
-        // inventory_id + kategorinya perlu diketahui duluan sebelum validasi
-        // jenis_kerusakan, karena pilihan yang valid beda antara Barang Utama
-        // (software/hardware) dan Kelengkapan (tidak_berfungsi/hancur/
-        // terputus_sobek) -- Kelengkapan gak punya sisi "software" sama sekali.
         $request->validate([
             'inventory_id' => 'required|exists:inventory,id',
         ]);
 
         $user = $request->user();
-        $inventory = Inventory::with('kategori')->findOrFail($request->input('inventory_id'));
+        $inventory = Inventory::findOrFail($request->input('inventory_id'));
 
-        $bolehLaporLewatSini = $inventory->isBarangUtama() || $inventory->isKelengkapan();
-
-        abort_unless($bolehLaporLewatSini, 422, 'Laporan kerusakan lewat endpoint ini hanya berlaku untuk Barang Utama atau Kelengkapan.');
-
-        $opsiJenisKerusakan = $inventory->isKelengkapan()
-            ? ['tidak_berfungsi', 'hancur', 'terputus_sobek']
-            : ['software', 'hardware'];
+        // satu daftar jenis kerusakan buat semua item, apapun kategori atau
+        // posisinya (induk/menempel) -- dulu bercabang by kategori
+        // (Kelengkapan vs Barang Utama), sekarang kategori gak lagi
+        // relevan buat ini. Constraint DB (lihat migration
+        // fix_jenis_kerusakan_check_constraint_pgsql) sudah lebih dulu
+        // diperluas buat nampung gabungan ke-5 opsi ini.
+        $opsiJenisKerusakan = ['software', 'hardware', 'tidak_berfungsi', 'hancur', 'terputus_sobek'];
 
         $validated = $request->validate([
             'inventory_id' => 'required|exists:inventory,id',
@@ -283,11 +281,12 @@ class InventoryPenangananController extends Controller
                 $hasilAkhir = $validated['hasil'] ?? $inventoryPenanganan->hasil;
 
                 if ($hasilAkhir === 'rusak_berat') {
-                    // Kelengkapan yang masih nempel ke induk TIDAK dicopot
+                    // Item yang masih menempel ke induk TIDAK dicopot
                     // otomatis di sini walaupun hasilnya rusak_berat --
                     // parent_id cuma boleh diubah lewat aksi manual admin
-                    // (lihat InventoryController::lepasDariInduk()). Barang
-                    // Utama gak kena ini (parent_id dia emang selalu null).
+                    // (lihat InventoryController::lepasDariInduk()). Item
+                    // yang berstatus induk gak kena ini (parent_id dia
+                    // emang selalu null).
                     Inventory::whereKey($inventoryPenanganan->inventory_id)->update(['status' => 'rusak_berat']);
 
                     // rusak berat = item gak dipakai siapa-siapa lagi. Tutup
