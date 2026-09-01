@@ -40,6 +40,29 @@ class InventoryBuktiImport implements ToCollection
      */
     private const KOLOM_NAMA_FLAT = 'nama';
 
+
+    private const PETA_KATEGORI_KEYWORDS = [
+        'Baterai'         => ['baterai', 'battery', 'lithium'],
+        'Bag'             => ['backpack', 'slingbag', 'tas '],
+        'Drawing Pad'     => ['wacom', 'intuos', 'drawing pad'],
+        'Docking'         => ['wall mount', 'docking', 'modular'],
+        'Hdd External'    => ['my passport', 'hdd', 'hard disk', 'external'],
+        'Modem'           => ['modem', 'orbit', 'mifi', 'router'],
+        'Proyektor'       => ['proyektor', 'projector', 'eb-x', 'view sonic', 'viewsonic'],
+        'Speaker'         => ['speaker', 'soundbar'],
+        'Scanner Barcode' => ['scanner', 'barcode', 'pm450', 'point mobile'],
+        'Case'            => ['case'],
+        'Charger'         => ['charger', 'adaptor', 'adapter'],
+        'Pointer'         => ['pointer', 'presenter'],
+        'Laptop'          => [
+            'ideapad', 'notebook', 'thinkpad', 'zenbook', 'vivobook',
+            'probook', 'elitebook', 'macbook', 'v14', 'v15', 'legion',
+            'yoga', 'inspiron', 'latitude', 'pavilion', 'envy', 'spectre',
+            '14s-', 'a1400ea',
+        ],
+    ];
+
+    private array $kategoriIdCache = [];
     /**
      * REVISI (refactor kategori bebas): dulu di sini ada 2 konstanta nama
      * kategori ("Barang Utama"/"Kelengkapan") yang dipakai buat nge-lookup
@@ -414,7 +437,12 @@ class InventoryBuktiImport implements ToCollection
                     Inventory::create([
                         'kode_inventory'    => $kodeInventory !== '' ? $kodeInventory : null,
                         'nama'              => trim($namaBarang),
-                        'kategori_id'       => $this->kategoriId(self::NAMA_KATEGORI_BARANG_UTAMA),
+                        'kategori_id'       => $this->kategoriIdOtomatis(
+                            $row['kategori'] ?? null,
+                            $row['merk'] ?? null,
+                            $row['type'] ?? null,
+                            $namaBarang,
+                        ),
                         'parent_id'         => null,
                         'supplier_id'       => $supplierId,
                         'jumlah'            => $row['jumlah'] ?? null,
@@ -516,6 +544,15 @@ class InventoryBuktiImport implements ToCollection
         ]);
     }
 
+
+    private function kategoriId(string $nama): int
+    {
+        if (!array_key_exists($nama, $this->kategoriIdCache)) {
+            $this->kategoriIdCache[$nama] = Kategori::firstOrCreate(['nama' => $nama])->id;
+        }
+
+        return $this->kategoriIdCache[$nama];
+    }
     /**
      * Ambil id kategori fallback (NAMA_KATEGORI_FALLBACK_IMPORT), bikin
      * kalau belum ada (firstOrCreate -- BEDA dari firstOrFail versi lama
@@ -545,6 +582,33 @@ class InventoryBuktiImport implements ToCollection
      * juga buat kolom lain di format flat (Serial Number, Warna) lewat
      * nilaiAtauNull().
      */
+
+    private function kategoriIdOtomatis(?string $kategoriExcel, ?string $merk, ?string $type, ?string $nama): int
+    {
+
+        $kategoriExcelTrim = trim((string) $kategoriExcel);
+
+        if (!$this->namaBarangKosong($kategoriExcelTrim)) {
+            return $this->kategoriId($kategoriExcelTrim);
+        }
+
+        $teks = strtolower(trim(($merk ?? '') . ' ' . ($type ?? '') . ' ' . ($nama ?? '')));
+
+        foreach (self::PETA_KATEGORI_KEYWORDS as $namaKategori => $kataKunci) {
+            foreach ($kataKunci as $kunci) {
+                if (str_contains($teks, $kunci)) {
+                    return $this->kategoriId($namaKategori);
+                }
+            }
+        }
+
+        if (preg_match('/\b\d+\s*(gb|tb)\b/i', $teks)) {
+            return $this->kategoriId('Hdd External');
+        }
+
+        return $this->kategoriIdFallback();
+    }
+
     private function namaBarangKosong(?string $nama): bool
     {
         if (empty($nama)) {
