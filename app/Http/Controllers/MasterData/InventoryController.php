@@ -52,8 +52,6 @@ class InventoryController extends Controller
 
         $query = Inventory::with([
             'kategori',
-            'departemen',
-            'lokasiKantor',
             'supplier',
             'parent:id,kode_inventory,nama',
             'pemakaiSaatIni.user.departemen',
@@ -116,8 +114,6 @@ class InventoryController extends Controller
 
         $inventory->load([
             'kategori',
-            'departemen',
-            'lokasiKantor',
             'supplier',
             'parent',
             'children.supplier',
@@ -150,7 +146,7 @@ class InventoryController extends Controller
         });
 
         return response()->json(
-            $inventory->load('kategori', 'departemen', 'lokasiKantor', 'supplier', 'parent'),
+            $inventory->load('kategori', 'supplier', 'parent'),
             201
         );
     }
@@ -237,7 +233,7 @@ class InventoryController extends Controller
         });
 
         return response()->json(
-            $inventory->fresh()->load('kategori', 'departemen', 'lokasiKantor', 'supplier', 'parent')
+            $inventory->fresh()->load('kategori', 'supplier', 'parent')
         );
     }
 
@@ -364,7 +360,6 @@ class InventoryController extends Controller
 
         return response()->json($inventory->fresh()->load([
             'kategori',
-            'departemen',
             'supplier',
             'pemakaiSaatIni',
             'writeoff.penyetuju:id,name',
@@ -460,7 +455,7 @@ class InventoryController extends Controller
         });
 
         return response()->json(
-            $inventory->fresh()->load(['parent', 'lokasiKantor', 'supplier'])
+            $inventory->fresh()->load(['parent', 'supplier'])
         );
     }
 
@@ -610,7 +605,7 @@ class InventoryController extends Controller
         }
 
         return response()->json(
-            $inventory->fresh()->load(['kategori', 'lokasiKantor', 'supplier'])
+            $inventory->fresh()->load(['kategori', 'supplier'])
         );
     }
 
@@ -646,7 +641,7 @@ class InventoryController extends Controller
         }
 
         $data = $query
-            ->with(['parent', 'lokasiKantor', 'supplier'])
+            ->with(['parent', 'supplier'])
             ->orderByDesc('tanggal_rusak')
             ->paginate($request->query('per_page', 15));
 
@@ -685,15 +680,11 @@ class InventoryController extends Controller
         $request->merge([
             'serial_number' => $request->serial_number === '' ? null : $request->serial_number,
             'kategori_id' => $request->kategori_id === '' ? null : $request->kategori_id,
-            'departemen_id' => $request->departemen_id === '' ? null : $request->departemen_id,
-            'lokasi_kantor_id' => $request->lokasi_kantor_id === '' ? null : $request->lokasi_kantor_id,
         ]);
 
         $validated = $request->validate([
             'parent_id' => 'nullable|exists:inventory,id',
             'kategori_id' => 'required|exists:kategori,id',
-            'departemen_id' => 'nullable|exists:departemen,id',
-            'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
             'nama' => 'nullable|string|max:255',
             'warna' => 'nullable|string|max:255',
             'serial_number' => [
@@ -710,7 +701,6 @@ class InventoryController extends Controller
             'keterangan' => 'nullable|string',
             'foto' => 'nullable|image|max:4096',
             'supplier_id' => 'nullable|exists:supplier,id',
-            'tanggal_pembelian' => 'nullable|date',
             'no_surat_jalan' => 'nullable|string|max:255',
             'no_good_receive' => 'nullable|string|max:255',
             'status' => 'nullable|in:tersedia,dipakai,rusak,menunggu_perbaikan,diperbaiki,rusak_berat',

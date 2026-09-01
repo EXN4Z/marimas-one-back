@@ -61,16 +61,8 @@ return new class extends Migration
             $table->foreignId('supplier_id')->nullable()
                 ->constrained('supplier')
                 ->nullOnDelete();
-            $table->date('tanggal_pembelian')->nullable();
             $table->string('no_surat_jalan')->nullable();
             $table->string('no_good_receive')->nullable();
-
-            $table->foreignId('departemen_id')->nullable()
-                ->constrained('departemen')
-                ->nullOnDelete();
-            $table->foreignId('lokasi_kantor_id')->nullable()
-                ->constrained('lokasi_kantor')
-                ->nullOnDelete();
 
             $table->string('status')->default('tersedia'); // tersedia, dipakai, rusak, diperbaiki
             $table->dateTime('tanggal_rusak')->nullable();
