@@ -326,17 +326,35 @@ class InventoryPemakaiController extends Controller
             $inventory->update(['status' => 'dipakai']);
 
             // Item yang menempel (children) ikut induknya -- begitu induk
-            // dipinjamkan, semua item yang menempel padanya dan masih
-            // 'tersedia' otomatis ikut dipinjamkan ke pemakai yang sama,
-            // pakai foto bukti & tanggal serah-terima yang sama juga (satu
-            // kejadian serah-terima fisik, bukan kejadian terpisah-pisah).
+            // dipinjamkan, semua item yang menempel padanya dan belum punya
+            // pemakaian aktif sendiri otomatis ikut dipinjamkan ke pemakai
+            // yang sama, pakai foto bukti & tanggal serah-terima yang sama
+            // juga (satu kejadian serah-terima fisik, bukan kejadian
+            // terpisah-pisah).
             // Kalau $inventory ini sendiri lagi menempel ke item lain,
             // children() bakal selalu kosong (item yang sudah punya parent
             // gak boleh sekaligus punya child sendiri -- ditegakkan di
             // InventoryController::validasiParent()), jadi aman dipanggil
             // tanpa pengecekan tambahan.
+            //
+            // FIX: dulu filternya `where('status', 'tersedia')` -- salah,
+            // karena InventoryController::selaraskanStatusByParent() forceset
+            // status kelengkapan jadi 'dipakai' begitu parent_id keisi, TERLEPAS
+            // dari ada/tidaknya pemakaian aktif induknya saat itu (misal
+            // kelengkapan di-attach ke induk yang masih 'tersedia', belum
+            // dipinjam siapa-siapa). Akibatnya kelengkapan semacam itu sudah
+            // berstatus 'dipakai' DUAN sebelum induknya pernah benar-benar
+            // dipinjamkan, dan filter status='tersedia' di sini bakal
+            // melewatkannya -- status nyangkut 'dipakai' selamanya tanpa
+            // pernah punya baris InventoryPemakai, jadi "Dipakai Oleh" di
+            // frontend tampil "-" walau statusnya sudah 'dipakai'. Sekarang
+            // patokannya ada/tidaknya pemakaian aktif (whereDoesntHave
+            // pemakaiSaatIni), bukan kolom status yang bisa berubah karena
+            // alasan lain (structural attach). Item yang lagi dalam
+            // penanganan/rusak tetap dikecualikan.
             $inventory->children()
-                ->where('status', 'tersedia')
+                ->whereNotIn('status', ['rusak', 'menunggu_perbaikan', 'diperbaiki', 'rusak_berat'])
+                ->whereDoesntHave('pemakaiSaatIni')
                 ->get()
                 ->each(function ($anak) use ($validated, $fotoPaths, $request) {
                     $noStrukAnak = $this->generateNoStruk('STJ', 'inventory_pemakai', 'no_struk_penerimaan');
