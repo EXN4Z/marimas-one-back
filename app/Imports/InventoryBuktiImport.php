@@ -10,11 +10,12 @@ use App\Models\MasterData\Supplier;
 use App\Models\Transaksi\InventoryPemakai;
 use App\Models\User;
 use Maatwebsite\Excel\Concerns\ToCollection;
+use Maatwebsite\Excel\Concerns\WithCalculatedFormulas; 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-class InventoryBuktiImport implements ToCollection
+class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
 {
     use GeneratesStrukNumber;
 
