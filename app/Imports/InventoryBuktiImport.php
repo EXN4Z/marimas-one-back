@@ -22,7 +22,23 @@ class InventoryBuktiImport implements ToCollection
     protected $errors = [];
 
     private const MAX_BARIS_DISCAN = 10;
-    private const KOLOM_PENANDA_HEADER = 'no_bukti';
+
+    /**
+     * Nama kolom (setelah dinormalisasi) yang menandai baris header --
+     * dicek pakai OR (baris dianggap header kalau salah satu dari kolom ini
+     * ada). 'kode_inventory' ditambahkan supaya file dengan format lain
+     * (mis. hasil export "Data Inventory" yang gak punya kolom "No Bukti",
+     * tapi punya "Kode Inventory") tetap kedetect headernya.
+     */
+    private const KOLOM_PENANDA_HEADER = ['no_bukti', 'kode_inventory'];
+
+    /**
+     * Nama kolom (setelah dinormalisasi) yang menandai FORMAT FLAT --
+     * 1 baris = 1 barang langsung (kolom "Nama" tunggal), dipakai kalau
+     * file gak punya kolom "Nama Barang 1", "Nama Barang 2", dst (format
+     * Bukti Serah Terima yang lama). Lihat procesBarisFlat().
+     */
+    private const KOLOM_NAMA_FLAT = 'nama';
 
     /**
      * Nama kategori (tabel `kategori`, kolom `nama`) yang menandai jenis
@@ -81,7 +97,7 @@ class InventoryBuktiImport implements ToCollection
         $indexHeader = $this->cariBarisHeader($rows);
 
         if ($indexHeader === null) {
-            $this->errors[] = 'Tidak menemukan baris header (kolom "No Bukti") di ' . self::MAX_BARIS_DISCAN . ' baris pertama.';
+            $this->errors[] = 'Tidak menemukan baris header (kolom "No Bukti" atau "Kode Inventory") di ' . self::MAX_BARIS_DISCAN . ' baris pertama.';
             return;
         }
 
@@ -92,14 +108,36 @@ class InventoryBuktiImport implements ToCollection
         Log::info('Header Excel Bukti Inventory terbaca:', $headers);
 
         $nomorBarang = $this->cariNomorBarang($headers);
+        $dataRows = $rows->slice($indexHeader + 1);
 
-        if (empty($nomorBarang)) {
-            $this->errors[] = 'Tidak menemukan kolom barang (pola "Nama Barang 1", "Nama Barang 2", dst).';
+        // Format lama (Bukti Serah Terima) -- ada kolom "Nama Barang 1",
+        // "Nama Barang 2", dst.
+        if (!empty($nomorBarang)) {
+            $this->procesBarisBuktiSerahTerima($dataRows, $headers, $nomorBarang);
             return;
         }
 
-        $dataRows = $rows->slice($indexHeader + 1);
+        // Format flat -- gak ada "Nama Barang N", tapi ada kolom "Nama"
+        // tunggal (1 baris = 1 barang, mis. hasil export "Data Inventory").
+        // Lihat procesBarisFlat() untuk detail asumsi pemetaan kolomnya.
+        if (in_array(self::KOLOM_NAMA_FLAT, $headers, true)) {
+            $this->procesBarisFlat($dataRows, $headers);
+            return;
+        }
 
+        $this->errors[] = 'Tidak menemukan kolom barang (pola "Nama Barang 1", "Nama Barang 2", dst) maupun kolom "Nama" (format flat).';
+    }
+
+    /**
+     * Proses baris data format LAMA (Bukti Serah Terima) -- 1 baris bisa
+     * berisi beberapa barang lewat kolom "Nama Barang 1", "Nama Barang 2",
+     * dst, dengan info bukti (No Bukti, Departemen, Penerima, dst) yang
+     * sama buat semua barang di baris itu. Logic-nya SAMA PERSIS seperti
+     * sebelum ditambahkannya format flat -- cuma dipindah ke method sendiri
+     * biar collection() bisa cabang ke 2 format tanpa isinya campur aduk.
+     */
+    private function procesBarisBuktiSerahTerima(Collection $dataRows, array $headers, array $nomorBarang): void
+    {
         foreach ($dataRows as $index => $rawRow) {
             try {
                 DB::transaction(function () use ($rawRow, $headers, $nomorBarang, $index) {
@@ -297,6 +335,110 @@ class InventoryBuktiImport implements ToCollection
     }
 
     /**
+     * Proses baris data format FLAT -- 1 baris = 1 barang langsung, gak ada
+     * pengelompokan "Nama Barang 1/2/3" kayak format Bukti Serah Terima.
+     * Semua baris dianggap BARANG UTAMA (gak ada kelengkapan terpisah),
+     * sesuai struktur file "Data Inventory" (Kode Inventory, Kategori,
+     * Merk, Type, Warna, Nama, Serial Number, Keterangan, Jumlah, Tanggal
+     * Garansi, Supplier, Tanggal Invoice, No Invoice / Surat Jalan, No Good
+     * Receive, Tanggal Input, Perusahaan).
+     *
+     * CATATAN ASUMSI PEMETAAN (sesuaikan kalau ternyata beda):
+     * - Kolom "Kode Inventory" dipakai APA ADANYA ke field `kode_inventory`
+     *   (gak di-generate ulang seperti biasanya).
+     * - Kolom "Kategori" (isinya "Charger", "Proyektor", dst) TIDAK dipakai
+     *   sebagai kategori_id sistem -- semua baris format ini otomatis
+     *   kategori_id = Barang Utama, karena "Kategori" di file ini
+     *   sebenarnya lebih ke jenis/nama barang, bukan Barang Utama/
+     *   Kelengkapan.
+     * - Kolom "Merk", "Type", "Tanggal Garansi", "No Invoice / Surat
+     *   Jalan", "No Good Receive" DIABAIKAN -- gak ada kolom yang cocok
+     *   di tabel `inventory` untuk field-field ini.
+     * - "Serial Number" & "Warna" diambil LANGSUNG dari kolomnya
+     *   masing-masing (BUKAN di-parse dari teks Keterangan seperti format
+     *   lama), karena file ini sudah punya kolom sendiri buat itu.
+     * - `tanggal_pembelian` diisi dari "Tanggal Invoice", fallback ke
+     *   "Tanggal Input" kalau "Tanggal Invoice" kosong.
+     * - `status` di-hardcode 'tersedia' -- file ini gak punya info siapa
+     *   pemakainya (gak ada kolom NIK/Penerima), beda dari format Bukti
+     *   Serah Terima yang punya info itu.
+     * - `no_bukti`, `departemen_id`, `nik`, `penerima`, dst dibiarkan null
+     *   -- memang gak ada datanya di format ini.
+     */
+    private function procesBarisFlat(Collection $dataRows, array $headers): void
+    {
+        foreach ($dataRows as $index => $rawRow) {
+            try {
+                DB::transaction(function () use ($rawRow, $headers, $index) {
+                    $rowArray = $rawRow->toArray();
+
+                    if (count(array_filter($rowArray, fn ($v) => $v !== null && $v !== '')) === 0) {
+                        return;
+                    }
+
+                    $row = array_combine(
+                        $headers,
+                        array_pad($rowArray, count($headers), null)
+                    );
+
+                    $namaBarang = $row[self::KOLOM_NAMA_FLAT] ?? null;
+
+                    if ($this->namaBarangKosong($namaBarang)) {
+                        $this->errors[] = 'Baris data ke-' . ($index + 1) . ': kolom "Nama" kosong, baris dilewati.';
+                        return;
+                    }
+
+                    $namaSupplier = trim((string) ($row['supplier'] ?? ''));
+                    $supplierId = null;
+
+                    if ($namaSupplier !== '') {
+                        $supplierId = Supplier::firstOrCreate(['nama' => $namaSupplier])->id;
+                    }
+
+                    $kodeInventory = trim((string) ($row['kode_inventory'] ?? ''));
+
+                    $tanggalPembelian = $this->parseTanggal($row['tanggal_invoice'] ?? null)
+                        ?? $this->parseTanggal($row['tanggal_input'] ?? null);
+
+                    Inventory::create([
+                        'kode_inventory'    => $kodeInventory !== '' ? $kodeInventory : null,
+                        'nama'              => trim($namaBarang),
+                        'kategori_id'       => $this->kategoriId(self::NAMA_KATEGORI_BARANG_UTAMA),
+                        'parent_id'         => null,
+                        'supplier_id'       => $supplierId,
+                        'jumlah'            => $row['jumlah'] ?? null,
+                        'keterangan'        => $row['keterangan'] ?? null,
+                        'serial_number'     => $this->nilaiAtauNull($row['serial_number'] ?? null),
+                        'warna'             => $this->nilaiAtauNull($row['warna'] ?? null),
+                        'status'            => 'tersedia',
+                        'perusahaan'        => $row['perusahaan'] ?? null,
+                        'tanggal_pembelian' => $tanggalPembelian,
+                    ]);
+
+                    $this->rowCount++;
+                });
+            } catch (\Exception $e) {
+                $this->errors[] = 'Baris data ke-' . ($index + 1) . ': ' . $e->getMessage();
+            }
+        }
+    }
+
+    /**
+     * Sama seperti namaBarangKosong() tapi buat kolom selain Nama Barang
+     * (mis. Serial Number, Warna di format flat) -- balikin null kalau
+     * isinya kosong atau cuma placeholder ("-", "n/a", dst), supaya field
+     * kayak serial_number/warna gak kesimpen literal "-" di database.
+     */
+    private function nilaiAtauNull(?string $nilai): ?string
+    {
+        if ($this->namaBarangKosong($nilai)) {
+            return null;
+        }
+
+        return trim($nilai);
+    }
+
+    /**
      * Bikin 1 nama barang kelengkapan (mis. "Charger", "Tas", atau apapun
      * isi kolom Nama Barang selain kolom barang utama) jadi baris
      * `inventory` dengan kategori_id = kelengkapan dan parent_id nunjuk ke
@@ -386,7 +528,9 @@ class InventoryBuktiImport implements ToCollection
      * "sel ini sengaja gak diisi" (mis. "-"). Tanpa ini, nilai seperti "-"
      * lolos empty() check (string "-" itu non-empty di PHP) dan kepakai
      * apa adanya sebagai `nama` baris Inventory (barang utama maupun
-     * kelengkapan), sehingga muncul barang dengan nama literal "-".
+     * kelengkapan), sehingga muncul barang dengan nama literal "-". Dipakai
+     * juga buat kolom lain di format flat (Serial Number, Warna) lewat
+     * nilaiAtauNull().
      */
     private function namaBarangKosong(?string $nama): bool
     {
@@ -412,6 +556,13 @@ class InventoryBuktiImport implements ToCollection
         return $nomor;
     }
 
+    /**
+     * Baris dianggap header kalau mengandung SALAH SATU (OR) dari nama
+     * kolom di KOLOM_PENANDA_HEADER -- misalnya file lama pakai "No Bukti",
+     * file lain pakai "Kode Inventory". Berhenti di kecocokan pertama yang
+     * ditemukan (baik penanda maupun barisnya), gak perlu semua penanda
+     * ada sekaligus.
+     */
     private function cariBarisHeader(Collection $rows): ?int
     {
         $batas = min(self::MAX_BARIS_DISCAN, $rows->count());
@@ -419,8 +570,10 @@ class InventoryBuktiImport implements ToCollection
         for ($i = 0; $i < $batas; $i++) {
             $selDinormalisasi = $rows[$i]->map(fn ($v) => $this->normalisasiHeader((string) $v));
 
-            if ($selDinormalisasi->contains(self::KOLOM_PENANDA_HEADER)) {
-                return $i;
+            foreach (self::KOLOM_PENANDA_HEADER as $penanda) {
+                if ($selDinormalisasi->contains($penanda)) {
+                    return $i;
+                }
             }
         }
 
@@ -493,6 +646,19 @@ class InventoryBuktiImport implements ToCollection
         return $hasil;
     }
 
+    private const BULAN_INDONESIA_KE_INGGRIS = [
+        'september' => 'September', 'november' => 'November', 'desember' => 'December',
+        'januari' => 'January', 'februari' => 'February', 'agustus' => 'August',
+        'oktober' => 'October',
+        'maret' => 'March', 'april' => 'April',
+        'juli' => 'July', 'juni' => 'June',
+        'agt' => 'August', 'agu' => 'August', 'okt' => 'October', 'des' => 'December',
+        'jan' => 'January', 'feb' => 'February', 'mar' => 'March', 'apr' => 'April',
+        'jun' => 'June', 'jul' => 'July', 'sep' => 'September', 'sept' => 'September',
+        'nov' => 'November', 'oct' => 'October', 'dec' => 'December', 'aug' => 'August',
+        'mei' => 'May',
+    ];
+
     private function parseTanggal($value)
     {
         if (empty($value)) return null;
@@ -501,9 +667,15 @@ class InventoryBuktiImport implements ToCollection
             return \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($value)->format('Y-m-d');
         }
 
-        return \Carbon\Carbon::parse($value)->format('Y-m-d');
-    }
+        $teks = (string) $value;
 
+        foreach (self::BULAN_INDONESIA_KE_INGGRIS as $indo => $inggris) {
+            $teks = preg_replace('/\b' . preg_quote($indo, '/') . '\b/i', $inggris, $teks);
+        }
+
+        return \Carbon\Carbon::parse($teks)->format('Y-m-d');
+    }
+    
     public function getRowCount()
     {
         return $this->rowCount;
