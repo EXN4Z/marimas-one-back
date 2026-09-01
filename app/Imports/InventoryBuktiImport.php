@@ -431,6 +431,8 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                     }
 
                     $kodeInventory = trim((string) ($row['kode_inventory'] ?? ''));
+                    $tanggalInput = $this->parseTanggal($row['tanggal_invoice'] ?? null);
+                    $tanggalInvoice = $this->parseTanggal($row['tanggal_invoice'] ?? null);
 
                     $tanggalPembelian = $this->parseTanggal($row['tanggal_invoice'] ?? null)
                         ?? $this->parseTanggal($row['tanggal_input'] ?? null);
@@ -444,6 +446,8 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                             $row['type'] ?? null,
                             $namaBarang,
                         ),
+                        'merk'              => $this->nilaiAtauNull($row['merk'] ?? null),
+                        'type'              => $this->nilaiAtauNull($row['type'] ?? null),
                         'parent_id'         => null,
                         'supplier_id'       => $supplierId,
                         'jumlah'            => $row['jumlah'] ?? null,
@@ -453,6 +457,8 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                         'status'            => 'tersedia',
                         'perusahaan'        => $row['perusahaan'] ?? null,
                         'tanggal_pembelian' => $tanggalPembelian,
+                        'tanggal_input'       => $tanggalInput,
+                        'tanggal_invoice'     => $tanggalInvoice,
                     ]);
 
                     $this->rowCount++;

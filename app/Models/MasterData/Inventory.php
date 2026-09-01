@@ -26,6 +26,10 @@ class Inventory extends Model
         'nik',
         'penerima',
         'tanggal_garansi',
+        'tanggal_input',
+        'tanggal_invoice',
+        'merk',
+        'type',
         'perusahaan',
         'keterangan',
         'diterima_oleh',
@@ -39,6 +43,7 @@ class Inventory extends Model
         'no_good_receive',
         'status',
         'tanggal_rusak',
+        
     ];
 
     protected $casts = [
