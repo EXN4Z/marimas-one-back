@@ -97,14 +97,6 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 });
 
 Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
-    // eks AsetKelengkapanController@rusak — daftar SEMUA item berstatus
-    // 'rusak' lintas karyawan (alasan privasi sama kayak
-    // inventory-penanganan/foto di bawah; dulu difilter khusus kategori
-    // Kelengkapan, sekarang digabung semua kategori/posisi -- lihat
-    // komentar InventoryController::rusakKelengkapan()). HARUS didaftarin
-    // SEBELUM wildcard GET /inventory/{inventory} di bawah, kalau kagak
-    // "kelengkapan" bakal ketangkep jadi {inventory}.
-    Route::get('/inventory/kelengkapan/rusak', [InventoryController::class, 'rusakKelengkapan']);
     Route::get('/inventory-pemakai', [InventoryPemakaiController::class, 'index']);
 });
 

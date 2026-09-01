@@ -279,12 +279,8 @@ class InventoryController extends Controller
             // Eloquent, jadi selaraskanStatusByParent() gak ikut kepanggil
             // otomatis -- status HARUS disamakan manual di sini juga, biar
             // invariant "parent_id null => status tersedia" tetap konsisten
-            // walau parent-nya dihapus paksa lewat force=1. 'rusak'
-            // dikecualikan, sama seperti di selaraskanStatusByParent().
-            $inventory->children()->where('status', '!=', 'rusak')
-                ->update(['parent_id' => null, 'status' => 'tersedia']);
-            $inventory->children()->where('status', 'rusak')
-                ->update(['parent_id' => null]);
+            // walau parent-nya dihapus paksa lewat force=1.
+            $inventory->children()->update(['parent_id' => null, 'status' => 'tersedia']);
         }
 
         $kodeInventory = $inventory->kode_inventory;
@@ -298,8 +294,8 @@ class InventoryController extends Controller
      * Cuma berlaku buat item yang berdiri sendiri (bukan yang menempel ke
      * item lain, dan bukan yang masih punya item lain menempel padanya) --
      * item yang menempel ke induk gak lewat alur writeoff (kalau rusak
-     * permanen, cukup dibiarkan status 'rusak' lewat proses lapor
-     * kerusakan biasa).
+     * permanen, itu ditangani lewat alur lapor kerusakan biasa
+     * -- menunggu_perbaikan -> diperbaiki/rusak_berat).
      */
     public function jual(Request $request, Inventory $inventory)
     {
@@ -516,10 +512,7 @@ class InventoryController extends Controller
      * validasi(), dipanggil sebelum helper ini di update()) atau di-set
      * manual tepat sebelum/sesudah detach di caller lain
      * (lepasDariInduk()). Helper ini murni beres-beres riwayat
-     * InventoryPemakai. 'rusak' tetap gak boleh ketimpa -- itu udah
-     * dijamin di level pemanggil (selaraskanStatusByParent() &
-     * lepasDariInduk() sama-sama ngecek status 'rusak' sebelum maksa
-     * 'tersedia').
+     * InventoryPemakai.
      *
      * Dipanggil di DALAM DB::transaction masing-masing caller.
      */
@@ -551,8 +544,7 @@ class InventoryController extends Controller
      * pemakaian induk, kelengkapan yang dilepas dari sini nyangkut
      * selamanya di status 'dipakai' meski udah gak nempel ke mana-mana --
      * gak bisa diserahkan/dipinjam lagi. Sekarang status dipaksa balik ke
-     * 'tersedia' langsung di sini (kecuali lagi 'rusak', itu tetap
-     * dipertahankan apa adanya) -- SEJALAN dengan invariant di
+     * 'tersedia' langsung di sini -- SEJALAN dengan invariant di
      * selaraskanStatusByParent(): parent_id null => status tersedia.
      */
     public function lepasDariInduk(Request $request, Inventory $inventory)
@@ -574,7 +566,7 @@ class InventoryController extends Controller
         DB::transaction(function () use ($inventory) {
             $inventory->update([
                 'parent_id' => null,
-                'status' => $inventory->status === 'rusak' ? 'rusak' : 'tersedia',
+                'status' => 'tersedia',
             ]);
 
             $this->lepasKelengkapanDariPemakaianAktif($inventory, 'Dikembalikan otomatis — kelengkapan dilepas dari induk oleh admin.');
@@ -607,45 +599,6 @@ class InventoryController extends Controller
         return response()->json(
             $inventory->fresh()->load(['kategori', 'supplier'])
         );
-    }
-
-    /**
-     * GET /api/inventory/kelengkapan/rusak
-     * eks AsetKelengkapanController@rusak -- daftar item berstatus 'rusak',
-     * paginated & bisa dicari. Dipakai tab "Rusak" di halaman Foto
-     * Inventory / laporan kelengkapan.
-     *
-     * REVISI: dulu difilter khusus kategori Kelengkapan (eks-Barang Utama
-     * gak pernah masuk daftar ini karena dia gak pakai status 'rusak' --
-     * dia berhenti di 'rusak_berat' lewat alur writeoff). Sekarang kategori
-     * gak lagi nentuin apa-apa, jadi daftar ini digabung: SEMUA item
-     * berstatus 'rusak', apapun kategori/posisinya (induk maupun yang
-     * menempel ke item lain).
-     *
-     * CATATAN: nama method & path URL (/inventory/kelengkapan/rusak) masih
-     * pakai istilah lama "kelengkapan" -- sengaja belum diganti di Fase 2
-     * ini biar kontrak endpoint ke frontend gak berubah dulu (frontend baru
-     * disentuh di Fase 3). Pertimbangkan rename nama+path yang lebih netral
-     * (mis. /inventory/rusak) pas Fase 3/4.
-     */
-    public function rusakKelengkapan(Request $request)
-    {
-        $query = Inventory::query()
-            ->where('status', 'rusak');
-
-        if ($search = $request->query('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('kode_inventory', 'like', "%{$search}%")
-                    ->orWhere('nama', 'like', "%{$search}%");
-            });
-        }
-
-        $data = $query
-            ->with(['parent', 'supplier'])
-            ->orderByDesc('tanggal_rusak')
-            ->paginate($request->query('per_page', 15));
-
-        return response()->json($data);
     }
 
     /**
@@ -703,7 +656,7 @@ class InventoryController extends Controller
             'supplier_id' => 'nullable|exists:supplier,id',
             'no_surat_jalan' => 'nullable|string|max:255',
             'no_good_receive' => 'nullable|string|max:255',
-            'status' => 'nullable|in:tersedia,dipakai,rusak,menunggu_perbaikan,diperbaiki,rusak_berat',
+            'status' => 'nullable|in:tersedia,dipakai,menunggu_perbaikan,diperbaiki,rusak_berat',
             'tanggal_rusak' => 'nullable|date',
         ]);
 
@@ -770,25 +723,13 @@ class InventoryController extends Controller
      * berlaku SERAGAM buat SEMUA item, apapun kategorinya, murni dari ada/
      * tidaknya parent_id. Efeknya: item yang dulu berkategori Barang Utama
      * yang diedit lewat form generik ini sekarang JUGA kena auto-sync
-     * status ke 'tersedia' selama parent_id-nya kosong (kecuali statusnya
-     * 'rusak') -- perhatikan ini pas testing Fase 3/4, terutama kalau ada
-     * alur lain yang masih berharap status item semacam itu bebas diisi
-     * manual lewat form generik ini.
-     *
-     * 'rusak' dikecualikan dari invariant ini -- itu state final yang cuma
-     * boleh diset lewat alur lapor rusak (InventoryPenanganan::store()),
-     * jangan ketimpa sinkronisasi otomatis di sini.
+     * status ke 'tersedia' selama parent_id-nya kosong -- perhatikan ini
+     * pas testing Fase 3/4, terutama kalau ada alur lain yang masih
+     * berharap status item semacam itu bebas diisi manual lewat form
+     * generik ini.
      */
     protected function selaraskanStatusByParent(array &$validated, ?Inventory $inventory): void
     {
-        $statusSaatIni = array_key_exists('status', $validated)
-            ? $validated['status']
-            : $inventory?->status;
-
-        if ($statusSaatIni === 'rusak') {
-            return;
-        }
-
         $parentId = array_key_exists('parent_id', $validated)
             ? $validated['parent_id']
             : $inventory?->parent_id;
