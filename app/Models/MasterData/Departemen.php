@@ -15,9 +15,4 @@ class Departemen extends Model
     {
         return $this->hasMany(User::class, 'departemen_id');
     }
-
-    public function inventory()
-    {
-        return $this->hasMany(Inventory::class, 'departemen_id');
-    }
 }

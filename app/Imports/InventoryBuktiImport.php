@@ -199,7 +199,6 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                         'no_bukti'       => $row['no_bukti'],
                         'tanggal'        => $this->parseTanggal($row['tanggal'] ?? null),
                         'perusahaan'     => $row['perusahaan'] ?? null,
-                        'departemen_id'  => $departemenId,
                         'nik'            => $row['nik'] ?? null,
                         'penerima'       => $row['penerima'] ?? null,
                         'diterima_oleh'  => $row['diterima_oleh'] ?? null,
@@ -320,13 +319,6 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                             'serial_number'     => $hasilParse['serial_number'],
                             'warna'             => $hasilParse['warna'],
                             'status'            => $statusInventory,
-                            // Samain juga ke tanggal_pembelian (kolom yang
-                            // dipakai dashboard "Tren Pembelian per Bulan").
-                            // $infoBukti['tanggal'] cuma keisi ke kolom
-                            // 'tanggal' (kolom bukti serah-terima), jadi
-                            // tanpa ini tanggal_pembelian selalu null buat
-                            // inventory hasil import.
-                            'tanggal_pembelian' => $infoBukti['tanggal'] ?? null,
                         ]));
 
                         $indukTerakhir = $inventory;
@@ -392,13 +384,11 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
      * - "Serial Number" & "Warna" diambil LANGSUNG dari kolomnya
      *   masing-masing (BUKAN di-parse dari teks Keterangan seperti format
      *   lama), karena file ini sudah punya kolom sendiri buat itu.
-     * - `tanggal_pembelian` diisi dari "Tanggal Invoice", fallback ke
-     *   "Tanggal Input" kalau "Tanggal Invoice" kosong.
      * - `status` di-hardcode 'tersedia' -- file ini gak punya info siapa
      *   pemakainya (gak ada kolom NIK/Penerima), beda dari format Bukti
      *   Serah Terima yang punya info itu.
-     * - `no_bukti`, `departemen_id`, `nik`, `penerima`, dst dibiarkan null
-     *   -- memang gak ada datanya di format ini.
+     * - `no_bukti`, `nik`, `penerima`, dst dibiarkan null -- memang gak
+     *   ada datanya di format ini.
      */
     private function procesBarisFlat(Collection $dataRows, array $headers): void
     {
@@ -434,9 +424,6 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                     $tanggalInput = $this->parseTanggal($row['tanggal_invoice'] ?? null);
                     $tanggalInvoice = $this->parseTanggal($row['tanggal_invoice'] ?? null);
 
-                    $tanggalPembelian = $this->parseTanggal($row['tanggal_invoice'] ?? null)
-                        ?? $this->parseTanggal($row['tanggal_input'] ?? null);
-
                     Inventory::create([
                         'kode_inventory'    => $kodeInventory !== '' ? $kodeInventory : null,
                         'nama'              => trim($namaBarang),
@@ -456,7 +443,6 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                         'warna'             => $this->nilaiAtauNull($row['warna'] ?? null),
                         'status'            => 'tersedia',
                         'perusahaan'        => $row['perusahaan'] ?? null,
-                        'tanggal_pembelian' => $tanggalPembelian,
                         'tanggal_input'       => $tanggalInput,
                         'tanggal_invoice'     => $tanggalInvoice,
                     ]);
@@ -511,7 +497,6 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
             'keterangan'        => $keterangan,
             'supplier_id'       => $supplierId,
             'perusahaan'        => $infoBukti['perusahaan'] ?? null,
-            'tanggal_pembelian' => $infoBukti['tanggal'] ?? null,
             'status'            => $indukInventory->status,
         ]);
     }

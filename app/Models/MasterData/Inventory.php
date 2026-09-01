@@ -2,7 +2,6 @@
 
 namespace App\Models\MasterData;
 
-use App\Models\LokasiKantor;
 use App\Models\Transaksi\InventoryPemakai;
 use App\Models\Transaksi\InventoryPenanganan;
 use App\Models\Transaksi\InventoryWriteoff;
@@ -15,8 +14,6 @@ class Inventory extends Model
     protected $fillable = [
         'parent_id',
         'kategori_id',
-        'departemen_id',
-        'lokasi_kantor_id',
         'nama',
         'warna',
         'serial_number',
@@ -38,7 +35,6 @@ class Inventory extends Model
         'diketahui_hrd',
         'foto',
         'supplier_id',
-        'tanggal_pembelian',
         'no_surat_jalan',
         'no_good_receive',
         'status',
@@ -49,7 +45,6 @@ class Inventory extends Model
     protected $casts = [
         'tanggal' => 'date',
         'tanggal_garansi' => 'date',
-        'tanggal_pembelian' => 'date',
         'tanggal_rusak' => 'datetime',
     ];
 
@@ -110,18 +105,6 @@ class Inventory extends Model
     public function supplier()
     {
         return $this->belongsTo(Supplier::class, 'supplier_id');
-    }
-
-    public function departemen()
-    {
-        return $this->belongsTo(Departemen::class, 'departemen_id');
-    }
-
-    // lokasi fisik item ini kalau BERDIRI SENDIRI (parent_id kosong) --
-    // eks kolom aset_kelengkapan.lokasi_kantor_id
-    public function lokasiKantor()
-    {
-        return $this->belongsTo(LokasiKantor::class, 'lokasi_kantor_id');
     }
 
     public function pemakai()
