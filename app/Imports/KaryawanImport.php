@@ -18,6 +18,21 @@ class KaryawanImport implements ToCollection
     private const MAX_BARIS_DISCAN = 10;
     private const KOLOM_PENANDA_HEADER = 'nik';
 
+    private const NILAI_PLACEHOLDER_TANGGAL_KOSONG = ['-', '--', '---', 'n/a', 'na', '.', 'kosong'];
+
+    private const BULAN_INDONESIA_KE_INGGRIS = [
+    'september' => 'September', 'november' => 'November', 'desember' => 'December',
+    'januari' => 'January', 'februari' => 'February', 'agustus' => 'August',
+    'oktober' => 'October',
+    'maret' => 'March', 'april' => 'April',
+    'juli' => 'July', 'juni' => 'June',
+    'agt' => 'August', 'agu' => 'August', 'okt' => 'October', 'des' => 'December',
+    'jan' => 'January', 'feb' => 'February', 'mar' => 'March', 'apr' => 'April',
+    'jun' => 'June', 'jul' => 'July', 'sep' => 'September', 'sept' => 'September',
+    'nov' => 'November', 'oct' => 'October', 'dec' => 'December', 'aug' => 'August',
+    'mei' => 'May',
+];
+
     public function collection(Collection $rows)
     {
         $indexHeader = $this->cariBarisHeader($rows);
@@ -77,7 +92,7 @@ class KaryawanImport implements ToCollection
                             'phone'         => $row['phone'] ?? null,
                             'departemen_id' => $departemenId,
                             'tanggal_masuk' => $this->parseTanggal($row['tanggal_masuk'] ?? null),
-                            'role'          => 'karyawan',
+                            'role'          => $row['role'] ?? 'karyawan',
                             ...($userLama ? [] : ['password' => $passwordPlain]),
                         ]
                     );
@@ -125,11 +140,21 @@ class KaryawanImport implements ToCollection
     {
         if (empty($value)) return null;
 
+        $teks = trim((string) $value);
+
+        if (in_array(strtolower($teks), self::NILAI_PLACEHOLDER_TANGGAL_KOSONG, true)) {
+            return null;
+        }
+
         if (is_numeric($value)) {
             return \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($value)->format('Y-m-d');
         }
 
-        return \Carbon\Carbon::parse($value)->format('Y-m-d');
+        foreach (self::BULAN_INDONESIA_KE_INGGRIS as $indo => $inggris) {
+            $teks = preg_replace('/\b' . preg_quote($indo, '/') . '\b/i', $inggris, $teks);
+        }
+
+        return \Carbon\Carbon::parse($teks)->format('Y-m-d');
     }
 
     public function getRowCount()

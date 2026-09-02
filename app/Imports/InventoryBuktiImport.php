@@ -421,7 +421,7 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                     }
 
                     $kodeInventory = trim((string) ($row['kode_inventory'] ?? ''));
-                    $tanggalInput = $this->parseTanggal($row['tanggal_invoice'] ?? null);
+                    $tanggalInput = $this->parseTanggal($row['tanggal_input'] ?? null);
                     $tanggalInvoice = $this->parseTanggal($row['tanggal_invoice'] ?? null);
 
                     Inventory::create([
@@ -488,7 +488,7 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
     {
         $hasilParse = $this->parseKeterangan($keterangan);
 
-        return Inventory::create([
+        return Inventory::create(array_merge([
             'parent_id'         => $indukInventory->id,
             'kategori_id'       => $this->kategoriIdFallback(),
             'nama'              => $namaBarang,
@@ -498,7 +498,7 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
             'supplier_id'       => $supplierId,
             'perusahaan'        => $infoBukti['perusahaan'] ?? null,
             'status'            => $indukInventory->status,
-        ]);
+        ], $this->timestampsDariTanggal($infoBukti['tanggal'] ?? null)));
     }
 
     /**
@@ -526,14 +526,14 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
     {
         $noStruk = $this->generateNoStrukRandom('inventory_pemakai', 'no_struk_penerimaan');
 
-        InventoryPemakai::create([
+        InventoryPemakai::create(array_merge([
             'inventory_id'        => $item->id,
             'user_id'             => $penerimaUser->id,
             'status'              => 'disetujui',
             'no_struk_penerimaan' => $noStruk,
             'tanggal_penerimaan'  => $tanggalPenerimaan,
             'diterima_at'         => $tanggalPenerimaan,
-        ]);
+        ], $this->timestampsDariTanggal($tanggalPenerimaan)));
     }
 
 
@@ -561,6 +561,34 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
         }
 
         return $this->kategoriIdFallbackCache;
+    }
+
+    /**
+     * `created_at`/`updated_at` bawaan Eloquent selalu ke-set ke waktu
+     * import dijalankan (now()) -- padahal data ini historis (bukti lama
+     * yang baru sekarang di-import), jadi urutan "created_at" di riwayat
+     * harusnya ngikutin tanggal bukti serah-terima yang sebenarnya, bukan
+     * kapan tombol import ditekan.
+     *
+     * Eloquent gak nimpa created_at/updated_at yang udah di-set manual di
+     * attributes sebelum save() -- updateTimestamps() cuma ngisi kalau
+     * kolomnya belum "dirty" -- jadi cukup masukin dua kolom ini ke array
+     * create() buat override default now()-nya.
+     *
+     * Kalau $tanggal null (baris gak punya kolom Tanggal terisi), return
+     * array kosong supaya Eloquent tetap fallback ke default now() dia,
+     * daripada maksa created_at jadi null.
+     */
+    private function timestampsDariTanggal(?string $tanggal): array
+    {
+        if (empty($tanggal)) {
+            return [];
+        }
+
+        return [
+            'created_at' => $tanggal,
+            'updated_at' => $tanggal,
+        ];
     }
 
     /**
