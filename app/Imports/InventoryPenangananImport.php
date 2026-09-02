@@ -76,12 +76,12 @@ class InventoryPenangananImport implements ToCollection
             return false;
         }
 
-        // opsi jenis kerusakan beda per kategori -- Kelengkapan (charger,
-        // tas, kabel, dll) gak punya sisi "software" sama sekali, jadi
-        // dikasih opsi sendiri. Lihat juga InventoryPenangananController@store.
-        $opsiJenisKerusakan = $inventory->isKelengkapan()
-            ? ['tidak_berfungsi', 'hancur', 'terputus_sobek']
-            : ['software', 'hardware'];
+        // satu daftar jenis kerusakan buat semua item, apapun kategori atau
+        // posisinya (induk/menempel) -- dulu bercabang by kategori
+        // (Kelengkapan vs Barang Utama), sekarang kategori gak lagi
+        // relevan buat ini. Samain sama
+        // InventoryPenangananController::store().
+        $opsiJenisKerusakan = ['software', 'hardware', 'tidak_berfungsi', 'hancur', 'terputus_sobek'];
 
         $jenisKerusakan = strtolower(trim((string) ($row['jenis_kerusakan'] ?? '')));
         $jenisKerusakan = str_replace([' ', '-', '/'], '_', $jenisKerusakan);

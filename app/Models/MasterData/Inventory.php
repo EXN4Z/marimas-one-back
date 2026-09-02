@@ -2,7 +2,6 @@
 
 namespace App\Models\MasterData;
 
-use App\Models\LokasiKantor;
 use App\Models\Transaksi\InventoryPemakai;
 use App\Models\Transaksi\InventoryPenanganan;
 use App\Models\Transaksi\InventoryWriteoff;
@@ -15,8 +14,6 @@ class Inventory extends Model
     protected $fillable = [
         'parent_id',
         'kategori_id',
-        'departemen_id',
-        'lokasi_kantor_id',
         'nama',
         'warna',
         'serial_number',
@@ -26,6 +23,10 @@ class Inventory extends Model
         'nik',
         'penerima',
         'tanggal_garansi',
+        'tanggal_input',
+        'tanggal_invoice',
+        'merk',
+        'type',
         'perusahaan',
         'keterangan',
         'diterima_oleh',
@@ -34,17 +35,16 @@ class Inventory extends Model
         'diketahui_hrd',
         'foto',
         'supplier_id',
-        'tanggal_pembelian',
         'no_surat_jalan',
         'no_good_receive',
         'status',
         'tanggal_rusak',
+        
     ];
 
     protected $casts = [
         'tanggal' => 'date',
         'tanggal_garansi' => 'date',
-        'tanggal_pembelian' => 'date',
         'tanggal_rusak' => 'datetime',
     ];
 
@@ -55,44 +55,46 @@ class Inventory extends Model
         return $this->belongsTo(Kategori::class, 'kategori_id');
     }
 
-    public function isBarangUtama(): bool
-    {
-        return $this->kategori?->nama === 'Barang Utama';
-    }
-
-    public function isKelengkapan(): bool
-    {
-        return $this->kategori?->nama === 'Kelengkapan';
-    }
-
-    public function scopeBarangUtama($query)
-    {
-        return $query->whereHas(
-            'kategori',
-            fn ($q) => $q->where('nama', 'Barang Utama')
-        );
-    }
-
-    public function scopeKelengkapan($query)
-    {
-        return $query->whereHas(
-            'kategori',
-            fn ($q) => $q->where('nama', 'Kelengkapan')
-        );
-    }
-
     // ================= Self-relation (parent/anak) =================
+    //
+    // Status "induk" vs "nempel ke item lain" sekarang murni dari
+    // parent_id, TIDAK lagi dari kategori (kategori cuma label jenis
+    // barang, lihat Kategori.php). isInduk()/isChild() & scope di bawah
+    // gantiin isBarangUtama()/isKelengkapan()/scopeBarangUtama()/
+    // scopeKelengkapan() versi lama yang cek kategori->nama.
 
-    // barang utama tempat kelengkapan ini menempel (null = berdiri sendiri
-    // ATAU baris ini sendiri adalah barang utama)
+    // true kalau item ini berdiri sendiri / jadi induk (parent_id kosong)
+    public function isInduk(): bool
+    {
+        return $this->parent_id === null;
+    }
+
+    // true kalau item ini nempel ke item lain (parent_id terisi)
+    public function isChild(): bool
+    {
+        return $this->parent_id !== null;
+    }
+
+    public function scopeIndukSendiri($query)
+    {
+        return $query->whereNull('parent_id');
+    }
+
+    public function scopeMenempel($query)
+    {
+        return $query->whereNotNull('parent_id');
+    }
+
+    // item induk tempat baris ini menempel (null = berdiri sendiri ATAU
+    // baris ini sendiri adalah induk)
     public function parent()
     {
         return $this->belongsTo(Inventory::class, 'parent_id');
     }
 
-    // kelengkapan yang menempel ke baris ini (cuma relevan kalau baris ini
-    // barang utama -- kelengkapan gak boleh punya anak, ditegakkan di
-    // controller)
+    // item yang menempel ke baris ini (cuma relevan kalau baris ini
+    // berstatus induk -- item yang sudah punya child gak boleh punya
+    // parent_id sendiri, ditegakkan di controller lewat validasiParent())
     public function children()
     {
         return $this->hasMany(Inventory::class, 'parent_id');
@@ -103,18 +105,6 @@ class Inventory extends Model
     public function supplier()
     {
         return $this->belongsTo(Supplier::class, 'supplier_id');
-    }
-
-    public function departemen()
-    {
-        return $this->belongsTo(Departemen::class, 'departemen_id');
-    }
-
-    // lokasi fisik item ini kalau BERDIRI SENDIRI (kelengkapan tanpa
-    // parent) -- eks kolom aset_kelengkapan.lokasi_kantor_id
-    public function lokasiKantor()
-    {
-        return $this->belongsTo(LokasiKantor::class, 'lokasi_kantor_id');
     }
 
     public function pemakai()
@@ -138,8 +128,11 @@ class Inventory extends Model
     }
 
     // riwayat lengkap perbaikan/penanganan kerusakan (semua status, terbaru
-    // dulu) -- cuma relevan buat barang utama, kelengkapan gak lewat alur
-    // ini (lihat InventoryController::laporRusakKelengkapan)
+    // dulu). REVISI Fase 2: dulu cuma dipakai buat item induk (barang
+    // utama) lewat sini, item yang nempel ke induk (eks-kelengkapan) lewat
+    // alur laporRusakKelengkapan() terpisah yang langsung final -- endpoint
+    // itu sudah dihapus total, sekarang SEMUA item (apapun posisinya) lapor
+    // kerusakan lewat sini (InventoryPenanganan), satu alur seragam.
     public function penanganan()
     {
         return $this->hasMany(InventoryPenanganan::class, 'inventory_id')->latest('tanggal_lapor');

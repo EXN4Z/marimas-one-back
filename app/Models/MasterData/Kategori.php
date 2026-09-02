@@ -5,17 +5,16 @@ namespace App\Models\MasterData;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Kategori barang di Inventory (mis. "Barang Utama", "Kelengkapan").
- * Dikelola admin lewat CRUD biasa (Master Data) -- BEDA dari versi lama
- * yang cuma 2 baris fix & read-only (`kode` enum wajib unik). Sekarang
- * `kode` cuma abbreviation opsional (nullable, gak unik), gak dipakai buat
- * identifikasi program.
+ * Kategori barang di Inventory (mis. "Laptop", "Charger", "Speaker" --
+ * lihat seeder 13 kategori di migration reset_and_seed_kategori_baru).
+ * Dikelola admin lewat CRUD biasa (Master Data), nama bebas apa saja.
  *
- * Klasifikasi Barang Utama/Kelengkapan yang dipakai di banyak tempat kode
- * program (validasi parent_id, filter index, dst) sekarang dicek langsung
- * dari `nama` ("Barang Utama" / "Kelengkapan"), BUKAN dari `kode`. Baris
- * dengan nama selain itu (kalau admin nambah kategori baru lewat CRUD)
- * dianggap bukan salah satu dari keduanya oleh isBarangUtama()/isKelengkapan().
+ * PENTING: kategori TIDAK LAGI punya makna tipe/golongan barang. Dulu ada
+ * 2 baris khusus "Barang Utama"/"Kelengkapan" yang dicek by nama di banyak
+ * tempat kode program (validasi parent_id, filter index, dst) -- itu semua
+ * sudah dihapus. Status "item ini induk atau nempel ke item lain" sekarang
+ * murni ditentukan dari Inventory::parent_id (lihat Inventory::isInduk()/
+ * isChild()), sama sekali independen dari kategori apa pun yang dipilih.
  */
 class Kategori extends Model
 {
@@ -28,15 +27,5 @@ class Kategori extends Model
     public function inventory()
     {
         return $this->hasMany(Inventory::class, 'kategori_id');
-    }
-
-    public function isBarangUtama(): bool
-    {
-        return $this->nama === 'Barang Utama';
-    }
-
-    public function isKelengkapan(): bool
-    {
-        return $this->nama === 'Kelengkapan';
     }
 }

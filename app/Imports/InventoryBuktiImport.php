@@ -10,11 +10,12 @@ use App\Models\MasterData\Supplier;
 use App\Models\Transaksi\InventoryPemakai;
 use App\Models\User;
 use Maatwebsite\Excel\Concerns\ToCollection;
+use Maatwebsite\Excel\Concerns\WithCalculatedFormulas; 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-class InventoryBuktiImport implements ToCollection
+class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
 {
     use GeneratesStrukNumber;
 
@@ -22,20 +23,67 @@ class InventoryBuktiImport implements ToCollection
     protected $errors = [];
 
     private const MAX_BARIS_DISCAN = 10;
-    private const KOLOM_PENANDA_HEADER = 'no_bukti';
 
     /**
-     * Nama kategori (tabel `kategori`, kolom `nama`) yang menandai jenis
-     * baris inventory. Dulu diidentifikasi lewat `kategori.kode` (enum-style,
-     * lihat riwayat git), sekarang tabel `kategori` sudah digabung dengan
-     * `master_kategori` lama dan `kode`-nya jadi abbreviation opsional biasa
-     * (bukan enum lagi) -- jadi identifikasi jenis baris sekarang langsung
-     * dari `nama` ("Barang Utama" / "Kelengkapan"). JANGAN diubah nilainya
-     * di sini -- ini kode program, string ini harus persis sama dengan nama
-     * baris kategori yang di-seed lewat migration.
+     * Nama kolom (setelah dinormalisasi) yang menandai baris header --
+     * dicek pakai OR (baris dianggap header kalau salah satu dari kolom ini
+     * ada). 'kode_inventory' ditambahkan supaya file dengan format lain
+     * (mis. hasil export "Data Inventory" yang gak punya kolom "No Bukti",
+     * tapi punya "Kode Inventory") tetap kedetect headernya.
      */
-    private const NAMA_KATEGORI_BARANG_UTAMA = 'Barang Utama';
-    private const NAMA_KATEGORI_KELENGKAPAN = 'Kelengkapan';
+    private const KOLOM_PENANDA_HEADER = ['no_bukti', 'kode_inventory'];
+
+    /**
+     * Nama kolom (setelah dinormalisasi) yang menandai FORMAT FLAT --
+     * 1 baris = 1 barang langsung (kolom "Nama" tunggal), dipakai kalau
+     * file gak punya kolom "Nama Barang 1", "Nama Barang 2", dst (format
+     * Bukti Serah Terima yang lama). Lihat procesBarisFlat().
+     */
+    private const KOLOM_NAMA_FLAT = 'nama';
+
+
+    private const PETA_KATEGORI_KEYWORDS = [
+        'Baterai'         => ['baterai', 'battery', 'lithium'],
+        'Bag'             => ['backpack', 'slingbag', 'tas '],
+        'Drawing Pad'     => ['wacom', 'intuos', 'drawing pad'],
+        'Docking'         => ['wall mount', 'docking', 'modular'],
+        'Hdd External'    => ['my passport', 'hdd', 'hard disk', 'external'],
+        'Modem'           => ['modem', 'orbit', 'mifi', 'router'],
+        'Proyektor'       => ['proyektor', 'projector', 'eb-x', 'view sonic', 'viewsonic'],
+        'Speaker'         => ['speaker', 'soundbar'],
+        'Scanner Barcode' => ['scanner', 'barcode', 'pm450', 'point mobile'],
+        'Case'            => ['case'],
+        'Charger'         => ['charger', 'adaptor', 'adapter'],
+        'Pointer'         => ['pointer', 'presenter'],
+        'Laptop'          => [
+            'ideapad', 'notebook', 'thinkpad', 'zenbook', 'vivobook',
+            'probook', 'elitebook', 'macbook', 'v14', 'v15', 'legion',
+            'yoga', 'inspiron', 'latitude', 'pavilion', 'envy', 'spectre',
+            '14s-', 'a1400ea',
+        ],
+    ];
+
+    private array $kategoriIdCache = [];
+    /**
+     * REVISI (refactor kategori bebas): dulu di sini ada 2 konstanta nama
+     * kategori ("Barang Utama"/"Kelengkapan") yang dipakai buat nge-lookup
+     * kategori_id lewat Kategori::where('nama', ...)->firstOrFail(). Sejak
+     * migration `reset_and_seed_kategori_baru` (Fase 0 refactor kategori
+     * bebas), 2 baris kategori itu SUDAH DIHAPUS dari tabel `kategori` --
+     * jadi kode lama itu bakal selalu throw ModelNotFoundException tiap
+     * baris diimport (bug, sudah kejadian, sekarang difix).
+     *
+     * Excel sumber file bukti serah-terima gak punya kolom "Kategori" sama
+     * sekali -- struktur induk/kelengkapan cuma bisa ditentukan dari POSISI
+     * KOLOM (lihat NOMOR_KOLOM_ASET_UTAMA), bukan dari nama kategori. Karena
+     * kategori sekarang cuma label bebas yang gak menentukan struktur data
+     * apa pun, dan kita gak punya info kategori sebenarnya dari Excel-nya,
+     * semua baris hasil import (barang utama maupun kelengkapan) untuk
+     * sementara ditaruh di 1 kategori fallback ini (get-or-create, gak akan
+     * pernah throw). Admin bisa recategorize manual belakangan lewat
+     * halaman Inventory kalau perlu.
+     */
+    private const NAMA_KATEGORI_FALLBACK_IMPORT = 'Belum Dikategorikan';
 
     /**
      * Nomor kolom "Nama Barang N" yang dianggap BARANG UTAMA. Semua kolom
@@ -70,18 +118,18 @@ class InventoryBuktiImport implements ToCollection
     private const NILAI_PLACEHOLDER_NAMA_KOSONG = ['-', '--', '---', 'n/a', 'na', '.', 'kosong'];
 
     /**
-     * Cache id kategori 'Barang Utama' & 'Kelengkapan' (key = nama,
-     * value = id) supaya gak query ke tabel kategori berulang-ulang
-     * tiap baris/kolom yang diproses. Diisi lazy lewat kategoriId().
+     * Cache id kategori fallback (NAMA_KATEGORI_FALLBACK_IMPORT) supaya gak
+     * query/create ke tabel kategori berulang-ulang tiap baris/kolom yang
+     * diproses dalam satu proses import. Diisi lazy lewat kategoriIdFallback().
      */
-    private array $kategoriIdCache = [];
+    private ?int $kategoriIdFallbackCache = null;
 
     public function collection(Collection $rows)
     {
         $indexHeader = $this->cariBarisHeader($rows);
 
         if ($indexHeader === null) {
-            $this->errors[] = 'Tidak menemukan baris header (kolom "No Bukti") di ' . self::MAX_BARIS_DISCAN . ' baris pertama.';
+            $this->errors[] = 'Tidak menemukan baris header (kolom "No Bukti" atau "Kode Inventory") di ' . self::MAX_BARIS_DISCAN . ' baris pertama.';
             return;
         }
 
@@ -92,14 +140,36 @@ class InventoryBuktiImport implements ToCollection
         Log::info('Header Excel Bukti Inventory terbaca:', $headers);
 
         $nomorBarang = $this->cariNomorBarang($headers);
+        $dataRows = $rows->slice($indexHeader + 1);
 
-        if (empty($nomorBarang)) {
-            $this->errors[] = 'Tidak menemukan kolom barang (pola "Nama Barang 1", "Nama Barang 2", dst).';
+        // Format lama (Bukti Serah Terima) -- ada kolom "Nama Barang 1",
+        // "Nama Barang 2", dst.
+        if (!empty($nomorBarang)) {
+            $this->procesBarisBuktiSerahTerima($dataRows, $headers, $nomorBarang);
             return;
         }
 
-        $dataRows = $rows->slice($indexHeader + 1);
+        // Format flat -- gak ada "Nama Barang N", tapi ada kolom "Nama"
+        // tunggal (1 baris = 1 barang, mis. hasil export "Data Inventory").
+        // Lihat procesBarisFlat() untuk detail asumsi pemetaan kolomnya.
+        if (in_array(self::KOLOM_NAMA_FLAT, $headers, true)) {
+            $this->procesBarisFlat($dataRows, $headers);
+            return;
+        }
 
+        $this->errors[] = 'Tidak menemukan kolom barang (pola "Nama Barang 1", "Nama Barang 2", dst) maupun kolom "Nama" (format flat).';
+    }
+
+    /**
+     * Proses baris data format LAMA (Bukti Serah Terima) -- 1 baris bisa
+     * berisi beberapa barang lewat kolom "Nama Barang 1", "Nama Barang 2",
+     * dst, dengan info bukti (No Bukti, Departemen, Penerima, dst) yang
+     * sama buat semua barang di baris itu. Logic-nya SAMA PERSIS seperti
+     * sebelum ditambahkannya format flat -- cuma dipindah ke method sendiri
+     * biar collection() bisa cabang ke 2 format tanpa isinya campur aduk.
+     */
+    private function procesBarisBuktiSerahTerima(Collection $dataRows, array $headers, array $nomorBarang): void
+    {
         foreach ($dataRows as $index => $rawRow) {
             try {
                 DB::transaction(function () use ($rawRow, $headers, $nomorBarang, $index) {
@@ -129,7 +199,6 @@ class InventoryBuktiImport implements ToCollection
                         'no_bukti'       => $row['no_bukti'],
                         'tanggal'        => $this->parseTanggal($row['tanggal'] ?? null),
                         'perusahaan'     => $row['perusahaan'] ?? null,
-                        'departemen_id'  => $departemenId,
                         'nik'            => $row['nik'] ?? null,
                         'penerima'       => $row['penerima'] ?? null,
                         'diterima_oleh'  => $row['diterima_oleh'] ?? null,
@@ -179,11 +248,10 @@ class InventoryBuktiImport implements ToCollection
                     $adaBarangDiproses = false;
 
                     // Barang utama terakhir yang berhasil dibuat di baris ini
-                    // (kategori_id = barang_utama) -- barang di kolom Nama
-                    // Barang N (N != NOMOR_KOLOM_ASET_UTAMA) yang muncul
-                    // SETELAHNYA jadi baris Inventory dengan kategori_id =
-                    // kelengkapan yang parent_id-nya nunjuk ke sini, dan
-                    // status-nya ngikutin baris ini (lihat
+                    // (parent_id = null) -- barang di kolom Nama Barang N
+                    // (N != NOMOR_KOLOM_ASET_UTAMA) yang muncul SETELAHNYA
+                    // jadi baris Inventory dengan parent_id nunjuk ke sini,
+                    // dan status-nya ngikutin baris ini (lihat
                     // buatInventoryKelengkapan()).
                     $indukTerakhir = null;
 
@@ -228,18 +296,22 @@ class InventoryBuktiImport implements ToCollection
                             continue;
                         }
 
-                        // Jenis Aset (enum lama) sudah dihapus -- sekarang
-                        // jenis baris ditentukan lewat kategori_id
-                        // (barang_utama/kelengkapan). Nama barang ("Laptop",
-                        // "Modem Telkomsel", dst) disimpan seragam ke kolom
-                        // `nama`, sama seperti baris kelengkapan, karena
-                        // sekarang keduanya baris di tabel `inventory` yang
-                        // sama.
+                        // Jenis Aset (enum lama) sudah dihapus. Struktur
+                        // induk/kelengkapan sekarang murni dari parent_id
+                        // (ditentukan dari posisi kolom, lihat komentar
+                        // NOMOR_KOLOM_ASET_UTAMA), BUKAN dari kategori_id --
+                        // kategori_id di sini cuma fallback karena Excel
+                        // sumber gak punya info kategori sebenarnya (lihat
+                        // komentar NAMA_KATEGORI_FALLBACK_IMPORT). Nama
+                        // barang ("Laptop", "Modem Telkomsel", dst) disimpan
+                        // seragam ke kolom `nama`, sama seperti baris
+                        // kelengkapan, karena sekarang keduanya baris di
+                        // tabel `inventory` yang sama.
                         $hasilParse = $this->parseKeterangan($keteranganAsli);
 
                         $inventory = Inventory::create(array_merge($infoBukti, [
                             'nama'              => $namaBarangTrim,
-                            'kategori_id'       => $this->kategoriId(self::NAMA_KATEGORI_BARANG_UTAMA),
+                            'kategori_id'       => $this->kategoriIdFallback(),
                             'parent_id'         => null,
                             'supplier_id'       => $supplierId,
                             'jumlah'            => $row["jumlah_{$n}"] ?? null,
@@ -247,14 +319,7 @@ class InventoryBuktiImport implements ToCollection
                             'serial_number'     => $hasilParse['serial_number'],
                             'warna'             => $hasilParse['warna'],
                             'status'            => $statusInventory,
-                            // Samain juga ke tanggal_pembelian (kolom yang
-                            // dipakai dashboard "Tren Pembelian per Bulan").
-                            // $infoBukti['tanggal'] cuma keisi ke kolom
-                            // 'tanggal' (kolom bukti serah-terima), jadi
-                            // tanpa ini tanggal_pembelian selalu null buat
-                            // inventory hasil import.
-                            'tanggal_pembelian' => $infoBukti['tanggal'] ?? null,
-                        ], $this->timestampsDariTanggal($infoBukti['tanggal'])));
+                        ]));
 
                         $indukTerakhir = $inventory;
 
@@ -297,10 +362,120 @@ class InventoryBuktiImport implements ToCollection
     }
 
     /**
+     * Proses baris data format FLAT -- 1 baris = 1 barang langsung, gak ada
+     * pengelompokan "Nama Barang 1/2/3" kayak format Bukti Serah Terima.
+     * Semua baris dianggap BARANG UTAMA (gak ada kelengkapan terpisah),
+     * sesuai struktur file "Data Inventory" (Kode Inventory, Kategori,
+     * Merk, Type, Warna, Nama, Serial Number, Keterangan, Jumlah, Tanggal
+     * Garansi, Supplier, Tanggal Invoice, No Invoice / Surat Jalan, No Good
+     * Receive, Tanggal Input, Perusahaan).
+     *
+     * CATATAN ASUMSI PEMETAAN (sesuaikan kalau ternyata beda):
+     * - Kolom "Kode Inventory" dipakai APA ADANYA ke field `kode_inventory`
+     *   (gak di-generate ulang seperti biasanya).
+     * - Kolom "Kategori" (isinya "Charger", "Proyektor", dst) TIDAK dipakai
+     *   sebagai kategori_id sistem -- semua baris format ini otomatis
+     *   kategori_id = Barang Utama, karena "Kategori" di file ini
+     *   sebenarnya lebih ke jenis/nama barang, bukan Barang Utama/
+     *   Kelengkapan.
+     * - Kolom "Merk", "Type", "Tanggal Garansi", "No Invoice / Surat
+     *   Jalan", "No Good Receive" DIABAIKAN -- gak ada kolom yang cocok
+     *   di tabel `inventory` untuk field-field ini.
+     * - "Serial Number" & "Warna" diambil LANGSUNG dari kolomnya
+     *   masing-masing (BUKAN di-parse dari teks Keterangan seperti format
+     *   lama), karena file ini sudah punya kolom sendiri buat itu.
+     * - `status` di-hardcode 'tersedia' -- file ini gak punya info siapa
+     *   pemakainya (gak ada kolom NIK/Penerima), beda dari format Bukti
+     *   Serah Terima yang punya info itu.
+     * - `no_bukti`, `nik`, `penerima`, dst dibiarkan null -- memang gak
+     *   ada datanya di format ini.
+     */
+    private function procesBarisFlat(Collection $dataRows, array $headers): void
+    {
+        foreach ($dataRows as $index => $rawRow) {
+            try {
+                DB::transaction(function () use ($rawRow, $headers, $index) {
+                    $rowArray = $rawRow->toArray();
+
+                    if (count(array_filter($rowArray, fn ($v) => $v !== null && $v !== '')) === 0) {
+                        return;
+                    }
+
+                    $row = array_combine(
+                        $headers,
+                        array_pad($rowArray, count($headers), null)
+                    );
+
+                    $namaBarang = $row[self::KOLOM_NAMA_FLAT] ?? null;
+
+                    if ($this->namaBarangKosong($namaBarang)) {
+                        $this->errors[] = 'Baris data ke-' . ($index + 1) . ': kolom "Nama" kosong, baris dilewati.';
+                        return;
+                    }
+
+                    $namaSupplier = trim((string) ($row['supplier'] ?? ''));
+                    $supplierId = null;
+
+                    if ($namaSupplier !== '') {
+                        $supplierId = Supplier::firstOrCreate(['nama' => $namaSupplier])->id;
+                    }
+
+                    $kodeInventory = trim((string) ($row['kode_inventory'] ?? ''));
+                    $tanggalInput = $this->parseTanggal($row['tanggal_invoice'] ?? null);
+                    $tanggalInvoice = $this->parseTanggal($row['tanggal_invoice'] ?? null);
+
+                    Inventory::create([
+                        'kode_inventory'    => $kodeInventory !== '' ? $kodeInventory : null,
+                        'nama'              => trim($namaBarang),
+                        'kategori_id'       => $this->kategoriIdOtomatis(
+                            $row['kategori'] ?? null,
+                            $row['merk'] ?? null,
+                            $row['type'] ?? null,
+                            $namaBarang,
+                        ),
+                        'merk'              => $this->nilaiAtauNull($row['merk'] ?? null),
+                        'type'              => $this->nilaiAtauNull($row['type'] ?? null),
+                        'parent_id'         => null,
+                        'supplier_id'       => $supplierId,
+                        'jumlah'            => $row['jumlah'] ?? null,
+                        'keterangan'        => $row['keterangan'] ?? null,
+                        'serial_number'     => $this->nilaiAtauNull($row['serial_number'] ?? null),
+                        'warna'             => $this->nilaiAtauNull($row['warna'] ?? null),
+                        'status'            => 'tersedia',
+                        'perusahaan'        => $row['perusahaan'] ?? null,
+                        'tanggal_input'       => $tanggalInput,
+                        'tanggal_invoice'     => $tanggalInvoice,
+                    ]);
+
+                    $this->rowCount++;
+                });
+            } catch (\Exception $e) {
+                $this->errors[] = 'Baris data ke-' . ($index + 1) . ': ' . $e->getMessage();
+            }
+        }
+    }
+
+    /**
+     * Sama seperti namaBarangKosong() tapi buat kolom selain Nama Barang
+     * (mis. Serial Number, Warna di format flat) -- balikin null kalau
+     * isinya kosong atau cuma placeholder ("-", "n/a", dst), supaya field
+     * kayak serial_number/warna gak kesimpen literal "-" di database.
+     */
+    private function nilaiAtauNull(?string $nilai): ?string
+    {
+        if ($this->namaBarangKosong($nilai)) {
+            return null;
+        }
+
+        return trim($nilai);
+    }
+
+    /**
      * Bikin 1 nama barang kelengkapan (mis. "Charger", "Tas", atau apapun
      * isi kolom Nama Barang selain kolom barang utama) jadi baris
-     * `inventory` dengan kategori_id = kelengkapan dan parent_id nunjuk ke
-     * $indukInventory -- BUKAN tabel/model terpisah lagi seperti dulu
+     * `inventory` dengan parent_id nunjuk ke $indukInventory (kategori_id
+     * cuma fallback, lihat NAMA_KATEGORI_FALLBACK_IMPORT) -- BUKAN
+     * tabel/model terpisah lagi seperti dulu
      * (AsetKelengkapan sudah dihapus). $keterangan (kalau ada) di-parse
      * ulang lewat parseKeterangan() buat coba tarik serial_number & warna-
      * nya juga, sama seperti yang dilakukan buat barang utama. Info bukti
@@ -315,14 +490,13 @@ class InventoryBuktiImport implements ToCollection
 
         return Inventory::create(array_merge([
             'parent_id'         => $indukInventory->id,
-            'kategori_id'       => $this->kategoriId(self::NAMA_KATEGORI_KELENGKAPAN),
+            'kategori_id'       => $this->kategoriIdFallback(),
             'nama'              => $namaBarang,
             'warna'             => $hasilParse['warna'],
             'serial_number'     => $hasilParse['serial_number'],
             'keterangan'        => $keterangan,
             'supplier_id'       => $supplierId,
             'perusahaan'        => $infoBukti['perusahaan'] ?? null,
-            'tanggal_pembelian' => $infoBukti['tanggal'] ?? null,
             'status'            => $indukInventory->status,
         ], $this->timestampsDariTanggal($infoBukti['tanggal'] ?? null)));
     }
@@ -362,21 +536,31 @@ class InventoryBuktiImport implements ToCollection
         ], $this->timestampsDariTanggal($tanggalPenerimaan)));
     }
 
-    /**
-     * Ambil id kategori berdasarkan nama ('Barang Utama' / 'Kelengkapan'),
-     * dengan cache di $kategoriIdCache biar gak query berulang tiap baris.
-     * Sengaja pakai firstOrFail -- kalau nama kategori ini gak ada di
-     * tabel kategori, itu masalah data master yang harus ketahuan cepat
-     * (error jelas), bukan diam-diam bikin baris inventory dengan
-     * kategori_id null.
-     */
+
     private function kategoriId(string $nama): int
     {
         if (!array_key_exists($nama, $this->kategoriIdCache)) {
-            $this->kategoriIdCache[$nama] = Kategori::where('nama', $nama)->firstOrFail()->id;
+            $this->kategoriIdCache[$nama] = Kategori::firstOrCreate(['nama' => $nama])->id;
         }
 
         return $this->kategoriIdCache[$nama];
+    }
+    /**
+     * Ambil id kategori fallback (NAMA_KATEGORI_FALLBACK_IMPORT), bikin
+     * kalau belum ada (firstOrCreate -- BEDA dari firstOrFail versi lama
+     * yang throw kalau kategori gak ketemu). Ini kategori bebas biasa,
+     * bukan lagi baris "spesial" yang divalidasi khusus di tempat lain,
+     * jadi aman dibikin otomatis di sini.
+     */
+    private function kategoriIdFallback(): int
+    {
+        if ($this->kategoriIdFallbackCache === null) {
+            $this->kategoriIdFallbackCache = Kategori::firstOrCreate(
+                ['nama' => self::NAMA_KATEGORI_FALLBACK_IMPORT]
+            )->id;
+        }
+
+        return $this->kategoriIdFallbackCache;
     }
 
     /**
@@ -414,8 +598,37 @@ class InventoryBuktiImport implements ToCollection
      * "sel ini sengaja gak diisi" (mis. "-"). Tanpa ini, nilai seperti "-"
      * lolos empty() check (string "-" itu non-empty di PHP) dan kepakai
      * apa adanya sebagai `nama` baris Inventory (barang utama maupun
-     * kelengkapan), sehingga muncul barang dengan nama literal "-".
+     * kelengkapan), sehingga muncul barang dengan nama literal "-". Dipakai
+     * juga buat kolom lain di format flat (Serial Number, Warna) lewat
+     * nilaiAtauNull().
      */
+
+    private function kategoriIdOtomatis(?string $kategoriExcel, ?string $merk, ?string $type, ?string $nama): int
+    {
+
+        $kategoriExcelTrim = trim((string) $kategoriExcel);
+
+        if (!$this->namaBarangKosong($kategoriExcelTrim)) {
+            return $this->kategoriId($kategoriExcelTrim);
+        }
+
+        $teks = strtolower(trim(($merk ?? '') . ' ' . ($type ?? '') . ' ' . ($nama ?? '')));
+
+        foreach (self::PETA_KATEGORI_KEYWORDS as $namaKategori => $kataKunci) {
+            foreach ($kataKunci as $kunci) {
+                if (str_contains($teks, $kunci)) {
+                    return $this->kategoriId($namaKategori);
+                }
+            }
+        }
+
+        if (preg_match('/\b\d+\s*(gb|tb)\b/i', $teks)) {
+            return $this->kategoriId('Hdd External');
+        }
+
+        return $this->kategoriIdFallback();
+    }
+
     private function namaBarangKosong(?string $nama): bool
     {
         if (empty($nama)) {
@@ -440,6 +653,13 @@ class InventoryBuktiImport implements ToCollection
         return $nomor;
     }
 
+    /**
+     * Baris dianggap header kalau mengandung SALAH SATU (OR) dari nama
+     * kolom di KOLOM_PENANDA_HEADER -- misalnya file lama pakai "No Bukti",
+     * file lain pakai "Kode Inventory". Berhenti di kecocokan pertama yang
+     * ditemukan (baik penanda maupun barisnya), gak perlu semua penanda
+     * ada sekaligus.
+     */
     private function cariBarisHeader(Collection $rows): ?int
     {
         $batas = min(self::MAX_BARIS_DISCAN, $rows->count());
@@ -447,8 +667,10 @@ class InventoryBuktiImport implements ToCollection
         for ($i = 0; $i < $batas; $i++) {
             $selDinormalisasi = $rows[$i]->map(fn ($v) => $this->normalisasiHeader((string) $v));
 
-            if ($selDinormalisasi->contains(self::KOLOM_PENANDA_HEADER)) {
-                return $i;
+            foreach (self::KOLOM_PENANDA_HEADER as $penanda) {
+                if ($selDinormalisasi->contains($penanda)) {
+                    return $i;
+                }
             }
         }
 
@@ -521,6 +743,19 @@ class InventoryBuktiImport implements ToCollection
         return $hasil;
     }
 
+    private const BULAN_INDONESIA_KE_INGGRIS = [
+        'september' => 'September', 'november' => 'November', 'desember' => 'December',
+        'januari' => 'January', 'februari' => 'February', 'agustus' => 'August',
+        'oktober' => 'October',
+        'maret' => 'March', 'april' => 'April',
+        'juli' => 'July', 'juni' => 'June',
+        'agt' => 'August', 'agu' => 'August', 'okt' => 'October', 'des' => 'December',
+        'jan' => 'January', 'feb' => 'February', 'mar' => 'March', 'apr' => 'April',
+        'jun' => 'June', 'jul' => 'July', 'sep' => 'September', 'sept' => 'September',
+        'nov' => 'November', 'oct' => 'October', 'dec' => 'December', 'aug' => 'August',
+        'mei' => 'May',
+    ];
+
     private function parseTanggal($value)
     {
         if (empty($value)) return null;
@@ -529,9 +764,15 @@ class InventoryBuktiImport implements ToCollection
             return \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($value)->format('Y-m-d');
         }
 
-        return \Carbon\Carbon::parse($value)->format('Y-m-d');
-    }
+        $teks = (string) $value;
 
+        foreach (self::BULAN_INDONESIA_KE_INGGRIS as $indo => $inggris) {
+            $teks = preg_replace('/\b' . preg_quote($indo, '/') . '\b/i', $inggris, $teks);
+        }
+
+        return \Carbon\Carbon::parse($teks)->format('Y-m-d');
+    }
+    
     public function getRowCount()
     {
         return $this->rowCount;

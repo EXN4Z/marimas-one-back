@@ -8,11 +8,17 @@ use App\Models\MasterData\Kategori;
 use Illuminate\Http\Request;
 
 /**
- * Kategori barang di Inventory (mis. "Barang Utama", "Kelengkapan").
- * Dulu cuma 2 baris fix & read-only lewat migration, sekarang dikelola
- * admin lewat CRUD biasa di Master Data -- sama kayak MasterKategoriController
- * yang digantikan controller ini (tabel master_kategori sudah dihapus,
- * digabung ke tabel kategori).
+ * Kategori barang di Inventory (mis. "Laptop", "Charger", "Speaker" --
+ * lihat 13 kategori seed di migration reset_and_seed_kategori_baru). Nama
+ * bebas apa saja, dikelola admin lewat CRUD biasa di Master Data, gak ada
+ * validasi tipe/golongan khusus (kategori TIDAK LAGI menentukan struktur
+ * induk/menempel item -- itu murni dari Inventory::parent_id, lihat
+ * Inventory::isInduk()/isChild()).
+ *
+ * Ini controller yang AKTIF & dirutekan (lihat routes/api.php).
+ * MasterKategoriController (tabel master_kategori) sudah dihapus total --
+ * dulu sempat ada 2 controller kategori paralel, sekarang cuma ini yang
+ * dipakai.
  */
 class KategoriController extends Controller
 {
