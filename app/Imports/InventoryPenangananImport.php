@@ -138,7 +138,7 @@ class InventoryPenangananImport implements ToCollection
             $catatan = trim($catatan . ($catatan !== '' ? "\n" : '') . "Pelapor (import): {$pelapor}");
         }
 
-        $noStruk = $this->generateNoStruk('PNG', 'inventory_penanganan', 'no_struk');
+        $noStruk = $this->generateNoStrukTahunan('inventory_penanganan', 'no_struk');
 
         InventoryPenanganan::create([
             'inventory_id' => $inventory->id,

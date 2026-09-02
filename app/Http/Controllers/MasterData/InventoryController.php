@@ -432,7 +432,7 @@ class InventoryController extends Controller
             ]);
 
             if ($pemakaiIndukAktif) {
-                $noStruk = $this->generateNoStruk('STJ', 'inventory_pemakai', 'no_struk_penerimaan');
+                $noStruk = $this->generateNoStrukRandom('inventory_pemakai', 'no_struk_penerimaan');
                 $fotoPaths = $this->simpanFotoBukti($request, 'foto_penerimaan', 'inventory-pemakai/penerimaan');
 
                 InventoryPemakai::create([
@@ -484,7 +484,7 @@ class InventoryController extends Controller
             return;
         }
 
-        $noStrukAnak = $this->generateNoStruk('STJ', 'inventory_pemakai', 'no_struk_penerimaan');
+        $noStrukAnak = $this->generateNoStrukRandom('inventory_pemakai', 'no_struk_penerimaan');
 
         InventoryPemakai::create([
             'inventory_id' => $inventory->id,

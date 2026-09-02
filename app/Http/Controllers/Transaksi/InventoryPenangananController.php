@@ -249,7 +249,7 @@ class InventoryPenangananController extends Controller
         DB::transaction(function () use ($inventoryPenanganan, $validated) {
             // struk cuma digenerate sekali, pas pertama kali ditandai selesai
             if (!$inventoryPenanganan->no_struk && ($validated['tanggal_selesai'] ?? null)) {
-                $validated['no_struk'] = $this->generateNoStruk('PNG', 'inventory_penanganan', 'no_struk');
+                $validated['no_struk'] = $this->generateNoStrukTahunan('inventory_penanganan', 'no_struk');
             }
 
             // waktu akurat buat riwayat — selesai_at dicatat terpisah dari

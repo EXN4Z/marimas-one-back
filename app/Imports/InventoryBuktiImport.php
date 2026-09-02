@@ -524,7 +524,7 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
      */
     private function buatInventoryPemakai(Inventory $item, User $penerimaUser, ?string $tanggalPenerimaan): void
     {
-        $noStruk = $this->generateNoStruk('STJ', 'inventory_pemakai', 'no_struk_penerimaan');
+        $noStruk = $this->generateNoStrukRandom('inventory_pemakai', 'no_struk_penerimaan');
 
         InventoryPemakai::create([
             'inventory_id'        => $item->id,
