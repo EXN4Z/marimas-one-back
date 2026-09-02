@@ -640,6 +640,8 @@ class InventoryController extends Controller
             'kategori_id' => 'required|exists:kategori,id',
             'nama' => 'nullable|string|max:255',
             'warna' => 'nullable|string|max:255',
+            'merk' => 'nullable|string|max:255',
+            'type' => 'nullable|string|max:255',
             'serial_number' => [
                 'nullable',
                 'string',
