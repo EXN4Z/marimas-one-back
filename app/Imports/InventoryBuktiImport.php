@@ -254,7 +254,7 @@ class InventoryBuktiImport implements ToCollection
                             // tanpa ini tanggal_pembelian selalu null buat
                             // inventory hasil import.
                             'tanggal_pembelian' => $infoBukti['tanggal'] ?? null,
-                        ]));
+                        ], $this->timestampsDariTanggal($infoBukti['tanggal'])));
 
                         $indukTerakhir = $inventory;
 
@@ -313,7 +313,7 @@ class InventoryBuktiImport implements ToCollection
     {
         $hasilParse = $this->parseKeterangan($keterangan);
 
-        return Inventory::create([
+        return Inventory::create(array_merge([
             'parent_id'         => $indukInventory->id,
             'kategori_id'       => $this->kategoriId(self::NAMA_KATEGORI_KELENGKAPAN),
             'nama'              => $namaBarang,
@@ -324,7 +324,7 @@ class InventoryBuktiImport implements ToCollection
             'perusahaan'        => $infoBukti['perusahaan'] ?? null,
             'tanggal_pembelian' => $infoBukti['tanggal'] ?? null,
             'status'            => $indukInventory->status,
-        ]);
+        ], $this->timestampsDariTanggal($infoBukti['tanggal'] ?? null)));
     }
 
     /**
@@ -352,14 +352,14 @@ class InventoryBuktiImport implements ToCollection
     {
         $noStruk = $this->generateNoStruk('STJ', 'inventory_pemakai', 'no_struk_penerimaan');
 
-        InventoryPemakai::create([
+        InventoryPemakai::create(array_merge([
             'inventory_id'        => $item->id,
             'user_id'             => $penerimaUser->id,
             'status'              => 'disetujui',
             'no_struk_penerimaan' => $noStruk,
             'tanggal_penerimaan'  => $tanggalPenerimaan,
             'diterima_at'         => $tanggalPenerimaan,
-        ]);
+        ], $this->timestampsDariTanggal($tanggalPenerimaan)));
     }
 
     /**
@@ -377,6 +377,34 @@ class InventoryBuktiImport implements ToCollection
         }
 
         return $this->kategoriIdCache[$nama];
+    }
+
+    /**
+     * `created_at`/`updated_at` bawaan Eloquent selalu ke-set ke waktu
+     * import dijalankan (now()) -- padahal data ini historis (bukti lama
+     * yang baru sekarang di-import), jadi urutan "created_at" di riwayat
+     * harusnya ngikutin tanggal bukti serah-terima yang sebenarnya, bukan
+     * kapan tombol import ditekan.
+     *
+     * Eloquent gak nimpa created_at/updated_at yang udah di-set manual di
+     * attributes sebelum save() -- updateTimestamps() cuma ngisi kalau
+     * kolomnya belum "dirty" -- jadi cukup masukin dua kolom ini ke array
+     * create() buat override default now()-nya.
+     *
+     * Kalau $tanggal null (baris gak punya kolom Tanggal terisi), return
+     * array kosong supaya Eloquent tetap fallback ke default now() dia,
+     * daripada maksa created_at jadi null.
+     */
+    private function timestampsDariTanggal(?string $tanggal): array
+    {
+        if (empty($tanggal)) {
+            return [];
+        }
+
+        return [
+            'created_at' => $tanggal,
+            'updated_at' => $tanggal,
+        ];
     }
 
     /**
