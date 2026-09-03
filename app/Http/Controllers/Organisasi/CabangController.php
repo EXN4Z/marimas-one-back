@@ -39,15 +39,8 @@ class CabangController extends Controller
             'alamat' => 'nullable|string|max:1000',
             'telepon' => 'nullable|string|max:30',
             'link' => 'required|string|max:255',
-            // FIX: sebelumnya latitude/longitude gak divalidasi & gak ikut
-            // ke $validated sama sekali, padahal kolomnya NOT NULL di DB --
-            // request "Tambah Cabang" selalu gagal di step LokasiKantor::create().
-            'latitude' => 'required|numeric|between:-90,90',
-            'longitude' => 'required|numeric|between:-180,180',
         ], [
             'link.required' => 'Kolom link wajib diisi.',
-            'latitude.required' => 'Latitude wajib diisi.',
-            'longitude.required' => 'Longitude wajib diisi.',
         ]);
 
         $cabang = LokasiKantor::create($validated);
@@ -66,10 +59,6 @@ class CabangController extends Controller
             'alamat' => 'nullable|string|max:1000',
             'telepon' => 'nullable|string|max:30',
             'link' => 'sometimes|required|string|max:255',
-            // FIX: sama kayak store() -- latitude/longitude sebelumnya gak
-            // divalidasi/di-update sama sekali.
-            'latitude' => 'sometimes|required|numeric|between:-90,90',
-            'longitude' => 'sometimes|required|numeric|between:-180,180',
         ]);
 
         $cabang->update($validated);

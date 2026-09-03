@@ -14,13 +14,6 @@ class LokasiKantor extends Model
         'alamat',
         'telepon',
         'link',
-        // FIX: latitude & longitude sebelumnya gak ada di $fillable, padahal
-        // kolomnya WAJIB diisi (NOT NULL, tanpa default) di migration --
-        // akibatnya create()/update() lewat mass-assignment selalu gagal
-        // (Eloquent diam-diam nge-drop field yang gak fillable, lalu DB
-        // nolak insert/update karena kolom wajib itu kosong).
-        'latitude',
-        'longitude',
     ];
 
     // BARU (eks-pekerja): karyawan yang kerja di cabang ini — dikecualikan
