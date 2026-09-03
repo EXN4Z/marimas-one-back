@@ -49,6 +49,10 @@ class DepartemenImport implements ToCollection
                 continue; // baris kosong, lewati diam-diam
             }
 
+            if ($this->adalahBarisFooter($rowArray)) {
+                continue; // baris footer disclaimer hasil Export Excel, lewati diam-diam
+            }
+
             $row = array_combine($headers, array_pad($rowArray, count($headers), null));
             $nama = trim((string) ($row['nama'] ?? ''));
 
@@ -69,6 +73,20 @@ class DepartemenImport implements ToCollection
                 $this->errors[] = 'Baris data ke-' . ($index + 1) . ' ("' . $nama . '"): ' . $e->getMessage();
             }
         }
+    }
+
+    /**
+     * Deteksi baris footer disclaimer yang otomatis ditambahkan fitur Export
+     * Excel ("Dokumen digenerate otomatis oleh Marimas One ..."). Kalau file
+     * hasil export diimpor balik tanpa diedit, baris ini ikut kebaca sebagai
+     * baris data (nyangkut di kolom pertama karena aslinya merged cell) dan
+     * bikin entri palsu -- makanya harus disaring.
+     */
+    private function adalahBarisFooter(array $rowArray): bool
+    {
+        $gabungan = strtolower(implode(' ', array_map('strval', $rowArray)));
+
+        return str_contains($gabungan, 'digenerate otomatis');
     }
 
     private function cariBarisHeader(Collection $rows): ?int

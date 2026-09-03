@@ -179,6 +179,10 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                         return;
                     }
 
+                    if ($this->adalahBarisFooter($rowArray)) {
+                        return; // baris footer disclaimer hasil Export Excel, lewati diam-diam
+                    }
+
                     $row = array_combine(
                         $headers,
                         array_pad($rowArray, count($headers), null)
@@ -399,6 +403,10 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
 
                     if (count(array_filter($rowArray, fn ($v) => $v !== null && $v !== '')) === 0) {
                         return;
+                    }
+
+                    if ($this->adalahBarisFooter($rowArray)) {
+                        return; // baris footer disclaimer hasil Export Excel, lewati diam-diam
                     }
 
                     $row = array_combine(
@@ -675,6 +683,20 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
         }
 
         return null;
+    }
+
+    /**
+     * Deteksi baris footer disclaimer yang otomatis ditambahkan fitur Export
+     * Excel ("Dokumen digenerate otomatis oleh Marimas One ..."). Kalau file
+     * hasil export diimpor balik tanpa diedit, baris ini ikut kebaca sebagai
+     * baris data (nyangkut di kolom pertama karena aslinya merged cell) dan
+     * bikin entri palsu -- makanya harus disaring.
+     */
+    private function adalahBarisFooter(array $rowArray): bool
+    {
+        $gabungan = strtolower(implode(' ', array_map('strval', $rowArray)));
+
+        return str_contains($gabungan, 'digenerate otomatis');
     }
 
     private function normalisasiHeader(string $header): string
