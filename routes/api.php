@@ -30,6 +30,10 @@ Broadcast::routes(['middleware' => ['auth:sanctum']]);
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::apiResource('cabang', CabangController::class);
     // BARU: menu "Perusahaan" di Master Data -- mirror Cabang, admin-only.
+    // Route import HARUS didaftarkan sebelum apiResource -- kalau tidak,
+    // "import" akan salah tertangkap sebagai parameter {perusahaan} di
+    // route PUT/DELETE apiResource (sama pola dengan supplier/import).
+    Route::post('/perusahaan/import', [PerusahaanController::class, 'import']);
     Route::apiResource('perusahaan', PerusahaanController::class);
 });
 
@@ -69,12 +73,6 @@ Route::middleware(['auth:sanctum', 'role:cabang,karyawan,manajer,hr,admin'])->gr
     });
 });
 
-Route::middleware(['auth:sanctum', 'role:manajer,hr,admin,cabang'])->group(function () {
-    Route::prefix('dashboard-analytics')->group(function () {
-        Route::get('/total-keuangan', [DashboardController::class, 'totalKeuangan']);
-        Route::get('/keuangan-per-bulan', [DashboardController::class, 'keuanganPerBulan']);
-    });
-});
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/karyawan', [UserController::class, 'index']);

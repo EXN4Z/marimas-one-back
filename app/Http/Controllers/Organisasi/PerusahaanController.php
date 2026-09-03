@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Organisasi;
 
 use App\Http\Controllers\Controller;
 
+use App\Imports\PerusahaanImport;
 use App\Models\Perusahaan;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 
 // Mirror dari CabangController -- struktur & validasi field sama persis,
 // tapi TANPA cek "masih ada pegawai/relasi" sebelum hapus, karena
@@ -77,5 +80,45 @@ class PerusahaanController extends Controller
         $perusahaan->delete();
 
         return response()->json(['message' => 'Perusahaan berhasil dihapus.']);
+    }
+
+    /**
+     * POST /api/perusahaan/import -- import massal data Perusahaan dari file
+     * Excel (.xlsx/.xls). Format kolom: Nama | Alamat | Telepon | Link.
+     * Baris dengan nama yang sudah ada di-UPDATE (bukan dilewati) -- lihat
+     * PerusahaanImport. Mirror SupplierController::import().
+     */
+    public function import(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls|max:10240', // max 10MB
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $import = new PerusahaanImport();
+            Excel::import($import, $request->file('file'));
+
+            if (count($import->getErrors()) > 0) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'errors'  => $import->getErrors(),
+                ], 422);
+            }
+
+            DB::commit();
+            return response()->json([
+                'success' => true,
+                'message' => "Berhasil import {$import->getCreatedCount()} perusahaan baru"
+                    . ($import->getUpdatedCount() > 0 ? ", {$import->getUpdatedCount()} diperbarui" : ''),
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal import: ' . $e->getMessage(),
+            ], 422);
+        }
     }
 }
