@@ -679,6 +679,9 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
 
     private function normalisasiHeader(string $header): string
     {
+        $header = str_replace("\xEF\xBB\xBF", '', $header);
+        $header = preg_replace('/[\x{00A0}\x{200B}\x{FEFF}]/u', ' ', $header);
+
         $header = trim($header);
         $header = strtolower($header);
         $header = preg_replace('/[\s\-]+/', '_', $header);

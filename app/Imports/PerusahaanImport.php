@@ -23,7 +23,7 @@ use Maatwebsite\Excel\Concerns\ToCollection;
 class PerusahaanImport implements ToCollection
 {
     private const KOLOM_PENANDA_HEADER = 'nama';
-    private const MAX_BARIS_DISCAN = 5;
+    private const MAX_BARIS_DISCAN = 10;
 
     protected int $createdCount = 0;
     protected int $updatedCount = 0;
@@ -105,6 +105,12 @@ class PerusahaanImport implements ToCollection
 
     private function normalisasiHeader(string $header): string
     {
+        // Buang BOM & samakan spasi "tak kelihatan" (NBSP, zero-width, dsb)
+        // jadi spasi biasa dulu, biar sel header yang kelihatannya "Nama"
+        // tapi sebenarnya ada karakter siluman tetap kedeteksi.
+        $header = str_replace("\xEF\xBB\xBF", '', $header);
+        $header = preg_replace('/[\x{00A0}\x{200B}\x{FEFF}]/u', ' ', $header);
+
         $header = trim($header);
         $header = strtolower($header);
         $header = preg_replace('/[\s\-]+/', '_', $header);
