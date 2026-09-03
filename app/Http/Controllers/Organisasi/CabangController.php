@@ -36,10 +36,13 @@ class CabangController extends Controller
     {
         $validated = $request->validate([
             'nama' => 'required|string|max:150',
-            'alamat' => 'nullable|string|max:1000',
-            'telepon' => 'nullable|string|max:30',
+            'alamat' => 'required|string|max:1000',
+            'telepon' => 'required|string|max:30',
             'link' => 'required|string|max:255',
         ], [
+            'nama.required' => 'Kolom nama wajib diisi.',
+            'alamat.required' => 'Kolom alamat wajib diisi.',
+            'telepon.required' => 'Kolom nomor telepon wajib diisi.',
             'link.required' => 'Kolom link wajib diisi.',
         ]);
 
@@ -56,9 +59,14 @@ class CabangController extends Controller
 
         $validated = $request->validate([
             'nama' => 'sometimes|required|string|max:150',
-            'alamat' => 'nullable|string|max:1000',
-            'telepon' => 'nullable|string|max:30',
+            'alamat' => 'sometimes|required|string|max:1000',
+            'telepon' => 'sometimes|required|string|max:30',
             'link' => 'sometimes|required|string|max:255',
+        ], [
+            'nama.required' => 'Kolom nama wajib diisi.',
+            'alamat.required' => 'Kolom alamat wajib diisi.',
+            'telepon.required' => 'Kolom nomor telepon wajib diisi.',
+            'link.required' => 'Kolom link wajib diisi.',
         ]);
 
         $cabang->update($validated);
