@@ -16,6 +16,7 @@ use App\Http\Controllers\MasterData\KategoriController;
 use App\Http\Controllers\Transaksi\InventoryPemakaiController;
 use App\Http\Controllers\Transaksi\InventoryPenangananController;
 use App\Http\Controllers\Organisasi\CabangController;
+use App\Http\Controllers\Organisasi\PerusahaanController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\ImportController;
 
@@ -28,6 +29,8 @@ Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::apiResource('cabang', CabangController::class);
+    // BARU: menu "Perusahaan" di Master Data -- mirror Cabang, admin-only.
+    Route::apiResource('perusahaan', PerusahaanController::class);
 });
 
 Route::middleware(['auth:sanctum'])->group(function () {
