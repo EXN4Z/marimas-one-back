@@ -52,6 +52,7 @@ class InventoryController extends Controller
 
         $query = Inventory::with([
             'kategori',
+            'perusahaan',
             'supplier',
             'parent:id,kode_inventory,nama',
             'pemakaiSaatIni.user.departemen',
@@ -631,9 +632,11 @@ class InventoryController extends Controller
             ]);
         }
 
+// tambahkan sejajar dengan normalisasi serial_number/kategori_id yang sudah ada
         $request->merge([
             'serial_number' => $request->serial_number === '' ? null : $request->serial_number,
             'kategori_id' => $request->kategori_id === '' ? null : $request->kategori_id,
+            'supplier_id' => $request->supplier_id === '' ? null : $request->supplier_id, // tambahkan ini
         ]);
 
         $validated = $request->validate([
