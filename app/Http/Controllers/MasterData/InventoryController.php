@@ -146,7 +146,7 @@ class InventoryController extends Controller
         });
 
         return response()->json(
-            $inventory->load('kategori', 'supplier', 'parent'),
+            $inventory->load('kategori', 'supplier', 'parent', 'perusahaan'),
             201
         );
     }
@@ -233,7 +233,7 @@ class InventoryController extends Controller
         });
 
         return response()->json(
-            $inventory->fresh()->load('kategori', 'supplier', 'parent')
+            $inventory->fresh()->load('kategori', 'supplier', 'parent', 'perusahaan')
         );
     }
 
