@@ -41,6 +41,7 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
      */
     private const KOLOM_NAMA_FLAT = 'nama';
 
+    private array $perusahaanIdCache = [];
 
     private const PETA_KATEGORI_KEYWORDS = [
         'Baterai'         => ['baterai', 'battery', 'lithium'],
@@ -202,7 +203,7 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                     $infoBukti = [
                         'no_bukti'       => $row['no_bukti'],
                         'tanggal'        => $this->parseTanggal($row['tanggal'] ?? null),
-                        'perusahaan'     => $row['perusahaan'] ?? null,
+                        'perusahaan_id'  => null,
                         'nik'            => $row['nik'] ?? null,
                         'penerima'       => $row['penerima'] ?? null,
                         'diterima_oleh'  => $row['diterima_oleh'] ?? null,
@@ -318,6 +319,7 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                             'kategori_id'       => $this->kategoriIdFallback(),
                             'parent_id'         => null,
                             'supplier_id'       => $supplierId,
+                            'perusahaan_id'     => $infoBukti['perusahaan_id'] ?? null,
                             'jumlah'            => $row["jumlah_{$n}"] ?? null,
                             'keterangan'        => $keteranganAsli,
                             'serial_number'     => $hasilParse['serial_number'],
@@ -450,7 +452,7 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                         'serial_number'     => $this->nilaiAtauNull($row['serial_number'] ?? null),
                         'warna'             => $this->nilaiAtauNull($row['warna'] ?? null),
                         'status'            => 'tersedia',
-                        'perusahaan'        => $row['perusahaan'] ?? null,
+                        'perusahaan_id'     => null,
                         'tanggal_input'       => $tanggalInput,
                         'tanggal_invoice'     => $tanggalInvoice,
                     ]);
@@ -544,6 +546,20 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
         ], $this->timestampsDariTanggal($tanggalPenerimaan)));
     }
 
+    private function perusahaanIdDariNama(?string $nama): ?int
+    {
+        $namaTrim = trim((string) $nama);
+
+        if ($namaTrim === '' || $this->namaBarangKosong($namaTrim)) {
+            return null;
+        }
+
+        if (!array_key_exists($namaTrim, $this->perusahaanIdCache)) {
+            $this->perusahaanIdCache[$namaTrim] = \App\Models\Perusahaan::where('nama', $namaTrim)->first()?->id;
+        }
+
+        return $this->perusahaanIdCache[$namaTrim];
+    }
 
     private function kategoriId(string $nama): int
     {
