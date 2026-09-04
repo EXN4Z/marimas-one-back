@@ -113,6 +113,7 @@ class InventoryController extends Controller
         }
 
         $inventory->load([
+            'perusahaan',
             'kategori',
             'supplier',
             'parent',
