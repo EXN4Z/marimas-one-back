@@ -520,7 +520,7 @@ class InventoryController extends Controller
     {
         InventoryPemakai::where('inventory_id', $inventory->id)
             ->where('status', 'disetujui')
-            ->whereNull('tanggal_pengembalian')
+            ->whereNull('tanggal_pengembalian') 
             ->update([
                 'tanggal_pengembalian' => now(),
                 'dikembalikan_at' => now(),
@@ -652,7 +652,7 @@ class InventoryController extends Controller
             ],
             'jumlah' => 'nullable|integer|min:1',
             'tanggal_garansi' => 'nullable|date',
-            'perusahaan' => 'nullable|string|max:255',
+            'perusahaan_id' => 'nullable|exists:perusahaan,id',
             'keterangan' => 'nullable|string',
             'foto' => 'nullable|image|max:4096',
             'supplier_id' => 'nullable|exists:supplier,id',
