@@ -96,6 +96,11 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
      * konsisten: kolom pertama = barang utama, kolom berikutnya = barang
      * yang menyertai/melengkapi barang utama itu.
      */
+    private const PETA_PERUSAHAAN_SINGKATAN = [
+    'MPK' => 'PT. Marimas Putera Kencana',
+    'UTH' => 'PT. Ulam Tiba Halim',
+    ];
+
     private const NOMOR_KOLOM_ASET_UTAMA = 1;
 
     private const WARNA_KEYWORDS = [
@@ -203,7 +208,7 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                     $infoBukti = [
                         'no_bukti'       => $row['no_bukti'],
                         'tanggal'        => $this->parseTanggal($row['tanggal'] ?? null),
-                        'perusahaan_id'  => null,
+                        'perusahaan_id'  => $this->perusahaanIdDariSingkatan($row['perusahaan'] ?? null, $index + 1),
                         'nik'            => $row['nik'] ?? null,
                         'penerima'       => $row['penerima'] ?? null,
                         'diterima_oleh'  => $row['diterima_oleh'] ?? null,
@@ -452,7 +457,7 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                         'serial_number'     => $this->nilaiAtauNull($row['serial_number'] ?? null),
                         'warna'             => $this->nilaiAtauNull($row['warna'] ?? null),
                         'status'            => 'tersedia',
-                        'perusahaan_id'     => null,
+                        'perusahaan_id'     => $this->perusahaanIdDariSingkatan($row['perusahaan'] ?? null, $index + 1),
                         'tanggal_input'       => $tanggalInput,
                         'tanggal_invoice'     => $tanggalInvoice,
                     ]);
@@ -506,7 +511,7 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
             'serial_number'     => $hasilParse['serial_number'],
             'keterangan'        => $keterangan,
             'supplier_id'       => $supplierId,
-            'perusahaan'        => $infoBukti['perusahaan'] ?? null,
+            'perusahaan_id'        => $infoBukti['perusahaan_id'] ?? null,
             'status'            => $indukInventory->status,
         ], $this->timestampsDariTanggal($infoBukti['tanggal'] ?? null)));
     }
@@ -546,19 +551,32 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
         ], $this->timestampsDariTanggal($tanggalPenerimaan)));
     }
 
-    private function perusahaanIdDariNama(?string $nama): ?int
+    private function perusahaanIdDariSingkatan(?string $singkatan, int $nomorBaris): ?int
     {
-        $namaTrim = trim((string) $nama);
+        $singkatanTrim = strtoupper(trim((string) $singkatan));
 
-        if ($namaTrim === '' || $this->namaBarangKosong($namaTrim)) {
+        if ($singkatanTrim === '' || $this->namaBarangKosong($singkatanTrim)) {
             return null;
         }
 
-        if (!array_key_exists($namaTrim, $this->perusahaanIdCache)) {
-            $this->perusahaanIdCache[$namaTrim] = \App\Models\Perusahaan::where('nama', $namaTrim)->first()?->id;
+        if (array_key_exists($singkatanTrim, $this->perusahaanIdCache)) {
+            return $this->perusahaanIdCache[$singkatanTrim];
         }
 
-        return $this->perusahaanIdCache[$namaTrim];
+        $namaLengkap = self::PETA_PERUSAHAAN_SINGKATAN[$singkatanTrim] ?? null;
+
+        if ($namaLengkap === null) {
+            $this->errors[] = 'Baris data ke-' . $nomorBaris . ': singkatan perusahaan "' . $singkatan . '" tidak dikenali, perusahaan_id dikosongkan.';
+            return $this->perusahaanIdCache[$singkatanTrim] = null;
+        }
+
+        $id = \App\Models\Perusahaan::where('nama', $namaLengkap)->first()?->id;
+
+        if ($id === null) {
+            $this->errors[] = 'Baris data ke-' . $nomorBaris . ': perusahaan "' . $namaLengkap . '" (dari singkatan "' . $singkatan . '") belum ada di tabel perusahaan.';
+        }
+
+        return $this->perusahaanIdCache[$singkatanTrim] = $id;
     }
 
     private function kategoriId(string $nama): int
