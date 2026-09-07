@@ -5,6 +5,7 @@ namespace App\Models\MasterData;
 use App\Models\Transaksi\InventoryPemakai;
 use App\Models\Transaksi\InventoryPenanganan;
 use App\Models\Transaksi\InventoryWriteoff;
+use App\Models\Perusahaan;
 use Illuminate\Database\Eloquent\Model;
 
 class Inventory extends Model
@@ -27,7 +28,7 @@ class Inventory extends Model
         'tanggal_invoice',
         'merk',
         'type',
-        'perusahaan',
+        'perusahaan_id',
         'keterangan',
         'diterima_oleh',
         'diketahui',
@@ -53,6 +54,11 @@ class Inventory extends Model
     public function kategori()
     {
         return $this->belongsTo(Kategori::class, 'kategori_id');
+    }
+
+    public function perusahaan()
+    {
+        return $this->belongsTo(Perusahaan::class, 'perusahaan_id');
     }
 
     // ================= Self-relation (parent/anak) =================
