@@ -755,7 +755,8 @@ class InventoryController extends Controller
      */
     public function foto(Request $request)
     {
-        $query = Inventory::whereNotNull('foto')
+        $query = Inventory::with('kategori')
+            ->whereNotNull('foto')
             ->orderByDesc('created_at');
 
         if ($search = $request->input('search')) {
