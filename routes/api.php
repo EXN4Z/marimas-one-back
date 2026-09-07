@@ -99,6 +99,11 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 
 Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
     Route::get('/inventory-pemakai', [InventoryPemakaiController::class, 'index']);
+    // WAJIB didaftarkan SEBELUM 'GET /inventory/{inventory}' di bawah (beda
+    // grup middleware pun tetap harus lebih dulu di file ini), soalnya kalau
+    // kebalik, Laravel bakal nganggep 'foto' itu isian {inventory} dan malah
+    // nyoba resolve Inventory::find('foto') -> 404, gak pernah nyampe sini.
+    Route::get('/inventory/foto', [InventoryController::class, 'foto']);
 });
 
 Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {

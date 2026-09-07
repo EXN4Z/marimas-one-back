@@ -52,6 +52,7 @@ class InventoryController extends Controller
 
         $query = Inventory::with([
             'kategori',
+            'perusahaan',
             'supplier',
             'parent:id,kode_inventory,nama',
             'pemakaiSaatIni.user.departemen',
@@ -113,6 +114,7 @@ class InventoryController extends Controller
         }
 
         $inventory->load([
+            'perusahaan',
             'kategori',
             'supplier',
             'parent',
@@ -146,7 +148,7 @@ class InventoryController extends Controller
         });
 
         return response()->json(
-            $inventory->load('kategori', 'supplier', 'parent'),
+            $inventory->load('kategori', 'supplier', 'parent', 'perusahaan'),
             201
         );
     }
@@ -233,7 +235,7 @@ class InventoryController extends Controller
         });
 
         return response()->json(
-            $inventory->fresh()->load('kategori', 'supplier', 'parent')
+            $inventory->fresh()->load('kategori', 'supplier', 'parent', 'perusahaan')
         );
     }
 
@@ -520,7 +522,7 @@ class InventoryController extends Controller
     {
         InventoryPemakai::where('inventory_id', $inventory->id)
             ->where('status', 'disetujui')
-            ->whereNull('tanggal_pengembalian')
+            ->whereNull('tanggal_pengembalian') 
             ->update([
                 'tanggal_pengembalian' => now(),
                 'dikembalikan_at' => now(),
@@ -630,9 +632,11 @@ class InventoryController extends Controller
             ]);
         }
 
+// tambahkan sejajar dengan normalisasi serial_number/kategori_id yang sudah ada
         $request->merge([
             'serial_number' => $request->serial_number === '' ? null : $request->serial_number,
             'kategori_id' => $request->kategori_id === '' ? null : $request->kategori_id,
+            'supplier_id' => $request->supplier_id === '' ? null : $request->supplier_id, // tambahkan ini
         ]);
 
         $validated = $request->validate([
@@ -652,7 +656,7 @@ class InventoryController extends Controller
             ],
             'jumlah' => 'nullable|integer|min:1',
             'tanggal_garansi' => 'nullable|date',
-            'perusahaan' => 'nullable|string|max:255',
+            'perusahaan_id' => 'nullable|exists:perusahaan,id',
             'keterangan' => 'nullable|string',
             'foto' => 'nullable|image|max:4096',
             'supplier_id' => 'nullable|exists:supplier,id',
@@ -737,5 +741,33 @@ class InventoryController extends Controller
             : $inventory?->parent_id;
 
         $validated['status'] = $parentId ? 'dipakai' : 'tersedia';
+    }
+
+    /**
+     * GET /api/inventory/foto — daftar item inventory yang punya foto DASAR
+     * (diupload pas nambah/edit barang di Master Data, kolom `inventory.foto`).
+     * Ini beda dari:
+     * - /inventory-pemakai/foto (foto serah-terima & pengembalian)
+     * - /inventory-penanganan/foto (foto laporan kerusakan)
+     * ...yang keduanya foto TRANSAKSI. Ini foto BARANGNYA sendiri, buat tab
+     * "Inventory" paling kiri di halaman Foto Inventory (Laporan).
+     * Admin+hr only, sama kayak akses halaman Laporan di frontend.
+     */
+    public function foto(Request $request)
+    {
+        $query = Inventory::whereNotNull('foto')
+            ->orderByDesc('created_at');
+
+        if ($search = $request->input('search')) {
+            $query->where(function ($qq) use ($search) {
+                $qq->where('kode_inventory', 'like', "%{$search}%")
+                    ->orWhere('nama', 'like', "%{$search}%");
+            });
+        }
+
+        $perPage = max(10, (int) $request->input('per_page', 12));
+        $data = $query->paginate($perPage);
+
+        return response()->json($data);
     }
 }
