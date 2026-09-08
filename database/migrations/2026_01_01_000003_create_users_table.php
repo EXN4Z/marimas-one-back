@@ -28,16 +28,10 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('email')->unique();
-            $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->rememberToken();
 
             $table->string('phone')->nullable()->unique();
-            $table->string('otp_code')->nullable();
-            $table->timestamp('otp_expires_at')->nullable();
-            $table->timestamp('phone_verified_at')->nullable();
-            $table->enum('status', ['aktif', 'nonaktif'])->default('aktif');
-            $table->string('reference_photo_path')->nullable();
 
             $table->timestamps();
         });

@@ -27,6 +27,8 @@ return [
         'http://localhost:5173',
         'http://localhost:5174',
         'http://marimas-one.test',
+        'http://10.10.1.4:8015/backend/public',
+        'http://10.10.1.4:8015/frontend',
         env('FRONTEND_URL'),
     ]),
     

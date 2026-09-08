@@ -14,8 +14,6 @@ return new class extends Migration
             $table->text('alamat')->nullable();
             $table->string('link', 255)->nullable();
             $table->string('telepon', 30)->nullable();
-            $table->decimal('latitude', 10, 7);
-            $table->decimal('longitude', 10, 7);
             $table->timestamps();
         });
     }
