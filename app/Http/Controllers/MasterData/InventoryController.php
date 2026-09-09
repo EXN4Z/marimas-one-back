@@ -736,13 +736,45 @@ class InventoryController extends Controller
      */
     protected function selaraskanStatusByParent(array &$validated, ?Inventory $inventory): void
     {
-        $parentId = array_key_exists('parent_id', $validated)
+        $parentIdLama = $inventory?->parent_id;
+        $parentIdBaru = array_key_exists('parent_id', $validated)
             ? $validated['parent_id']
-            : $inventory?->parent_id;
+            : $parentIdLama;
 
-        $validated['status'] = $parentId ? 'dipakai' : 'tersedia';
+        // Item baru saja DIPASANG ke induk (attach) -> paksa 'dipakai'
+        if ($parentIdBaru && $parentIdBaru != $parentIdLama) {
+            $validated['status'] = 'dipakai';
+            return;
+        }
+
+        // Item baru saja DILEPAS dari induk (detach) -> paksa 'tersedia'
+        if ($parentIdLama && !$parentIdBaru) {
+            $validated['status'] = 'tersedia';
+            return;
+        }
+
+        // Item MASIH menempel ke induk yang sama seperti sebelumnya -> tetap 'dipakai'
+        if ($parentIdBaru) {
+            $validated['status'] = 'dipakai';
+            return;
+        }
+
+        // Item yang dari awal SUDAH berdiri sendiri (parent_id kosong, gak ada
+        // perubahan apa-apa soal parent) -> JANGAN sentuh status. Biarkan value
+        // dari request (kalau memang dikirim, misal lewat alur lain) atau
+        // biarkan Eloquent update() cuma nimpa field lain, status lama tetap.
+        if (array_key_exists('status', $validated) && $inventory) {
+            // Item sudah ada (mode update) & parent_id gak berubah dari kosong
+            // ke kosong -> jangan biarkan form Edit nimpa status secara gak
+            // sengaja. Buang key status dari $validated biar update() gak
+            // menyentuh kolom ini sama sekali.
+            unset($validated['status']);
+        } elseif (!$inventory) {
+            // Mode store() (item baru): parent_id kosong -> default aman
+            // 'tersedia'.
+            $validated['status'] = 'tersedia';
+        }
     }
-
     /**
      * GET /api/inventory/foto — daftar item inventory yang punya foto DASAR
      * (diupload pas nambah/edit barang di Master Data, kolom `inventory.foto`).

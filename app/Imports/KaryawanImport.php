@@ -96,7 +96,7 @@ class KaryawanImport implements ToCollection
                             'phone'         => $row['phone'] ?? null,
                             'departemen_id' => $departemenId,
                             'tanggal_masuk' => $this->parseTanggal($row['tanggal_masuk'] ?? null),
-                            'role'          => $row['role'] ?? 'karyawan',
+                            'role' => strtolower(trim($row['role'] ?? '')) ?: 'karyawan',
                             ...($userLama ? [] : ['password' => $passwordPlain]),
                         ]
                     );
