@@ -656,6 +656,15 @@ class InventoryController extends Controller
             ],
             'jumlah' => 'nullable|integer|min:1',
             'tanggal_garansi' => 'nullable|date',
+            // FIX: tanggal_input & tanggal_invoice sudah dikirim FE (lihat
+            // buildInventoryFormData di api/masterData/inventory.ts) dan sudah
+            // fillable di model + ada kolomnya di DB, tapi sebelumnya gak
+            // didaftarkan di rules ini -- $request->validate() cuma
+            // meloloskan key yang ada di rules, jadi kedua field ini selalu
+            // ke-drop diam-diam dari $validated sebelum Inventory::create()
+            // / update(), makanya gak pernah kesimpen walau sudah diisi di form.
+            'tanggal_input' => 'nullable|date',
+            'tanggal_invoice' => 'nullable|date',
             'perusahaan_id' => 'nullable|exists:perusahaan,id',
             'keterangan' => 'nullable|string',
             'foto' => 'nullable|image|max:4096',
