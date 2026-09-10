@@ -19,8 +19,6 @@ use App\Http\Controllers\Organisasi\CabangController;
 use App\Http\Controllers\Organisasi\PerusahaanController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\ImportController;
-use App\Models\User;
-use App\Notifications\TestPushNotification;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
@@ -30,6 +28,10 @@ Route::post('/login', [AuthController::class, 'login']);
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
+    // Route import HARUS didaftarkan sebelum apiResource -- kalau tidak,
+    // "import" akan salah tertangkap sebagai parameter {cabang} di route
+    // PUT/DELETE apiResource (sama pola dengan supplier/import & perusahaan/import).
+    Route::post('/cabang/import', [CabangController::class, 'import']);
     Route::apiResource('cabang', CabangController::class);
     // BARU: menu "Perusahaan" di Master Data -- mirror Cabang, admin-only.
     // Route import HARUS didaftarkan sebelum apiResource -- kalau tidak,
@@ -177,28 +179,4 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     // Data -- dipakai buat dropdown pilih Kategori waktu bikin/edit
     // Inventory. Kategori TIDAK LAGI menentukan struktur induk/menempel.
     Route::apiResource('kategori', KategoriController::class)->except(['show']);
-});
-Route::get('/test-push/{userId}', function ($userId) {
-    $user = User::findOrFail($userId);
-
-    if ($user->pushSubscriptions->isEmpty()) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'User ini belum punya push subscription.',
-        ], 400);
-    }
-
-    try {
-        $user->notify(new TestPushNotification());
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Push notification terkirim ke user ID ' . $userId,
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => $e->getMessage(),
-        ], 500);
-    }
 });
