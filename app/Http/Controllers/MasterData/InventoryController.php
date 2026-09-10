@@ -187,8 +187,13 @@ class InventoryController extends Controller
                     Storage::disk('public')->delete($inventory->foto);
                 }
                 $validated['foto'] = $request->file('foto')->store('inventory', 'public');
+            } elseif ($request->boolean('hapus_foto')) {
+                // BARU: user memang mau hapus foto tanpa ganti foto baru
+                if ($inventory->foto) {
+                    Storage::disk('public')->delete($inventory->foto);
+                }
+                $validated['foto'] = null;
             }
-
             // Tangkep parent_id LAMA sebelum update() -- dipakai buat
             // bedain "baru di-attach sekarang" / "baru dilepas sekarang"
             // vs "form disubmit ulang dengan parent_id yang sama seperti
