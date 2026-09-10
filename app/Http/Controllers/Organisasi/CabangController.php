@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Organisasi;
 
 use App\Http\Controllers\Controller;
 
+use App\Imports\CabangImport;
 use App\Models\LokasiKantor;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 
 class CabangController extends Controller
 {
@@ -89,5 +92,46 @@ class CabangController extends Controller
         $cabang->delete();
 
         return response()->json(['message' => 'Cabang berhasil dihapus.']);
+    }
+
+    /**
+     * POST /api/cabang/import -- import massal data Cabang dari file Excel
+     * (.xlsx/.xls). Format kolom: Nama | Alamat | Telepon | Link.
+     * Baris dengan nama yang sudah ada di-UPDATE (bukan dilewati) -- lihat
+     * CabangImport. Mirror PerusahaanController::import() persis, cuma
+     * beda target model (LokasiKantor).
+     */
+    public function import(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls|max:10240', // max 10MB
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $import = new CabangImport();
+            Excel::import($import, $request->file('file'));
+
+            if (count($import->getErrors()) > 0) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'errors'  => $import->getErrors(),
+                ], 422);
+            }
+
+            DB::commit();
+            return response()->json([
+                'success' => true,
+                'message' => "Berhasil import {$import->getCreatedCount()} cabang baru"
+                    . ($import->getUpdatedCount() > 0 ? ", {$import->getUpdatedCount()} diperbarui" : ''),
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal import: ' . $e->getMessage(),
+            ], 422);
+        }
     }
 }
