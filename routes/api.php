@@ -89,6 +89,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
 Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
     Route::post('/departemen/import', [DepartemenController::class, 'import']);
     Route::apiResource('departemen', DepartemenController::class)->except(['show']);
+    Route::apiResource('kategori', KategoriController::class)->except(['show']);
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
@@ -178,5 +179,5 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     // -- 13 kategori, bebas nama apa saja), dikelola admin lewat Master
     // Data -- dipakai buat dropdown pilih Kategori waktu bikin/edit
     // Inventory. Kategori TIDAK LAGI menentukan struktur induk/menempel.
-    Route::apiResource('kategori', KategoriController::class)->except(['show']);
+
 });
