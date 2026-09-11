@@ -13,6 +13,7 @@ use App\Http\Controllers\Karyawan\AdminUserController;
 use App\Http\Controllers\MasterData\SupplierController;
 use App\Http\Controllers\MasterData\InventoryController;
 use App\Http\Controllers\MasterData\KategoriController;
+use App\Http\Controllers\MasterData\RoleController;
 use App\Http\Controllers\Transaksi\InventoryPemakaiController;
 use App\Http\Controllers\Transaksi\InventoryPenangananController;
 use App\Http\Controllers\Organisasi\CabangController;
@@ -39,6 +40,11 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     // route PUT/DELETE apiResource (sama pola dengan supplier/import).
     Route::post('/perusahaan/import', [PerusahaanController::class, 'import']);
     Route::apiResource('perusahaan', PerusahaanController::class);
+    // BARU: menu "Role" di Master Data -- admin-only, sama pola. Cuma
+    // index/store/update/destroy/import (gak ada 'show', dipilih via
+    // modal edit dari list yang udah dimuat, sama kayak Cabang/Perusahaan).
+    Route::post('/role/import', [RoleController::class, 'import']);
+    Route::apiResource('role', RoleController::class)->except(['show']);
 });
 
 Route::middleware(['auth:sanctum'])->group(function () {
@@ -86,7 +92,13 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/karyawan', [UserController::class, 'store']);
 });
 
-Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
+// Admin-only (dulu 'role:admin,hr' -- tapi karena level hr = level
+// karyawan/manajer/cabang, dulu itu efeknya malah kebuka buat SEMUA
+// non-admin, bukan cuma hr. Sekarang disamakan tegas: semua role selain
+// admin punya hak akses sama persis seperti karyawan, yaitu TIDAK ada
+// akses ke Departemen sama sekali -- sinkron sama frontend, lihat
+// AppLayout.tsx & MasterData.tsx).
+Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/departemen/import', [DepartemenController::class, 'import']);
     Route::apiResource('departemen', DepartemenController::class)->except(['show']);
     Route::apiResource('kategori', KategoriController::class)->except(['show']);
@@ -102,7 +114,10 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/import-karyawan', [ImportController::class, 'importKaryawan']);
 });
 
-Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
+// Admin-only (dulu 'role:admin,hr', lihat catatan di grup Departemen di
+// atas soal kenapa itu disamakan). Kedua endpoint ini cuma dipakai halaman
+// Laporan/Foto Aset yang sekarang admin-only di frontend.
+Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/inventory-pemakai', [InventoryPemakaiController::class, 'index']);
     // WAJIB didaftarkan SEBELUM 'GET /inventory/{inventory}' di bawah (beda
     // grup middleware pun tetap harus lebih dulu di file ini), soalnya kalau
@@ -141,9 +156,10 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
 });
 
 // endpoint ini nampilin SEMUA laporan kerusakan dari SELURUH karyawan tanpa
-// filter (tab "Rusak" di halaman Foto Aset) -- tetap admin+hr only, beda dari
-// /inventory-penanganan (index) di atas yang sekarang sudah self-scoping.
-Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
+// filter (tab "Rusak" di halaman Foto Aset) -- admin-only (dulu 'role:admin,hr',
+// lihat catatan di grup Departemen di atas), beda dari /inventory-penanganan
+// (index) di atas yang self-scoping buat semua non-admin.
+Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/inventory-penanganan/foto', [InventoryPenangananController::class, 'foto']);
 });
 

@@ -39,12 +39,20 @@ class User extends Authenticatable
         'remember_token',
     ];
     
+    // BARU: karyawan, cabang, manajer, dan hr disetarakan levelnya (1) --
+    // cuma admin yang beda/lebih tinggi. Role-role non-admin ini tetap
+    // punya nama/label sendiri-sendiri (dipakai buat tampilan & filter di
+    // frontend), tapi dari sisi hak akses API semuanya setara persis
+    // seperti karyawan biasa. Middleware 'role:...' yang nyebut kombinasi
+    // apa pun selain 'admin' murni (misal 'role:admin,hr') otomatis kebuka
+    // buat semua role non-admin juga, karena level terendah di antara
+    // role yang disebut sekarang selalu 1.
     protected static array $roleLevels = [
         'guest' => 0,
         'karyawan' => 1,
-        'cabang' => 2,
-        'manajer' => 3,
-        'hr' => 4,
+        'cabang' => 1,
+        'manajer' => 1,
+        'hr' => 1,
         'admin' => 5,
     ];
     public function hasRoleAtLeast(string $role): bool

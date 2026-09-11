@@ -55,7 +55,10 @@ class UserController extends Controller
             'email' => 'nullable|email|unique:users,email',
             'phone' => 'nullable|string|unique:users,phone',
             'password' => 'required|string',
-            'role' => 'required|string|in:guest,karyawan,manajer,hr,admin,cabang',
+            // BARU: divalidasi dinamis ke tabel `roles` (Master Data > Role),
+            // bukan lagi hardcode 6 role tetap -- role baru yang dibuat admin
+            // lewat halaman Role otomatis bisa langsung dipakai di sini.
+            'role' => 'required|string|exists:roles,nama',
             'nik' => 'required_unless:role,cabang|nullable|string|unique:users,nik',
             'departemen_id' => 'nullable|exists:departemen,id',
             // UBAH: wajib diisi kalau role cabang, biar gak lolos dengan null lagi.
@@ -96,7 +99,8 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|unique:users,email,' . $user->id,
             'phone' => 'nullable|string|unique:users,phone,' . $user->id,
-            'role' => 'required|string|in:guest,karyawan,manajer,hr,admin,cabang',
+            // BARU: sama seperti store() -- divalidasi dinamis ke tabel `roles`.
+            'role' => 'required|string|exists:roles,nama',
             'nik' => 'required_unless:role,cabang|nullable|string|unique:users,nik,' . $user->id,
             'departemen_id' => 'nullable|exists:departemen,id',
             'lokasi_kantor_id' => 'required_if:role,cabang|nullable|exists:lokasi_kantor,id',
