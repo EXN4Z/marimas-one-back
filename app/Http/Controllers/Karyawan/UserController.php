@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Karyawan;
 use App\Http\Controllers\Controller;
 
 use App\Models\User;
+use App\Models\MasterData\Role; // BARU: dibutuhkan buat lookup nama role -> id di store()/update()
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
@@ -13,14 +14,15 @@ class UserController extends Controller
 {
     public function index(Request $request)
     {
-        $query = User::with('departemen', 'lokasiKantor');
+        // BARU: eager-load relasi role juga, biar frontend (TabKaryawan.tsx)
+        // bisa nampilin nama/warna role tanpa request tambahan.
+        $query = User::with('departemen', 'lokasiKantor', 'roleRef');
 
-        // BARU: kalau yang akses akun cabang, cuma tampilin karyawan yang
-        // lokasi_kantor_id-nya sama dengan lokasi_kantor_id akun cabang tsb.
-        // Filter langsung di kolom users.lokasi_kantor_id (dulu lewat
-        // whereHas('pekerja', ...), sekarang gak ada lagi tabel pekerja).
+        // BARU: cek role akun cabang sekarang lewat relasi roleRef->nama,
+        // bukan $user->role lagi (kolom itu sudah nggak ada -- dulu diam-diam
+        // selalu null & bikin kondisi ini nggak pernah kepakai).
         $user = Auth::user();
-        if ($user && $user->role === 'cabang' && $user->lokasi_kantor_id) {
+        if ($user && $user->roleRef?->nama === 'cabang' && $user->lokasi_kantor_id) {
             $query->where('lokasi_kantor_id', $user->lokasi_kantor_id)
                   ->whereHas('roleRef', fn ($q) => $q->where('nama', '!=', 'cabang'));
         }
@@ -45,7 +47,7 @@ class UserController extends Controller
 
     public function edit(User $user)
     {
-        return response()->json($user->load('departemen', 'lokasiKantor'));
+        return response()->json($user->load('departemen', 'lokasiKantor', 'roleRef'));
     }
 
     public function store(Request $request)
@@ -55,32 +57,57 @@ class UserController extends Controller
             'email' => 'nullable|email|unique:users,email',
             'phone' => 'nullable|string|unique:users,phone',
             'password' => 'required|string',
-            // BARU: divalidasi dinamis ke tabel `roles` (Master Data > Role),
-            // bukan lagi hardcode 6 role tetap -- role baru yang dibuat admin
-            // lewat halaman Role otomatis bisa langsung dipakai di sini.
-            'role' => 'required|string|exists:roles,nama',
-            'nik' => 'required_unless:role,cabang|nullable|string|unique:users,nik',
+            // BARU: validasi sekarang langsung ke role_id integer, sinkron
+            // sama CreateKaryawanPage.tsx yang sudah ngirim role_id, bukan
+            // nama role lagi.
+            'role_id' => 'required|integer|exists:roles,id',
+            'nik' => 'nullable|string|unique:users,nik',
             'departemen_id' => 'nullable|exists:departemen,id',
-            // UBAH: wajib diisi kalau role cabang, biar gak lolos dengan null lagi.
-            'lokasi_kantor_id' => 'required_if:role,cabang|nullable|exists:lokasi_kantor,id',
+            'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
             'tanggal_masuk' => 'nullable|date',
         ]);
 
-        // BARU: password default dibuat dari nama user (huruf kecil, spasi
-        // diganti underscore), bukan random lagi.
-        $plainPassword = User::generatePasswordFromName($validated['name']);
-        $isCabang = $validated['role'] === 'cabang';
+        // BARU: ambil nama role dari id yang dikirim, dipakai buat nentuin
+        // apakah ini akun cabang (masih perlu tau NAMA-nya buat cabang-specific
+        // logic di bawah, walau yang disimpan ke DB tetap role_id).
+        $role = Role::findOrFail($validated['role_id']);
+        $isCabang = $role->nama === 'cabang';
 
-        // BARU: gak ada lagi tabel pekerja terpisah — semua kolom karyawan
-        // (nik, departemen_id, tanggal_masuk) langsung masuk ke users dalam
-        // satu insert. Akun cabang gak punya data karyawan sama sekali
-        // (nik/departemen_id/tanggal_masuk dibiarkan null).
+        // BARU: validasi kondisional (nik wajib kecuali cabang, lokasi_kantor_id
+        // wajib kalau cabang) sekarang dicek manual di sini -- dulu bisa pakai
+        // required_unless:role,cabang / required_if:role,cabang karena field-nya
+        // masih 'role' (nama string), tapi sekarang field yang dikirim 'role_id'
+        // (angka), jadi rule itu nggak bisa lagi bandingin ke literal 'cabang'.
+        if (!$isCabang && empty($validated['nik'])) {
+            return response()->json([
+                'message' => 'The given data was invalid.',
+                'errors' => ['nik' => ['NIK karyawan wajib diisi.']],
+            ], 422);
+        }
+        if ($isCabang && empty($validated['lokasi_kantor_id'])) {
+            return response()->json([
+                'message' => 'The given data was invalid.',
+                'errors' => ['lokasi_kantor_id' => ['Cabang penempatan wajib dipilih.']],
+            ], 422);
+        }
+        if (!$isCabang && !empty($validated['nik'])) {
+            // unique check manual karena rule unique: di atas gak jalan buat nik kosong/cabang
+            if (User::where('nik', $validated['nik'])->exists()) {
+                return response()->json([
+                    'message' => 'The given data was invalid.',
+                    'errors' => ['nik' => ['NIK sudah digunakan.']],
+                ], 422);
+            }
+        }
+
+        $plainPassword = User::generatePasswordFromName($validated['name']);
+
         $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'] ?? null,
             'phone' => $validated['phone'] ?? null,
             'password' => Hash::make($validated['password']),
-            'role' => $validated['role'],
+            'role_id' => $validated['role_id'], // BARU: ganti dari 'role' => nama
             'lokasi_kantor_id' => $isCabang ? $validated['lokasi_kantor_id'] : ($validated['lokasi_kantor_id'] ?? null),
             'nik' => $isCabang ? null : $validated['nik'],
             'departemen_id' => $isCabang ? null : ($validated['departemen_id'] ?? null),
@@ -89,7 +116,7 @@ class UserController extends Controller
 
         return response()->json([
             'message' => 'User berhasil dibuat.',
-            'user' => $user->load('departemen', 'lokasiKantor'),
+            'user' => $user->load('departemen', 'lokasiKantor', 'roleRef'),
         ], 201);
     }
 
@@ -99,32 +126,42 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|unique:users,email,' . $user->id,
             'phone' => 'nullable|string|unique:users,phone,' . $user->id,
-            // BARU: sama seperti store() -- divalidasi dinamis ke tabel `roles`.
-            'role' => 'required|string|exists:roles,nama',
-            'nik' => 'required_unless:role,cabang|nullable|string|unique:users,nik,' . $user->id,
+            // BARU: sama seperti store() -- role_id, bukan nama role.
+            'role_id' => 'required|integer|exists:roles,id',
+            'nik' => 'nullable|string|unique:users,nik,' . $user->id,
             'departemen_id' => 'nullable|exists:departemen,id',
-            'lokasi_kantor_id' => 'required_if:role,cabang|nullable|exists:lokasi_kantor,id',
+            'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
             'tanggal_masuk' => 'nullable|date',
         ]);
 
-        $isCabang = $validated['role'] === 'cabang';
+        $role = Role::findOrFail($validated['role_id']);
+        $isCabang = $role->nama === 'cabang';
 
-        // BARU: satu update langsung ke users, gak ada lagi percabangan
-        // Pekerja::create/update/delete. Kalau role diganti jadi cabang,
-        // kolom karyawan (nik/departemen_id/tanggal_masuk) di-null-kan —
-        // analog sama dulu ngehapus row pekerja-nya.
+        if (!$isCabang && empty($validated['nik'])) {
+            return response()->json([
+                'message' => 'The given data was invalid.',
+                'errors' => ['nik' => ['NIK karyawan wajib diisi.']],
+            ], 422);
+        }
+        if ($isCabang && empty($validated['lokasi_kantor_id'])) {
+            return response()->json([
+                'message' => 'The given data was invalid.',
+                'errors' => ['lokasi_kantor_id' => ['Cabang penempatan wajib dipilih.']],
+            ], 422);
+        }
+
         $user->update([
             'name' => $validated['name'],
             'email' => $validated['email'] ?? null,
             'phone' => $validated['phone'] ?? null,
-            'role' => $validated['role'],
+            'role_id' => $validated['role_id'], // BARU: ganti dari 'role' => nama
             'lokasi_kantor_id' => $isCabang ? $validated['lokasi_kantor_id'] : ($validated['lokasi_kantor_id'] ?? null),
             'nik' => $isCabang ? null : $validated['nik'],
             'departemen_id' => $isCabang ? null : ($validated['departemen_id'] ?? null),
             'tanggal_masuk' => $isCabang ? null : ($validated['tanggal_masuk'] ?? null),
         ]);
 
-        return response()->json($user->load('departemen', 'lokasiKantor'));
+        return response()->json($user->load('departemen', 'lokasiKantor', 'roleRef'));
     }
 
     public function destroy(User $user)
