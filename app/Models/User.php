@@ -10,6 +10,7 @@ use Laravel\Sanctum\HasApiTokens;
 use NotificationChannels\WebPush\HasPushSubscriptions;
 use App\Models\MasterData\Departemen;
 use Illuminate\Support\Facades\Cache;
+use App\Models\MasterData\Role;
 
 class User extends Authenticatable
 {
