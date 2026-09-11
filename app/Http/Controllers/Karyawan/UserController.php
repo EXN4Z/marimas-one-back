@@ -22,11 +22,11 @@ class UserController extends Controller
         $user = Auth::user();
         if ($user && $user->role === 'cabang' && $user->lokasi_kantor_id) {
             $query->where('lokasi_kantor_id', $user->lokasi_kantor_id)
-                  ->where('role', '!=', 'cabang');
+                  ->whereHas('roleRef', fn ($q) => $q->where('nama', '!=', 'cabang'));
         }
 
         if ($request->filled('role') && $request->role !== 'all') {
-            $query->where('role', $request->role);
+            $query->whereHas('roleRef', fn ($q) => $q->where('nama', $request->role));
         }
 
         if ($request->filled('status') && $request->status !== 'all') {

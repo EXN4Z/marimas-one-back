@@ -584,7 +584,7 @@ class InventoryController extends Controller
         // ikut gagal kalau notif error.
         try {
             Notification::send(
-                User::whereIn('role', ['manajer', 'hr', 'admin'])
+                User::whereHas('roleRef', fn ($q) => $q->whereIn('nama', ['manajer', 'hr', 'admin']))
                     ->where('id', '!=', auth()->id())
                     ->get(),
                 new KelengkapanDilepasDariInduk(

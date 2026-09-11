@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 use NotificationChannels\WebPush\HasPushSubscriptions;
 use App\Models\MasterData\Departemen;
+use Illuminate\Support\Facades\Cache;
 
 class User extends Authenticatable
 {
@@ -23,7 +24,7 @@ class User extends Authenticatable
         'email',
         'phone',
         'password',
-        'role',
+        'role_id',
         // BARU: cuma dipakai buat akun role 'cabang', nunjuk ke lokasi_kantor
         // mana yang dia urus. Null buat role lain.
         'lokasi_kantor_id',
@@ -38,34 +39,76 @@ class User extends Authenticatable
         'password',
         'remember_token',
     ];
+
+    // WAJIB: tanpa ini, field "role" hilang total dari hasil toArray()/
+    // toJson() (termasuk response API) karena 'role' bukan lagi kolom asli
+    // di database -- sekarang murni accessor yang baca dari relasi roleRef.
+    protected $appends = ['role'];
+
+    // Relasi FK asli ke tabel roles (dulu users.role cuma string yang
+    // dicocokkan manual ke roles.nama, sekarang users.role_id beneran FK
+    // dengan constraint di database -- lihat migration
+    // 2026_09_13_000000_convert_users_role_to_role_id).
+    public function roleRef()
+    {
+        return $this->belongsTo(Role::class, 'role_id');
+    }
+
+    // Accessor: $user->role tetap balikin string ('admin', 'karyawan', dst)
+    // persis kayak sebelumnya -- semua kode lama yang baca $user->role
+    // gak perlu diubah sama sekali.
+    public function getRoleAttribute(): ?string
+    {
+        return $this->roleRef?->nama;
+    }
+
+    // Mutator: User::create(['role' => 'admin', ...]) atau $user->role =
+    // 'admin' tetap jalan -- otomatis di-resolve ke role_id yang cocok.
+    // Lempar exception jelas kalau nama role gak ketemu, daripada diam-diam
+    // nyimpen NULL/salah.
+    public function setRoleAttribute(string $value): void
+    {
+        $role = Role::where('nama', $value)->first();
+
+        if (!$role) {
+            throw new \InvalidArgumentException("Role '{$value}' tidak ditemukan di tabel roles.");
+        }
+
+        $this->attributes['role_id'] = $role->id;
+    }
     
-    // BARU: karyawan, cabang, manajer, dan hr disetarakan levelnya (1) --
-    // cuma admin yang beda/lebih tinggi. Role-role non-admin ini tetap
-    // punya nama/label sendiri-sendiri (dipakai buat tampilan & filter di
-    // frontend), tapi dari sisi hak akses API semuanya setara persis
-    // seperti karyawan biasa. Middleware 'role:...' yang nyebut kombinasi
-    // apa pun selain 'admin' murni (misal 'role:admin,hr') otomatis kebuka
-    // buat semua role non-admin juga, karena level terendah di antara
-    // role yang disebut sekarang selalu 1.
-    protected static array $roleLevels = [
-        'guest' => 0,
-        'karyawan' => 1,
-        'cabang' => 1,
-        'manajer' => 1,
-        'hr' => 1,
-        'admin' => 5,
-    ];
+    // Level tiap role sekarang diambil dari tabel `roles` (Master Data >
+    // Role), BUKAN array hardcode lagi -- jadi role baru yang dibikin admin
+    // lewat UI langsung punya level yang beneran berlaku buat middleware
+    // 'role:...' tanpa perlu redeploy kode. Di-cache forever (key
+    // 'role_levels_map') karena datanya jarang berubah dan dibaca di
+    // hampir tiap request; cache-nya di-invalidate manual lewat
+    // clearRoleLevelCache() tiap kali ada create/update/delete/import role
+    // (lihat RoleController & RoleImport).
+    //
+    // Kalau nama role gak ketemu di tabel roles (misal data lama/rusak),
+    // fallback ke level 0 (paling rendah) -- fail-safe ke arah lebih
+    // ketat, bukan lebih longgar.
     public function hasRoleAtLeast(string $role): bool
     {
-        $userLevel = self::$roleLevels[$this->role] ?? 0;
-        $requiredLevel = self::roleLevel($role);
-
-        return $userLevel >= $requiredLevel;
+        return self::roleLevel($this->role) >= self::roleLevel($role);
     }
 
     public static function roleLevel(string $role): int
     {
-        return self::$roleLevels[$role] ?? 0;
+        return self::roleLevelsMap()[$role] ?? 0;
+    }
+
+    protected static function roleLevelsMap(): array
+    {
+        return Cache::rememberForever('role_levels_map', function () {
+            return Role::pluck('level', 'nama')->all();
+        });
+    }
+
+    public static function clearRoleLevelCache(): void
+    {
+        Cache::forget('role_levels_map');
     }
 
     // BARU: generate password default dari nama depan (kata pertama di

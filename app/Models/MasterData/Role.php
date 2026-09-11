@@ -27,8 +27,11 @@ class Role extends Model
 
     // Jumlah user yang lagi pakai role ini -- dipakai buat cegah hapus/
     // ganti nama role yang masih terpakai (lihat RoleController::destroy()).
+    // Sejak users.role_id jadi FK asli (lihat migration
+    // 2026_09_13_000000_convert_users_role_to_role_id), relasi ini join
+    // by id, bukan lagi nyocokin string role/nama manual.
     public function users()
     {
-        return $this->hasMany(User::class, 'role', 'nama');
+        return $this->hasMany(User::class, 'role_id', 'id');
     }
 }

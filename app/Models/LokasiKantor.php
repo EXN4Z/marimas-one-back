@@ -22,7 +22,8 @@ class LokasiKantor extends Model
     // sebelum boleh dihapus, lihat CabangController).
     public function karyawan(): HasMany
     {
-        return $this->hasMany(User::class, 'lokasi_kantor_id')->where('role', '!=', 'cabang');
+        return $this->hasMany(User::class, 'lokasi_kantor_id')
+            ->whereHas('roleRef', fn ($q) => $q->where('nama', '!=', 'cabang'));
     }
 
     // Semua akun yang nunjuk ke lokasi ini, termasuk akun cabang sendiri.

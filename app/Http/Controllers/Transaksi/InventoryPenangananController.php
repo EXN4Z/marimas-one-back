@@ -176,7 +176,7 @@ class InventoryPenangananController extends Controller
         // jangan ikut gagal kalau notif error.
         try {
             Notification::send(
-                User::whereIn('role', ['manajer', 'hr', 'admin'])->get(),
+                User::whereHas('roleRef', fn ($q) => $q->whereIn('nama', ['manajer', 'hr', 'admin']))->get(),
                 new AsetKerusakanDilaporkan($penanganan->load(['inventory', 'pemakai.user']))
             );
         } catch (\Throwable $e) {
