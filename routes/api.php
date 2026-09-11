@@ -13,6 +13,7 @@ use App\Http\Controllers\Karyawan\AdminUserController;
 use App\Http\Controllers\MasterData\SupplierController;
 use App\Http\Controllers\MasterData\InventoryController;
 use App\Http\Controllers\MasterData\KategoriController;
+use App\Http\Controllers\MasterData\RoleController;
 use App\Http\Controllers\Transaksi\InventoryPemakaiController;
 use App\Http\Controllers\Transaksi\InventoryPenangananController;
 use App\Http\Controllers\Organisasi\CabangController;
@@ -39,6 +40,11 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     // route PUT/DELETE apiResource (sama pola dengan supplier/import).
     Route::post('/perusahaan/import', [PerusahaanController::class, 'import']);
     Route::apiResource('perusahaan', PerusahaanController::class);
+    // BARU: menu "Role" di Master Data -- admin-only, sama pola. Cuma
+    // index/store/update/destroy/import (gak ada 'show', dipilih via
+    // modal edit dari list yang udah dimuat, sama kayak Cabang/Perusahaan).
+    Route::post('/role/import', [RoleController::class, 'import']);
+    Route::apiResource('role', RoleController::class)->except(['show']);
 });
 
 Route::middleware(['auth:sanctum'])->group(function () {
