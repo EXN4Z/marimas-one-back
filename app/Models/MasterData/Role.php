@@ -1,8 +1,9 @@
 <?php
 
-namespace App\Models;
+namespace App\Models\MasterData;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\User;
 
 // Data referensi role (Master Data > Role) -- `nama` dipakai buat
 // mencocokkan users.role (plain string, bukan foreign key), `level`
