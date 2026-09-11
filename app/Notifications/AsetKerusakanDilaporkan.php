@@ -58,6 +58,12 @@ class AsetKerusakanDilaporkan extends Notification
     {
         return [
             'type' => 'aset_kerusakan',
+            // silent: true -- flag buat frontend (NotificationDropdown.tsx)
+            // biar baris ini TETAP masuk ke daftar notif & itung ke
+            // unread_count, tapi gak ditoast-in sebagai alert popup pas
+            // polling ketemu ID baru. Cuma true buat notifiable yang
+            // notabene pelapornya sendiri (lihat via() di atas).
+            'silent' => $notifiable->id === $this->penanganan->dilaporkan_oleh_user_id,
             'inventory_penanganan_id' => $this->penanganan->id,
             'inventory_id' => $this->penanganan->inventory_id,
             'jenis_kerusakan' => $this->penanganan->jenis_kerusakan,
