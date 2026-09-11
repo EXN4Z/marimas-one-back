@@ -407,6 +407,21 @@ class InventoryController extends Controller
             'parent_id' => 'required|exists:inventory,id',
         ]);
 
+        // FIX: item gak boleh dijadiin induk buat dirinya sendiri. Bug ini
+        // kejadian nyata -- indukOptions di frontend (TabInventory.tsx)
+        // difilter cuma dari parent_id===null, dan item yang lagi dicariin
+        // induk JUGA parent_id===null (justru itu makanya dia butuh
+        // dicariin induk), jadi dia ikut nongol sebagai pilihan buat
+        // dirinya sendiri. validasiParent() (dipakai form Edit biasa) udah
+        // punya pengaman ini dari awal, tapi jalur endpoint khusus ini
+        // (dipanggil dari modal "Pasang ke Induk") kelewat -- disamakan di
+        // sini.
+        abort_if(
+            (int) $request->input('parent_id') === $inventory->id,
+            422,
+            'Item tidak boleh menempel ke dirinya sendiri.'
+        );
+
         $parent = Inventory::findOrFail($request->input('parent_id'));
         // target parent juga harus item "induk murni" (belum menempel ke
         // item lain) -- simetris dengan aturan di atas.
