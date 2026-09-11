@@ -585,14 +585,23 @@ class InventoryController extends Controller
             $indukLabel = trim(($parent->kode_inventory ?? '') . ' ' . ($parent->nama ?? ''));
         }
 
-        DB::transaction(function () use ($inventory) {
-            $inventory->update([
-                'parent_id' => null,
-                'status' => 'tersedia',
-            ]);
+       DB::transaction(function () use ($inventory) {
+        // Kalau item lagi dalam proses penanganan/rusak (menunggu_perbaikan,
+        // diperbaiki, rusak_berat), status itu JANGAN ditimpa jadi 'tersedia'
+        // cuma karena dilepas dari induk -- barangnya belum tentu udah beres
+        // ditangani (atau malah rusak_berat/gak akan pernah dipinjamkan lagi).
+        // Cuma item yang statusnya normal (biasanya 'dipakai', ikut status
+        // induknya) yang di-reset ke 'tersedia' di sini, sesuai invariant
+        // "parent_id null => status tersedia" buat item non-penanganan.
+        $statusSedangDitangani = in_array($inventory->status, ['menunggu_perbaikan', 'diperbaiki', 'rusak_berat'], true);
 
-            $this->lepasKelengkapanDariPemakaianAktif($inventory, 'Dikembalikan otomatis — kelengkapan dilepas dari induk oleh admin.');
-        });
+        $inventory->update([
+            'parent_id' => null,
+            'status' => $statusSedangDitangani ? $inventory->status : 'tersedia',
+        ]);
+
+        $this->lepasKelengkapanDariPemakaianAktif($inventory, 'Dikembalikan otomatis — kelengkapan dilepas dari induk oleh admin.');
+    });
 
         // notif ke manajer/hr/admin, exclude admin yang ngelakuin aksi ini
         // sendiri. try-catch: aksi lepas yang SUDAH tersimpan di atas jangan
