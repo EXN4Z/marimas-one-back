@@ -24,24 +24,25 @@ class InventoryPenangananController extends Controller
 
     /**
      * GET /api/inventory-penanganan
-     * Admin & HR: semua laporan penanganan, lintas karyawan (perilaku lama,
-     * gak berubah).
-     * Non-admin/HR (karyawan/manajer): dibatasi cuma laporan yang terkait
-     * pemakaian dia sendiri (inventory_pemakai.user_id == dia), biar
-     * karyawan gak bisa lihat laporan kerusakan/riwayat perbaikan milik
-     * karyawan lain. Discoping DI SINI (bukan cuma di middleware
+     * Admin: semua laporan penanganan, lintas karyawan.
+     * Non-admin (karyawan/manajer/hr/cabang -- semua disetarakan, lihat
+     * User::$roleLevels): dibatasi cuma laporan yang terkait pemakaian dia
+     * sendiri (inventory_pemakai.user_id == dia), biar karyawan gak bisa
+     * lihat laporan kerusakan/riwayat perbaikan milik karyawan lain. HR
+     * TIDAK LAGI dapat pengecualian khusus di sini -- hak aksesnya sama
+     * persis seperti karyawan. Discoping DI SINI (bukan cuma di middleware
      * routes/api.php), soalnya middleware cuma ngatur SIAPA yang boleh
      * manggil endpoint-nya, bukan DATA APA yang boleh dia lihat.
      */
     public function index(Request $request)
     {
         $user = $request->user();
-        $isAdminAtauHr = in_array($user?->role, ['admin', 'hr'], true);
+        $isAdmin = $user?->role === 'admin';
 
         $query = InventoryPenanganan::with(['inventory', 'pemakai.user'])
             ->orderByDesc('tanggal_lapor');
 
-        if (!$isAdminAtauHr) {
+        if (!$isAdmin) {
             $query->whereHas('pemakai', function ($q) use ($user) {
                 $q->where('user_id', $user->id);
             });

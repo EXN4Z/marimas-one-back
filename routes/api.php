@@ -86,7 +86,13 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/karyawan', [UserController::class, 'store']);
 });
 
-Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
+// Admin-only (dulu 'role:admin,hr' -- tapi karena level hr = level
+// karyawan/manajer/cabang, dulu itu efeknya malah kebuka buat SEMUA
+// non-admin, bukan cuma hr. Sekarang disamakan tegas: semua role selain
+// admin punya hak akses sama persis seperti karyawan, yaitu TIDAK ada
+// akses ke Departemen sama sekali -- sinkron sama frontend, lihat
+// AppLayout.tsx & MasterData.tsx).
+Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/departemen/import', [DepartemenController::class, 'import']);
     Route::apiResource('departemen', DepartemenController::class)->except(['show']);
 });
@@ -101,7 +107,10 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/import-karyawan', [ImportController::class, 'importKaryawan']);
 });
 
-Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
+// Admin-only (dulu 'role:admin,hr', lihat catatan di grup Departemen di
+// atas soal kenapa itu disamakan). Kedua endpoint ini cuma dipakai halaman
+// Laporan/Foto Aset yang sekarang admin-only di frontend.
+Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/inventory-pemakai', [InventoryPemakaiController::class, 'index']);
     // WAJIB didaftarkan SEBELUM 'GET /inventory/{inventory}' di bawah (beda
     // grup middleware pun tetap harus lebih dulu di file ini), soalnya kalau
@@ -140,9 +149,10 @@ Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(fun
 });
 
 // endpoint ini nampilin SEMUA laporan kerusakan dari SELURUH karyawan tanpa
-// filter (tab "Rusak" di halaman Foto Aset) -- tetap admin+hr only, beda dari
-// /inventory-penanganan (index) di atas yang sekarang sudah self-scoping.
-Route::middleware(['auth:sanctum', 'role:admin,hr'])->group(function () {
+// filter (tab "Rusak" di halaman Foto Aset) -- admin-only (dulu 'role:admin,hr',
+// lihat catatan di grup Departemen di atas), beda dari /inventory-penanganan
+// (index) di atas yang self-scoping buat semua non-admin.
+Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/inventory-penanganan/foto', [InventoryPenangananController::class, 'foto']);
 });
 
