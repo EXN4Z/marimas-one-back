@@ -24,6 +24,14 @@ class AsetKerusakanDilaporkan extends Notification
 
     public function via(object $notifiable): array
     {
+        // Pelapor sendiri (kalau dia kebetulan manajer/hr/admin) tetap dapet
+        // baris di daftar notif, tapi TIDAK dapet alert real-time buat
+        // laporannya sendiri -- cuma 'database', broadcast & web push
+        // di-skip khusus buat dia.
+        if ($notifiable->id === $this->penanganan->dilaporkan_oleh_user_id) {
+            return ['database'];
+        }
+
         // WebPushChannel dimatikan sementara: VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY
         // belum di-setup di Railway, jadi channel ini selalu throw dan bikin
         // notif database/broadcast ke penerima lain ikut gak terkirim.

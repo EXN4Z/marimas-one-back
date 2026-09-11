@@ -171,13 +171,17 @@ class InventoryPenangananController extends Controller
             return $penanganan;
         });
 
-        // notif ke manajer/hr/admin tiap ada laporan kerusakan masuk
-        // (database + broadcast + web push, biar kekirim walau admin lagi
-        // di luar device) try-catch: laporan yang SUDAH tersimpan di atas
-        // jangan ikut gagal kalau notif error.
+        // notif ke manajer/hr/admin tiap ada laporan kerusakan masuk --
+        // SEMUA (termasuk pelapor sendiri kalau dia manajer/hr/admin) tetap
+        // dapet baris di daftar notif (channel 'database'), tapi pelapor
+        // gak dapet alert real-time (broadcast/web push) buat laporannya
+        // sendiri -- lihat AsetKerusakanDilaporkan::via().
+        // try-catch: laporan yang SUDAH tersimpan di atas jangan ikut gagal
+        // kalau notif error.
         try {
             Notification::send(
-                User::whereHas('roleRef', fn ($q) => $q->whereIn('nama', ['manajer', 'hr', 'admin']))->get(),
+                User::whereHas('roleRef', fn ($q) => $q->whereIn('nama', ['manajer', 'hr', 'admin']))
+                    ->get(),
                 new AsetKerusakanDilaporkan($penanganan->load(['inventory', 'pemakai.user']), $user->name)
             );
         } catch (\Throwable $e) {
