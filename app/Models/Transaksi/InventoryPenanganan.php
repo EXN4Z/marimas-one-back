@@ -10,7 +10,7 @@ class InventoryPenanganan extends Model
     protected $table = 'inventory_penanganan';
 
     protected $fillable = [
-        'inventory_id', 'inventory_pemakai_id', 'jenis_kerusakan', 'keluhan', 'foto',
+        'inventory_id', 'inventory_pemakai_id', 'dilaporkan_oleh_user_id', 'jenis_kerusakan', 'keluhan', 'foto',
         'tanggal_lapor', 'lapor_at',
         'tanggal_diterima', 'diterima_at',
         'tanggal_selesai', 'selesai_at',
@@ -46,6 +46,16 @@ class InventoryPenanganan extends Model
     public function pemakai()
     {
         return $this->belongsTo(InventoryPemakai::class, 'inventory_pemakai_id');
+    }
+
+    // siapa yang BENERAN submit laporan kerusakan ini (request()->user()
+    // pas store()) -- independen dari pemakai(), soalnya pelapor bisa aja
+    // bukan pemakai aktif barangnya (admin/HR/manajer lapor langsung pas
+    // audit gudang / barang lagi nganggur). Ini sumber kebenaran buat
+    // "siapa yang lapor", pemakai() cuma buat "siapa yang lagi pegang".
+    public function dilaporkanOleh()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'dilaporkan_oleh_user_id');
     }
 
     public function getTotalBiayaAttribute(): float

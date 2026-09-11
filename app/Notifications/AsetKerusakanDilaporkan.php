@@ -13,7 +13,12 @@ class AsetKerusakanDilaporkan extends Notification
 {
     use Queueable;
 
-    public function __construct(protected InventoryPenanganan $penanganan)
+    // $pelaporName ditangkap langsung dari user yang login & submit
+    // laporan (request()->user()), BUKAN dari relasi pemakai -- soalnya
+    // laporan kerusakan bisa juga dikirim pas item lagi nganggur/gak ada
+    // pemakai aktif (audit gudang, atau admin lapor langsung), jadi
+    // pemakai?->user?->name bisa null padahal pelapornya jelas ada.
+    public function __construct(protected InventoryPenanganan $penanganan, protected string $pelaporName)
     {
     }
 
@@ -28,7 +33,7 @@ class AsetKerusakanDilaporkan extends Notification
 
     protected function namaPelapor(): string
     {
-        return $this->penanganan->pemakai?->user?->name ?? 'Karyawan';
+        return $this->pelaporName;
     }
 
     protected function namaAset(): string
