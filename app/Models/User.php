@@ -24,6 +24,7 @@ class User extends Authenticatable
         'email',
         'phone',
         'password',
+        'role',
         'role_id',
         // BARU: cuma dipakai buat akun role 'cabang', nunjuk ke lokasi_kantor
         // mana yang dia urus. Null buat role lain.
