@@ -2,54 +2,55 @@
 
 namespace App\Notifications;
 
-use App\Models\Transaksi\InventoryPenanganan;
+use App\Models\MasterData\Inventory;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Notification;
 use NotificationChannels\WebPush\WebPushChannel;
 use NotificationChannels\WebPush\WebPushMessage;
 
-class AsetKerusakanDilaporkan extends Notification
+class AsetKelengkapanKerusakanDilaporkan extends Notification
 {
     use Queueable;
 
-    public function __construct(protected InventoryPenanganan $penanganan)
-    {
+    // $asetIndukLabel & $pelaporName ditangkap sebelum parent_id dikosongin
+    // di controller — begitu lapor rusak selesai, kelengkapan udah lepas
+    // dari induknya jadi relasi parent gak bisa diandalkan lagi di sini.
+    public function __construct(
+        protected Inventory $kelengkapan,
+        protected ?string $asetIndukLabel,
+        protected string $pelaporName
+    ) {
     }
 
     public function via(object $notifiable): array
     {
         // WebPushChannel dimatikan sementara: VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY
-        // belum di-setup di Railway, jadi channel ini selalu throw dan bikin
-        // notif database/broadcast ke penerima lain ikut gak terkirim.
-        // Aktifkan lagi setelah VAPID key beres: tambahkan WebPushChannel::class.
+        // belum di-setup di Railway. Aktifkan lagi setelah VAPID key beres:
+        // tambahkan WebPushChannel::class.
         return ['database', 'broadcast', WebPushChannel::class];
     }
 
-    protected function namaPelapor(): string
+    protected function namaKelengkapan(): string
     {
-        return $this->penanganan->pemakai?->user?->name ?? 'Karyawan';
+        return $this->kelengkapan->nama
+            ?: trim(($this->kelengkapan->merk ?? '') . ' ' . ($this->kelengkapan->type ?? ''))
+            ?: $this->kelengkapan->kode_inventory;
     }
 
-    protected function namaAset(): string
+    protected function pesan(): string
     {
-        $item = $this->penanganan->inventory;
-        if (!$item) {
-            return 'Aset';
-        }
-
-        return trim(($item->merek ?? 'Aset') . ' ' . ($item->tipe ?? ''));
+        $lokasi = $this->asetIndukLabel ? " (terpasang di {$this->asetIndukLabel})" : '';
+        return "{$this->pelaporName} melaporkan kelengkapan {$this->namaKelengkapan()}{$lokasi} rusak.";
     }
 
     public function toDatabase($notifiable): array
     {
         return [
-            'type' => 'aset_kerusakan',
-            'inventory_penanganan_id' => $this->penanganan->id,
-            'inventory_id' => $this->penanganan->inventory_id,
-            'jenis_kerusakan' => $this->penanganan->jenis_kerusakan,
-            'message' => "{$this->namaPelapor()} melaporkan kerusakan {$this->penanganan->jenis_kerusakan} pada {$this->namaAset()}.",
-            'url' => '/penanganan-inventory',
+            'type' => 'aset_kelengkapan_kerusakan',
+            'inventory_id' => $this->kelengkapan->id,
+            'message' => $this->pesan(),
+            'url' => '/master-data?tab=kelengkapan_inventory',
         ];
     }
 
@@ -61,10 +62,10 @@ class AsetKerusakanDilaporkan extends Notification
     public function toWebPush($notifiable, $notification): WebPushMessage
     {
         return (new WebPushMessage())
-            ->title('Laporan Kerusakan Aset')
+            ->title('Laporan Kerusakan Kelengkapan')
             ->icon('/logo.png')
-            ->body("{$this->namaPelapor()} melaporkan kerusakan {$this->penanganan->jenis_kerusakan} pada {$this->namaAset()}.")
-            ->data(['url' => '/penanganan-inventory'])
+            ->body($this->pesan())
+            ->data(['url' => '/master-data?tab=kelengkapan_inventory'])
             ->options(['TTL' => 300]);
     }
 }
