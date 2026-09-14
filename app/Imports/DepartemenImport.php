@@ -11,7 +11,8 @@ use Maatwebsite\Excel\Concerns\ToCollection;
  *
  * Format kolom yang diharapkan (baris pertama = header, nama kolom bebas
  * huruf besar/kecil & spasi, dinormalisasi otomatis ke snake_case):
- *   Nama
+ *   Nama  (atau "Nama Departemen" -- header yang dipakai fitur Export
+ *   Excel Departemen sendiri, supaya file hasil export bisa diimport balik)
  *
  * Setiap baris dicocokkan ke `nama` (unique) -- kalau departemen dengan
  * nama itu sudah ada, baris dilewati (dihitung sebagai "dilewati", BUKAN
@@ -21,6 +22,10 @@ use Maatwebsite\Excel\Concerns\ToCollection;
 class DepartemenImport implements ToCollection
 {
     private const KOLOM_PENANDA_HEADER = 'nama';
+    // Alias yang juga dianggap sebagai kolom "Nama" departemen -- termasuk
+    // "Nama Departemen" karena itu header yang dipakai fitur Export Excel
+    // sendiri, supaya file hasil export bisa diimport balik (idempotent).
+    private const ALIAS_KOLOM_NAMA = ['nama', 'nama_departemen'];
     private const MAX_BARIS_DISCAN = 10;
 
     protected int $createdCount = 0;
@@ -38,6 +43,7 @@ class DepartemenImport implements ToCollection
 
         $headers = $rows[$indexHeader]
             ->map(fn ($h) => $this->normalisasiHeader((string) $h))
+            ->map(fn ($h) => in_array($h, self::ALIAS_KOLOM_NAMA, true) ? self::KOLOM_PENANDA_HEADER : $h)
             ->toArray();
 
         $dataRows = $rows->slice($indexHeader + 1);
@@ -96,7 +102,7 @@ class DepartemenImport implements ToCollection
         for ($i = 0; $i < $batas; $i++) {
             $selDinormalisasi = $rows[$i]->map(fn ($v) => $this->normalisasiHeader((string) $v));
 
-            if ($selDinormalisasi->contains(self::KOLOM_PENANDA_HEADER)) {
+            if ($selDinormalisasi->intersect(self::ALIAS_KOLOM_NAMA)->isNotEmpty()) {
                 return $i;
             }
         }
