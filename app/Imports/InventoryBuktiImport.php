@@ -437,7 +437,7 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
 
                     $kodeInventory = trim((string) ($row['kode_inventory'] ?? ''));
                     $tanggalInput = $this->parseTanggal($row['tanggal_input'] ?? null);
-                    $tanggalInvoice = $this->parseTanggal($row['tanggal_invoice'] ?? null);
+                    $tanggalInvoice = $this->parseTanggal($row['tanggal_invoice'] ?? $row['tanggal_pembelian'] ?? null);
 
                     Inventory::create([
                         'kode_inventory'    => $kodeInventory !== '' ? $kodeInventory : null,
