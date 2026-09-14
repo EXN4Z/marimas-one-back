@@ -32,7 +32,7 @@ class AsetKerusakanSelesai extends Notification
             return 'Aset';
         }
 
-        return trim(($item->merk ?? 'Aset') . ' ' . ($item->type ?? ''));
+        return trim(($item->kode_inventory ?? '') . ' ' . ($item->nama ?? '')) ?: 'Aset';
     }
 
     protected function pesan(): string

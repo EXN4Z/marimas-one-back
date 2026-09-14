@@ -5,9 +5,17 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Versi SQUASHED. jenis_kerusakan langsung pakai 5 nilai final (riwayat
- * lama cuma 2 nilai lalu di-expand belakangan lewat migration terpisah
- * khusus PostgreSQL).
+ * Versi SQUASHED (ke-2). jenis_kerusakan langsung pakai 5 nilai final
+ * (riwayat lama cuma 2 nilai lalu di-expand belakangan lewat migration
+ * terpisah khusus PostgreSQL).
+ *
+ * Kolom `dilaporkan_oleh_user_id` dulu ditambah belakangan lewat
+ * migration terpisah (add_dilaporkan_oleh_to_inventory_penanganan) --
+ * FIX karena siapa yang lapor kerusakan tadinya ditebak dari relasi
+ * inventory_pemakai_id (pemakai aktif barang itu), yang keliru kalau
+ * laporan dikirim pas item lagi nganggur/gak ada pemakai aktif (audit
+ * gudang, atau admin/HR/manajer lapor langsung). Sekarang langsung jadi
+ * bagian dari create table-nya sejak awal.
  */
 return new class extends Migration
 {
@@ -17,6 +25,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('inventory_id')->nullable()->constrained('inventory')->nullOnDelete();
             $table->foreignId('inventory_pemakai_id')->nullable()->constrained('inventory_pemakai')->nullOnDelete();
+            $table->foreignId('dilaporkan_oleh_user_id')->nullable()->constrained('users')->nullOnDelete();
 
             $table->enum('jenis_kerusakan', ['software', 'hardware', 'tidak_berfungsi', 'hancur', 'terputus_sobek']);
             $table->text('keluhan');

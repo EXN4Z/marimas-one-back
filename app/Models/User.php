@@ -26,6 +26,14 @@ class User extends Authenticatable
         'phone',
         'password',
         'role_id',
+        // WAJIB ada juga di sini (bukan cuma 'role_id') -- mass assignment
+        // (create()/updateOrCreate()/fill()) MEMBUANG key apa pun yang gak
+        // ada di $fillable SEBELUM mutator setRoleAttribute() sempat jalan.
+        // Tanpa baris ini, User::create(['role' => 'admin']) diam-diam
+        // gagal set role_id (jadi null -> NOT NULL constraint violation) --
+        // dipakai di KaryawanImport, InventoryBuktiImport, AuthController,
+        // DummySeeder, dan UserFactory.
+        'role',
         // BARU: cuma dipakai buat akun role 'cabang', nunjuk ke lokasi_kantor
         // mana yang dia urus. Null buat role lain.
         'lokasi_kantor_id',

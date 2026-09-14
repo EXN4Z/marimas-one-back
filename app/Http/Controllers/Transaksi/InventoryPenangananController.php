@@ -153,6 +153,7 @@ class InventoryPenangananController extends Controller
             $penanganan = InventoryPenanganan::create([
                 'inventory_id' => $validated['inventory_id'],
                 'inventory_pemakai_id' => $pemakai->id ?? null,
+                'dilaporkan_oleh_user_id' => $request->user()->id,
                 'jenis_kerusakan' => $validated['jenis_kerusakan'],
                 'keluhan' => $validated['keluhan'],
                 'foto' => $fotoPath,
@@ -170,14 +171,18 @@ class InventoryPenangananController extends Controller
             return $penanganan;
         });
 
-        // notif ke manajer/hr/admin tiap ada laporan kerusakan masuk
-        // (database + broadcast + web push, biar kekirim walau admin lagi
-        // di luar device) try-catch: laporan yang SUDAH tersimpan di atas
-        // jangan ikut gagal kalau notif error.
+        // notif ke manajer/hr/admin tiap ada laporan kerusakan masuk --
+        // SEMUA (termasuk pelapor sendiri kalau dia manajer/hr/admin) tetap
+        // dapet baris di daftar notif (channel 'database'), tapi pelapor
+        // gak dapet alert real-time (broadcast/web push) buat laporannya
+        // sendiri -- lihat AsetKerusakanDilaporkan::via().
+        // try-catch: laporan yang SUDAH tersimpan di atas jangan ikut gagal
+        // kalau notif error.
         try {
             Notification::send(
-                User::whereHas('roleRef', fn ($q) => $q->whereIn('nama', ['manajer', 'hr', 'admin']))->get(),
-                new AsetKerusakanDilaporkan($penanganan->load(['inventory', 'pemakai.user']))
+                User::whereHas('roleRef', fn ($q) => $q->whereIn('nama', ['manajer', 'hr', 'admin']))
+                    ->get(),
+                new AsetKerusakanDilaporkan($penanganan->load(['inventory', 'pemakai.user']), $user->name)
             );
         } catch (\Throwable $e) {
             Log::error('Gagal mengirim notifikasi laporan kerusakan inventory', [
@@ -320,7 +325,10 @@ class InventoryPenangananController extends Controller
         // (baik diperbaiki maupun rusak_berat -- keduanya "selesai ditangani")
         if (($validated['tanggal_selesai'] ?? null) && !$sudahSelesaiSebelumnya) {
             try {
-                $pelapor = $inventoryPenanganan->pemakai?->user;
+                // pelapor asli (dilaporkan_oleh_user_id) adalah sumber
+                // kebenaran; fallback ke pemakai->user cuma buat baris lama
+                // yang dibuat sebelum kolom ini ada.
+                $pelapor = $inventoryPenanganan->dilaporkanOleh ?? $inventoryPenanganan->pemakai?->user;
 
                 if ($pelapor) {
                     $pelapor->notify(new AsetKerusakanSelesai(
