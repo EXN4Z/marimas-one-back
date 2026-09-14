@@ -6,8 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 use App\Models\User;
 
 // Data referensi role (Master Data > Role) -- `nama` dipakai buat
-// mencocokkan users.role (plain string, bukan foreign key), `level`
-// dipakai User::hasRoleAtLeast()/roleLevel() buat hak akses lintas role.
+// mencocokkan users.role_id (FK asli), dan buat cek akses lewat
+// User::isAdmin() (nama === 'admin'). REVISI: `label` & `level` dihapus
+// -- hak akses sekarang cuma 2 tingkat (admin vs role lain yang semuanya
+// setara), jadi level gak berarti apa-apa lagi, dan label gak pernah
+// dipakai di UI (Master Data Role cuma nampilin `nama`).
 // Lihat catatan lengkap di app/Models/User.php.
 class Role extends Model
 {
@@ -15,16 +18,7 @@ class Role extends Model
 
     protected $fillable = [
         'nama',
-        'label',
-        'level',
     ];
-
-    protected function casts(): array
-    {
-        return [
-            'level' => 'integer',
-        ];
-    }
 
     // Jumlah user yang lagi pakai role ini -- dipakai buat cegah hapus/
     // ganti nama role yang masih terpakai (lihat RoleController::destroy()).

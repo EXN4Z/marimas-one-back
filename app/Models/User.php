@@ -9,7 +9,6 @@ use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 use NotificationChannels\WebPush\HasPushSubscriptions;
 use App\Models\MasterData\Departemen;
-use Illuminate\Support\Facades\Cache;
 use App\Models\MasterData\Role;
 
 class User extends Authenticatable
@@ -86,38 +85,14 @@ class User extends Authenticatable
         $this->attributes['role_id'] = $role->id;
     }
     
-    // Level tiap role sekarang diambil dari tabel `roles` (Master Data >
-    // Role), BUKAN array hardcode lagi -- jadi role baru yang dibikin admin
-    // lewat UI langsung punya level yang beneran berlaku buat middleware
-    // 'role:...' tanpa perlu redeploy kode. Di-cache forever (key
-    // 'role_levels_map') karena datanya jarang berubah dan dibaca di
-    // hampir tiap request; cache-nya di-invalidate manual lewat
-    // clearRoleLevelCache() tiap kali ada create/update/delete/import role
-    // (lihat RoleController & RoleImport).
-    //
-    // Kalau nama role gak ketemu di tabel roles (misal data lama/rusak),
-    // fallback ke level 0 (paling rendah) -- fail-safe ke arah lebih
-    // ketat, bukan lebih longgar.
-    public function hasRoleAtLeast(string $role): bool
+    // REVISI (hapus level & label): hak akses sekarang cuma 2 tingkat --
+    // 'admin' (akses semua) vs role lain (semuanya setara, gak ada lagi
+    // hierarki level antar role kayak 'karyawan'/'manajer'/'hr'/'cabang').
+    // Dipakai di controller yang dulu pakai hasRoleAtLeast('admin'), dan
+    // di App\Http\Middleware\EnsureUserIsMember buat cek route 'role:...'.
+    public function isAdmin(): bool
     {
-        return self::roleLevel($this->role) >= self::roleLevel($role);
-    }
-
-    public static function roleLevel(string $role): int
-    {
-        return self::roleLevelsMap()[$role] ?? 0;
-    }
-
-    protected static function roleLevelsMap(): array
-    {
-        return Cache::rememberForever('role_levels_map', function () {
-            return Role::pluck('level', 'nama')->all();
-        });
-    }
-
-    public static function clearRoleLevelCache(): void
-    {
-        Cache::forget('role_levels_map');
+        return $this->role === 'admin';
     }
 
     // BARU: generate password default dari nama depan (kata pertama di

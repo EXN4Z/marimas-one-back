@@ -18,8 +18,17 @@ use Illuminate\Support\Facades\Schema;
  * sini sejak awal, gak pernah lewat kolom enum/varchar `role` sama
  * sekali.
  *
- * `nama` dipakai App\Models\User::roleLevel()/hasRoleAtLeast() buat
- * nentuin hak akses lintas role -- lihat catatan lengkap di User.php.
+ * REVISI (hapus level & label): dulu tabel ini punya kolom `label`
+ * (nama tampilan) & `level` (dipakai App\Models\User::roleLevel()/
+ * hasRoleAtLeast() buat hierarki akses lintas role). Sekarang hak akses
+ * disederhanakan jadi cuma 2 tingkat: 'admin' (akses semua) vs role lain
+ * (semuanya setara persis kayak 'karyawan', lihat
+ * App\Http\Middleware\EnsureUserIsMember) -- jadi `level` gak lagi
+ * berarti apa-apa, dan `label` gak pernah dipakai di UI (Master Data
+ * Role cuma nampilin `nama`). Kedua kolom dihapus dari sini.
+ *
+ * `nama` dipakai App\Models\User::isAdmin() (cek `nama === 'admin'`)
+ * buat nentuin hak akses -- lihat catatan lengkap di User.php.
  */
 return new class extends Migration
 {
@@ -28,26 +37,17 @@ return new class extends Migration
         Schema::create('roles', function (Blueprint $table) {
             $table->id();
             $table->string('nama', 50)->unique();
-            $table->string('label', 100)->nullable();
-            $table->unsignedTinyInteger('level')->default(1);
             $table->timestamps();
         });
 
-        // Level disamain persis App\Models\User (dulu $roleLevels hardcode,
-        // sekarang murni data tabel ini).
-        $defaults = [
-            ['nama' => 'guest', 'label' => 'Guest', 'level' => 0],
-            ['nama' => 'karyawan', 'label' => 'Karyawan', 'level' => 1],
-            ['nama' => 'cabang', 'label' => 'Cabang', 'level' => 1],
-            ['nama' => 'manajer', 'label' => 'Manajer', 'level' => 1],
-            ['nama' => 'hr', 'label' => 'HR', 'level' => 1],
-            ['nama' => 'admin', 'label' => 'Admin', 'level' => 5],
-        ];
+        $defaults = ['guest', 'karyawan', 'cabang', 'manajer', 'hr', 'admin'];
 
-        foreach ($defaults as $role) {
-            DB::table('roles')->insert(
-                array_merge($role, ['created_at' => now(), 'updated_at' => now()])
-            );
+        foreach ($defaults as $nama) {
+            DB::table('roles')->insert([
+                'nama'       => $nama,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
         }
     }
 

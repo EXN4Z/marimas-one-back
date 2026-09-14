@@ -2,8 +2,7 @@
 
 namespace App\Imports;
 
-use App\Models\Role;
-use App\Models\User;
+use App\Models\MasterData\Role;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
 
@@ -14,12 +13,17 @@ use Maatwebsite\Excel\Concerns\ToCollection;
  *
  * Format kolom yang diharapkan (baris pertama = header, nama kolom bebas
  * huruf besar/kecil & spasi, dinormalisasi otomatis ke snake_case):
- *   Nama | Label | Level
+ *   Nama
+ *
+ * REVISI (hapus level & label): dulu ada juga kolom Label & Level, tapi
+ * keduanya sudah dihapus dari tabel roles -- hak akses sekarang cuma 2
+ * tingkat (admin vs role lain yang setara), jadi gak ada lagi yang perlu
+ * diisi selain nama.
  *
  * Setiap baris dicocokkan ke `nama` (unique, ini yang HARUS sama persis
- * dengan nilai kolom users.role). Kalau role dengan nama itu SUDAH ada,
- * datanya di-UPDATE (kolom yang dikosongkan di Excel TIDAK menimpa data
- * lama). Kalau belum ada, dibuatkan baris baru.
+ * dengan role yang dipakai users.role_id). Kalau role dengan nama itu
+ * SUDAH ada, dilewati (gak ada apa-apa lagi yang bisa diupdate). Kalau
+ * belum ada, dibuatkan baris baru.
  */
 class RoleImport implements ToCollection
 {
@@ -64,37 +68,19 @@ class RoleImport implements ToCollection
                 continue;
             }
 
-            $label = trim((string) ($row['label'] ?? ''));
-            $levelRaw = trim((string) ($row['level'] ?? ''));
-
-            if ($levelRaw !== '' && !is_numeric($levelRaw)) {
-                $this->errors[] = 'Baris data ke-' . ($index + 1) . ' ("' . $nama . '"): kolom Level harus angka.';
-                continue;
-            }
-
             try {
                 $role = Role::where('nama', $nama)->first();
 
                 if ($role) {
-                    $role->update([
-                        'label' => $label !== '' ? $label : $role->label,
-                        'level' => $levelRaw !== '' ? (int) $levelRaw : $role->level,
-                    ]);
                     $this->updatedCount++;
                 } else {
-                    Role::create([
-                        'nama'  => $nama,
-                        'label' => $label !== '' ? $label : ucfirst($nama),
-                        'level' => $levelRaw !== '' ? (int) $levelRaw : 1,
-                    ]);
+                    Role::create(['nama' => $nama]);
                     $this->createdCount++;
                 }
             } catch (\Exception $e) {
                 $this->errors[] = 'Baris data ke-' . ($index + 1) . ' ("' . $nama . '"): ' . $e->getMessage();
             }
         }
-
-        User::clearRoleLevelCache();
     }
 
     private function adalahBarisFooter(array $rowArray): bool

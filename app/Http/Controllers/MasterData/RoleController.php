@@ -5,7 +5,6 @@ namespace App\Http\Controllers\MasterData;
 use App\Http\Controllers\Controller;
 use App\Imports\RoleImport;
 use App\Models\MasterData\Role;
-use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
@@ -16,13 +15,10 @@ class RoleController extends Controller
     // paginated (default 10/halaman, bisa dicari lewat ?search=).
     public function index(Request $request)
     {
-        $query = Role::withCount('users')->orderBy('level', 'desc')->orderBy('nama');
+        $query = Role::withCount('users')->orderBy('nama');
 
         if ($request->filled('search')) {
-            $query->where(function ($q) use ($request) {
-                $q->where('nama', 'like', '%' . $request->search . '%')
-                  ->orWhere('label', 'like', '%' . $request->search . '%');
-            });
+            $query->where('nama', 'like', '%' . $request->search . '%');
         }
 
         $perPage = max(1, (int) $request->get('per_page', 10));
@@ -35,21 +31,16 @@ class RoleController extends Controller
     {
         $validated = $request->validate([
             'nama' => 'required|string|max:50|alpha_dash|unique:roles,nama',
-            'label' => 'nullable|string|max:100',
-            'level' => 'required|integer|min:0|max:255',
         ], [
             'nama.required' => 'Kolom nama wajib diisi.',
             'nama.alpha_dash' => 'Nama role cuma boleh huruf, angka, strip, dan underscore (tanpa spasi) -- ini yang bakal dipakai di kolom role user.',
             'nama.unique' => 'Role dengan nama ini sudah ada.',
-            'level.required' => 'Kolom level wajib diisi.',
-            'level.integer' => 'Level harus berupa angka.',
         ]);
 
         $validated['nama'] = strtolower($validated['nama']);
 
         $role = Role::create($validated);
         $role->loadCount('users');
-        User::clearRoleLevelCache();
 
         return response()->json($role, 201);
     }
@@ -61,13 +52,10 @@ class RoleController extends Controller
 
         $validated = $request->validate([
             'nama' => 'sometimes|required|string|max:50|alpha_dash|unique:roles,nama,' . $role->id,
-            'label' => 'nullable|string|max:100',
-            'level' => 'sometimes|required|integer|min:0|max:255',
         ], [
             'nama.required' => 'Kolom nama wajib diisi.',
             'nama.alpha_dash' => 'Nama role cuma boleh huruf, angka, strip, dan underscore (tanpa spasi) -- ini yang bakal dipakai di kolom role user.',
             'nama.unique' => 'Role dengan nama ini sudah ada.',
-            'level.integer' => 'Level harus berupa angka.',
         ]);
 
         // Ganti nama role yang masih dipakai user bikin user itu jadi
@@ -87,7 +75,6 @@ class RoleController extends Controller
 
         $role->update($validated);
         $role->loadCount('users');
-        User::clearRoleLevelCache();
 
         return response()->json($role);
     }
@@ -104,15 +91,14 @@ class RoleController extends Controller
         }
 
         $role->delete();
-        User::clearRoleLevelCache();
 
         return response()->json(['message' => 'Role berhasil dihapus.']);
     }
 
     /**
      * POST /api/role/import -- import massal data Role dari file Excel
-     * (.xlsx/.xls). Format kolom: Nama | Label | Level. Baris dengan nama
-     * yang sudah ada di-UPDATE (bukan dilewati) -- lihat RoleImport.
+     * (.xlsx/.xls). Format kolom: Nama. Baris dengan nama yang sudah ada
+     * dilewati (sudah ada) -- lihat RoleImport.
      */
     public function import(Request $request)
     {
@@ -134,7 +120,6 @@ class RoleController extends Controller
             }
 
             DB::commit();
-            User::clearRoleLevelCache();
             return response()->json([
                 'success' => true,
                 'message' => "Berhasil import {$import->getCreatedCount()} role baru"
