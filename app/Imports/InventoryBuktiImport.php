@@ -243,7 +243,7 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                                     'name'          => $namaPenerima,
                                     'email'         => 'nik' . $nikPenerima . '@placeholder.local',
                                     'password'      => explode(' ', trim($namaPenerima))[0],
-                                    'role'          => 'karyawan',
+                                    'role'          => 'user',
                                     'nik'           => $nikPenerima,
                                     'departemen_id' => $departemenId,
                                 ]);

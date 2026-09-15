@@ -96,7 +96,12 @@ class KaryawanImport implements ToCollection
                             'phone'         => $row['phone'] ?? null,
                             'departemen_id' => $departemenId,
                             'tanggal_masuk' => $this->parseTanggal($row['tanggal_masuk'] ?? null),
-                            'role' => strtolower(trim($row['role'] ?? '')) ?: 'karyawan',
+                            // Cuma 'admin' yang dikenali dari kolom Excel -- value lain
+                            // (termasuk role lama kayak hr/manajer/karyawan/guest dari
+                            // file lama, atau kolom kosong) jatuh ke 'user', biar import
+                            // gak gagal gara-gara role_id gak ketemu (lihat
+                            // User::setRoleAttribute()).
+                            'role' => strtolower(trim($row['role'] ?? '')) === 'admin' ? 'admin' : 'user',
                             ...($userLama ? [] : ['password' => $passwordPlain]),
                         ]
                     );

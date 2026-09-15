@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Schema;
  * di-convert ke users.role_id FK lewat migration terpisah lagi
  * (convert_users_role_to_role_id). Karena fresh install gak punya data
  * lama yang perlu di-backfill, tabel ini sekarang dipindah ke URUTAN
- * PALING AWAL (sebelum `users`) dan langsung diisi 6 role default di
+ * PALING AWAL (sebelum `users`) dan langsung diisi role default di
  * sini juga -- `users` (lihat migration berikutnya) langsung FK ke
  * sini sejak awal, gak pernah lewat kolom enum/varchar `role` sama
  * sekali.
@@ -40,7 +40,15 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        $defaults = ['guest', 'karyawan', 'cabang', 'manajer', 'hr', 'admin'];
+        // REVISI (simplify_roles_table): dulu 6 role default (guest,
+        // karyawan, cabang, manajer, hr, admin), disederhanain jadi cuma 3
+        // -- 'karyawan'/'manajer'/'hr'/'guest' digabung jadi 'user' (gak
+        // pernah beda akses sama sekali, lihat catatan REVISI di atas).
+        // 'cabang' sengaja dibiarin, belum digarap (lihat migration
+        // 2026_09_15_000000_simplify_roles_table). Instance yang udah
+        // ke-migrate dengan 6 role lama otomatis ke-merge lewat migration
+        // itu, gak perlu backfill manual di sini.
+        $defaults = ['user', 'cabang', 'admin'];
 
         foreach ($defaults as $nama) {
             DB::table('roles')->insert([
