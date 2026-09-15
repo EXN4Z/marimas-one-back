@@ -13,7 +13,6 @@ use App\Http\Controllers\Karyawan\AdminUserController;
 use App\Http\Controllers\MasterData\SupplierController;
 use App\Http\Controllers\MasterData\InventoryController;
 use App\Http\Controllers\MasterData\KategoriController;
-use App\Http\Controllers\MasterData\RoleController;
 use App\Http\Controllers\Transaksi\InventoryPemakaiController;
 use App\Http\Controllers\Transaksi\InventoryPenangananController;
 use App\Http\Controllers\Organisasi\CabangController;
@@ -40,11 +39,6 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     // route PUT/DELETE apiResource (sama pola dengan supplier/import).
     Route::post('/perusahaan/import', [PerusahaanController::class, 'import']);
     Route::apiResource('perusahaan', PerusahaanController::class);
-    // BARU: menu "Role" di Master Data -- admin-only, sama pola. Cuma
-    // index/store/update/destroy/import (gak ada 'show', dipilih via
-    // modal edit dari list yang udah dimuat, sama kayak Cabang/Perusahaan).
-    Route::post('/role/import', [RoleController::class, 'import']);
-    Route::apiResource('role', RoleController::class)->except(['show']);
 });
 
 Route::middleware(['auth:sanctum'])->group(function () {
@@ -64,7 +58,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
 });
 Route::middleware(['auth:sanctum', 'role:admin'])->post('/admin/users/{id}/set-password', [AdminUserController::class, 'setPassword']);
 
-Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
+// REVISI (simplify_roles_table): dulu 'role:user,admin' -- karena
+// EnsureUserIsMember sekarang cuma cek admin-only vs bukan (lihat
+// catatan di middleware itu), daftar itu udah lama efeknya sama persis
+// kayak auth:sanctum polos (semua yang login lolos). Disederhanain di
+// sini biar teksnya gak menyesatkan (kelihatannya whitelist, padahal
+// bukan lagi).
+Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/inventory-penanganan', [InventoryPenangananController::class, 'store']); // lapor kerusakan barang -- berlaku buat semua item, apapun kategori/posisinya
 
     Route::prefix('dashboard')->group(function () {
@@ -126,7 +126,10 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/inventory/foto', [InventoryController::class, 'foto']);
 });
 
-Route::middleware(['auth:sanctum', 'role:karyawan,manajer,hr,admin'])->group(function () {
+// REVISI (simplify_roles_table): sama seperti grup di atas -- 'role:user,admin'
+// udah lama efeknya identik dengan auth:sanctum polos (lihat catatan di
+// EnsureUserIsMember), disederhanain biar teksnya gak menyesatkan.
+Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/inventory', [InventoryController::class, 'index']);
     Route::get('/inventory/{inventory}', [InventoryController::class, 'show']);
     Route::get('/supplier', [SupplierController::class, 'index']);

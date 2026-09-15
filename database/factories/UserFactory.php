@@ -33,7 +33,7 @@ class UserFactory extends Factory
             // Eksplisit, bukan ngandelin DEFAULT di level database --
             // lewat mutator setRoleAttribute() di User::class, jadi tetap
             // ke-resolve ke role_id yang benar.
-            'role' => 'karyawan',
+            'role' => 'user',
         ];
     }
 

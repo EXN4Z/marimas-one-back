@@ -243,7 +243,7 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                                     'name'          => $namaPenerima,
                                     'email'         => 'nik' . $nikPenerima . '@placeholder.local',
                                     'password'      => explode(' ', trim($namaPenerima))[0],
-                                    'role'          => 'karyawan',
+                                    'role'          => 'user',
                                     'nik'           => $nikPenerima,
                                     'departemen_id' => $departemenId,
                                 ]);
@@ -553,7 +553,8 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
 
     private function perusahaanIdDariSingkatan(?string $singkatan, int $nomorBaris): ?int
     {
-        $singkatanTrim = strtoupper(trim((string) $singkatan));
+        $nilaiAsli = trim((string) $singkatan);
+        $singkatanTrim = strtoupper($nilaiAsli);
 
         if ($singkatanTrim === '' || $this->namaBarangKosong($singkatanTrim)) {
             return null;
@@ -565,7 +566,21 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
 
         $namaLengkap = self::PETA_PERUSAHAAN_SINGKATAN[$singkatanTrim] ?? null;
 
+        // Kolom "Perusahaan" bisa berisi SINGKATAN (format Bukti Serah
+        // Terima, mis. "MPK") ATAU NAMA LENGKAP (format flat/"Data
+        // Inventory" -- kolom Perusahaan di export-nya nulis
+        // `perusahaan.nama` apa adanya, mis. "PT. Marimas Putera Kencana",
+        // BUKAN singkatan). Kalau gak ketemu di peta singkatan, coba
+        // cocokkan langsung sebagai nama lengkap (case-insensitive) dulu
+        // sebelum dianggap "tidak dikenali" -- biar hasil export flat bisa
+        // diimport balik tanpa perusahaan_id kosong.
         if ($namaLengkap === null) {
+            $id = \App\Models\Perusahaan::whereRaw('LOWER(nama) = ?', [strtolower($nilaiAsli)])->first()?->id;
+
+            if ($id !== null) {
+                return $this->perusahaanIdCache[$singkatanTrim] = $id;
+            }
+
             $this->errors[] = 'Baris data ke-' . $nomorBaris . ': singkatan perusahaan "' . $singkatan . '" tidak dikenali, perusahaan_id dikosongkan.';
             return $this->perusahaanIdCache[$singkatanTrim] = null;
         }

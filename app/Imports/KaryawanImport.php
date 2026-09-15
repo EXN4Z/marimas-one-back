@@ -21,17 +21,17 @@ class KaryawanImport implements ToCollection
     private const NILAI_PLACEHOLDER_TANGGAL_KOSONG = ['-', '--', '---', 'n/a', 'na', '.', 'kosong'];
 
     private const BULAN_INDONESIA_KE_INGGRIS = [
-    'september' => 'September', 'november' => 'November', 'desember' => 'December',
-    'januari' => 'January', 'februari' => 'February', 'agustus' => 'August',
-    'oktober' => 'October',
-    'maret' => 'March', 'april' => 'April',
-    'juli' => 'July', 'juni' => 'June',
-    'agt' => 'August', 'agu' => 'August', 'okt' => 'October', 'des' => 'December',
-    'jan' => 'January', 'feb' => 'February', 'mar' => 'March', 'apr' => 'April',
-    'jun' => 'June', 'jul' => 'July', 'sep' => 'September', 'sept' => 'September',
-    'nov' => 'November', 'oct' => 'October', 'dec' => 'December', 'aug' => 'August',
-    'mei' => 'May',
-];
+        'september' => 'September', 'november' => 'November', 'desember' => 'December',
+        'januari' => 'January', 'februari' => 'February', 'agustus' => 'August',
+        'oktober' => 'October',
+        'maret' => 'March', 'april' => 'April',
+        'juli' => 'July', 'juni' => 'June',
+        'agt' => 'August', 'agu' => 'August', 'okt' => 'October', 'des' => 'December',
+        'jan' => 'January', 'feb' => 'February', 'mar' => 'March', 'apr' => 'April',
+        'jun' => 'June', 'jul' => 'July', 'sep' => 'September', 'sept' => 'September',
+        'nov' => 'November', 'oct' => 'October', 'dec' => 'December', 'aug' => 'August',
+        'mei' => 'May',
+    ];
 
     public function collection(Collection $rows)
     {
@@ -84,39 +84,34 @@ class KaryawanImport implements ToCollection
                         $departemenId = Departemen::firstOrCreate(['nama' => $namaDepartemen])->id;
                     }
 
-                    $userLamaByNik = User::where('nik', $nik)->exists();
-                    $userLamaByEmail = User::where('email', $email)->exists();
-
-                    if ($userLamaByNik) {
+                    // Cek duplikat: kalau NIK ATAU email sudah ada di database,
+                    // baris ini di-skip (tidak dibuat, tidak diupdate).
+                    if (User::where('nik', $nik)->exists()) {
                         $this->errors[] = "Baris ke-{$index}: NIK {$nik} sudah terdaftar, dilewati.";
                         return;
                     }
 
-                    if ($userLamaByEmail) {
+                    if (User::where('email', $email)->exists()) {
                         $this->errors[] = "Baris ke-{$index}: Email {$email} sudah dipakai user lain, dilewati.";
                         return;
                     }
 
                     $passwordPlain = explode(' ', trim((string) ($row['nama'] ?? '')))[0];
 
-                    try {
-                        $user = User::create([
-                            'nik'           => $nik,
-                            'name'          => $row['nama'] ?? null,
-                            'email'         => $email,
-                            'phone'         => $row['phone'] ?? null,
-                            'departemen_id' => $departemenId,
-                            'tanggal_masuk' => $this->parseTanggal($row['tanggal_masuk'] ?? null),
-                            'role'          => strtolower(trim($row['role'] ?? '')) ?: 'karyawan',
-                            'password'      => $passwordPlain,
-                        ]);
-                    } catch (\Illuminate\Database\QueryException $e) {
-                        if ($e->getCode() === '23505') {
-                            $this->errors[] = "Baris ke-{$index}: NIK/Email duplikat saat insert (race/data tersembunyi), dilewati.";
-                            return;
-                        }
-                        throw $e; // error lain tetap dilempar biar ketangkep di catch luar
-                    }
+                    // Cuma 'admin' yang dikenali dari kolom Excel -- value lain
+                    // (termasuk role lama kayak hr/manajer/karyawan/guest dari
+                    // file lama, atau kolom kosong) jatuh ke 'user', biar import
+                    // gak gagal gara-gara role_id gak ketemu.
+                    $user = User::create([
+                        'nik'           => $nik,
+                        'name'          => $row['nama'] ?? null,
+                        'email'         => $email,
+                        'phone'         => $row['phone'] ?? null,
+                        'departemen_id' => $departemenId,
+                        'tanggal_masuk' => $this->parseTanggal($row['tanggal_masuk'] ?? null),
+                        'role'          => strtolower(trim($row['role'] ?? '')) === 'admin' ? 'admin' : 'user',
+                        'password'      => $passwordPlain,
+                    ]);
 
                     DB::afterCommit(function () use ($user, $passwordPlain) {
                         $user->notify(new PasswordAkunBaru($passwordPlain));

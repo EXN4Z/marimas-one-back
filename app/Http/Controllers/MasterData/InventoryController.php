@@ -603,12 +603,14 @@ class InventoryController extends Controller
         $this->lepasKelengkapanDariPemakaianAktif($inventory, 'Dikembalikan otomatis — kelengkapan dilepas dari induk oleh admin.');
     });
 
-        // notif ke manajer/hr/admin, exclude admin yang ngelakuin aksi ini
-        // sendiri. try-catch: aksi lepas yang SUDAH tersimpan di atas jangan
-        // ikut gagal kalau notif error.
+        // notif ke admin, exclude admin yang ngelakuin aksi ini sendiri --
+        // dulu manajer/hr juga ikut dinotif, tapi role itu udah dihapus
+        // (lihat migration simplify_roles_table), disederhanain jadi
+        // admin-only. try-catch: aksi lepas yang SUDAH tersimpan di atas
+        // jangan ikut gagal kalau notif error.
         try {
             Notification::send(
-                User::whereHas('roleRef', fn ($q) => $q->whereIn('nama', ['manajer', 'hr', 'admin']))
+                User::whereHas('roleRef', fn ($q) => $q->where('nama', 'admin'))
                     ->where('id', '!=', auth()->id())
                     ->get(),
                 new KelengkapanDilepasDariInduk(

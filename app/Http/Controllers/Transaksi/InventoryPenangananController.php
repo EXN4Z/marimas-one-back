@@ -171,16 +171,18 @@ class InventoryPenangananController extends Controller
             return $penanganan;
         });
 
-        // notif ke manajer/hr/admin tiap ada laporan kerusakan masuk --
-        // SEMUA (termasuk pelapor sendiri kalau dia manajer/hr/admin) tetap
-        // dapet baris di daftar notif (channel 'database'), tapi pelapor
-        // gak dapet alert real-time (broadcast/web push) buat laporannya
-        // sendiri -- lihat AsetKerusakanDilaporkan::via().
+        // notif ke admin tiap ada laporan kerusakan masuk -- dulu manajer/hr
+        // juga ikut dinotif, tapi role itu udah dihapus (lihat migration
+        // simplify_roles_table), disederhanain jadi admin-only. SEMUA admin
+        // (termasuk pelapor sendiri kalau dia admin) tetap dapet baris di
+        // daftar notif (channel 'database'), tapi pelapor gak dapet alert
+        // real-time (broadcast/web push) buat laporannya sendiri -- lihat
+        // AsetKerusakanDilaporkan::via().
         // try-catch: laporan yang SUDAH tersimpan di atas jangan ikut gagal
         // kalau notif error.
         try {
             Notification::send(
-                User::whereHas('roleRef', fn ($q) => $q->whereIn('nama', ['manajer', 'hr', 'admin']))
+                User::whereHas('roleRef', fn ($q) => $q->where('nama', 'admin'))
                     ->get(),
                 new AsetKerusakanDilaporkan($penanganan->load(['inventory', 'pemakai.user']), $user->name)
             );

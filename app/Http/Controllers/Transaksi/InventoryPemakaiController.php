@@ -399,7 +399,7 @@ class InventoryPemakaiController extends Controller
         $isPemilikPemakaian = $inventoryPemakai->user_id === $user->id;
 
         abort_unless(
-            $user->hasRoleAtLeast('admin') || $isPemilikPemakaian,
+            $user->isAdmin() || $isPemilikPemakaian,
             403,
             'Kamu tidak punya akses untuk mengembalikan item ini.'
         );

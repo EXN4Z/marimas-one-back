@@ -71,7 +71,7 @@ class AuthController extends Controller
             'email' => $data['email'],
             'phone' => $data['phone'],
             'password' => $data['password'],
-            'role' => 'karyawan',
+            'role' => 'user',
             'phone_verified_at' => now(),
         ]);
 
