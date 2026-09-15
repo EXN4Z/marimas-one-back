@@ -7,7 +7,6 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Auth;
 
 class UserController extends Controller
 {
@@ -17,15 +16,10 @@ class UserController extends Controller
         // bisa nampilin nama/warna role tanpa request tambahan.
         $query = User::with('departemen', 'lokasiKantor', 'roleRef');
 
-        // BARU: cek role akun cabang sekarang lewat relasi roleRef->nama,
-        // bukan $user->role lagi (kolom itu sudah nggak ada -- dulu diam-diam
-        // selalu null & bikin kondisi ini nggak pernah kepakai).
-        $user = Auth::user();
-        if ($user && $user->roleRef?->nama === 'cabang' && $user->lokasi_kantor_id) {
-            $query->where('lokasi_kantor_id', $user->lokasi_kantor_id)
-                  ->whereHas('roleRef', fn ($q) => $q->where('nama', '!=', 'cabang'));
-        }
-
+        // Role 'cabang' sekarang diperlakukan identik dengan 'user' --
+        // gak ada lagi scoping/filter khusus berdasarkan lokasi_kantor_id
+        // akun yang login (lihat catatan di User::isAdmin() -- akses cuma
+        // 2 tingkat: admin vs role lain, semuanya setara).
         if ($request->filled('role') && $request->role !== 'all') {
             $query->whereHas('roleRef', fn ($q) => $q->where('nama', $request->role));
         }
@@ -69,11 +63,11 @@ class UserController extends Controller
 
         $isCabang = $validated['role'] === 'cabang';
 
-        // BARU: validasi kondisional (nik wajib kecuali cabang, lokasi_kantor_id
-        // wajib kalau cabang) sekarang dicek manual di sini -- dulu bisa pakai
-        // required_unless:role,cabang / required_if:role,cabang karena field-nya
-        // masih 'role' (nama string), tapi sekarang field yang dikirim 'role_id'
-        // (angka), jadi rule itu nggak bisa lagi bandingin ke literal 'cabang'.
+        // Cabang: gak pakai NIK, gak milih Departemen -- tapi WAJIB milih
+        // Lokasi Kantor (nunjuk cabang itu ngarah ke lokasi mana). Role lain
+        // (admin/user): NIK wajib, Departemen & Lokasi Kantor opsional.
+        // Ini soal FIELD FORM doang -- beda dari scoping akses (yang sudah
+        // dihapus terpisah, lihat catatan di index()/DashboardController).
         if (!$isCabang && empty($validated['nik'])) {
             return response()->json([
                 'message' => 'The given data was invalid.',
@@ -83,7 +77,7 @@ class UserController extends Controller
         if ($isCabang && empty($validated['lokasi_kantor_id'])) {
             return response()->json([
                 'message' => 'The given data was invalid.',
-                'errors' => ['lokasi_kantor_id' => ['Cabang penempatan wajib dipilih.']],
+                'errors' => ['lokasi_kantor_id' => ['Lokasi kantor wajib dipilih untuk akun cabang.']],
             ], 422);
         }
         if (!$isCabang && !empty($validated['nik'])) {
@@ -104,7 +98,7 @@ class UserController extends Controller
             'phone' => $validated['phone'] ?? null,
             'password' => Hash::make($validated['password']),
             'role' => $validated['role'], // REVISI: ganti balik ke nama role (mutator resolve ke role_id)
-            'lokasi_kantor_id' => $isCabang ? $validated['lokasi_kantor_id'] : ($validated['lokasi_kantor_id'] ?? null),
+            'lokasi_kantor_id' => $isCabang ? $validated['lokasi_kantor_id'] : null,
             'nik' => $isCabang ? null : $validated['nik'],
             'departemen_id' => $isCabang ? null : ($validated['departemen_id'] ?? null),
             'tanggal_masuk' => $isCabang ? null : ($validated['tanggal_masuk'] ?? null),
@@ -142,16 +136,18 @@ class UserController extends Controller
         if ($isCabang && empty($validated['lokasi_kantor_id'])) {
             return response()->json([
                 'message' => 'The given data was invalid.',
-                'errors' => ['lokasi_kantor_id' => ['Cabang penempatan wajib dipilih.']],
+                'errors' => ['lokasi_kantor_id' => ['Lokasi kantor wajib dipilih untuk akun cabang.']],
             ], 422);
         }
 
+        // Cabang: gak pakai NIK, gak milih Departemen -- tapi WAJIB punya
+        // Lokasi Kantor. Soal FIELD FORM doang, beda dari scoping akses.
         $user->update([
             'name' => $validated['name'],
             'email' => $validated['email'] ?? null,
             'phone' => $validated['phone'] ?? null,
             'role' => $validated['role'], // REVISI: ganti balik ke nama role (mutator resolve ke role_id)
-            'lokasi_kantor_id' => $isCabang ? $validated['lokasi_kantor_id'] : ($validated['lokasi_kantor_id'] ?? null),
+            'lokasi_kantor_id' => $isCabang ? $validated['lokasi_kantor_id'] : null,
             'nik' => $isCabang ? null : $validated['nik'],
             'departemen_id' => $isCabang ? null : ($validated['departemen_id'] ?? null),
             'tanggal_masuk' => $isCabang ? null : ($validated['tanggal_masuk'] ?? null),
