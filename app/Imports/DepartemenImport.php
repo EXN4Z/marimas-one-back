@@ -54,7 +54,7 @@ class DepartemenImport implements ToCollection
             }
 
             $row = array_combine($headers, array_pad($rowArray, count($headers), null));
-            $nama = trim((string) ($row['nama'] ?? ''));
+            $nama = trim((string) ($row['nama'] ?? $row['nama_departemen'] ?? $row['namadepartemen'] ?? ''));
 
             if ($nama === '') {
                 $this->errors[] = 'Baris data ke-' . ($index + 1) . ': kolom Nama kosong, dilewati.';
@@ -96,7 +96,11 @@ class DepartemenImport implements ToCollection
         for ($i = 0; $i < $batas; $i++) {
             $selDinormalisasi = $rows[$i]->map(fn ($v) => $this->normalisasiHeader((string) $v));
 
-            if ($selDinormalisasi->contains(self::KOLOM_PENANDA_HEADER)) {
+            $ketemu = $selDinormalisasi->contains(
+                fn ($h) => str_contains($h, self::KOLOM_PENANDA_HEADER)
+            );
+
+            if ($ketemu) {
                 return $i;
             }
         }

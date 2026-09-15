@@ -84,28 +84,43 @@ class KaryawanImport implements ToCollection
                         $departemenId = Departemen::firstOrCreate(['nama' => $namaDepartemen])->id;
                     }
 
-                    $userLama = User::where('nik', $nik)->first();
+                    $userLamaByNik = User::where('nik', $nik)->exists();
+                    $userLamaByEmail = User::where('email', $email)->exists();
+
+                    if ($userLamaByNik) {
+                        $this->errors[] = "Baris ke-{$index}: NIK {$nik} sudah terdaftar, dilewati.";
+                        return;
+                    }
+
+                    if ($userLamaByEmail) {
+                        $this->errors[] = "Baris ke-{$index}: Email {$email} sudah dipakai user lain, dilewati.";
+                        return;
+                    }
 
                     $passwordPlain = explode(' ', trim((string) ($row['nama'] ?? '')))[0];
 
-                    $user = User::updateOrCreate(
-                        ['nik' => $nik],
-                        [
+                    try {
+                        $user = User::create([
+                            'nik'           => $nik,
                             'name'          => $row['nama'] ?? null,
                             'email'         => $email,
                             'phone'         => $row['phone'] ?? null,
                             'departemen_id' => $departemenId,
                             'tanggal_masuk' => $this->parseTanggal($row['tanggal_masuk'] ?? null),
-                            'role' => strtolower(trim($row['role'] ?? '')) ?: 'karyawan',
-                            ...($userLama ? [] : ['password' => $passwordPlain]),
-                        ]
-                    );
-
-                    if (!$userLama) {
-                        DB::afterCommit(function () use ($user, $passwordPlain) {
-                            $user->notify(new PasswordAkunBaru($passwordPlain));
-                        });
+                            'role'          => strtolower(trim($row['role'] ?? '')) ?: 'karyawan',
+                            'password'      => $passwordPlain,
+                        ]);
+                    } catch (\Illuminate\Database\QueryException $e) {
+                        if ($e->getCode() === '23505') {
+                            $this->errors[] = "Baris ke-{$index}: NIK/Email duplikat saat insert (race/data tersembunyi), dilewati.";
+                            return;
+                        }
+                        throw $e; // error lain tetap dilempar biar ketangkep di catch luar
                     }
+
+                    DB::afterCommit(function () use ($user, $passwordPlain) {
+                        $user->notify(new PasswordAkunBaru($passwordPlain));
+                    });
 
                     $this->rowCount++;
                 });
