@@ -58,7 +58,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
 });
 Route::middleware(['auth:sanctum', 'role:admin'])->post('/admin/users/{id}/set-password', [AdminUserController::class, 'setPassword']);
 
-Route::middleware(['auth:sanctum', 'role:user,admin'])->group(function () {
+// REVISI (simplify_roles_table): dulu 'role:user,admin' -- karena
+// EnsureUserIsMember sekarang cuma cek admin-only vs bukan (lihat
+// catatan di middleware itu), daftar itu udah lama efeknya sama persis
+// kayak auth:sanctum polos (semua yang login lolos). Disederhanain di
+// sini biar teksnya gak menyesatkan (kelihatannya whitelist, padahal
+// bukan lagi).
+Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/inventory-penanganan', [InventoryPenangananController::class, 'store']); // lapor kerusakan barang -- berlaku buat semua item, apapun kategori/posisinya
 
     Route::prefix('dashboard')->group(function () {
@@ -120,7 +126,10 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/inventory/foto', [InventoryController::class, 'foto']);
 });
 
-Route::middleware(['auth:sanctum', 'role:user,admin'])->group(function () {
+// REVISI (simplify_roles_table): sama seperti grup di atas -- 'role:user,admin'
+// udah lama efeknya identik dengan auth:sanctum polos (lihat catatan di
+// EnsureUserIsMember), disederhanain biar teksnya gak menyesatkan.
+Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/inventory', [InventoryController::class, 'index']);
     Route::get('/inventory/{inventory}', [InventoryController::class, 'show']);
     Route::get('/supplier', [SupplierController::class, 'index']);
