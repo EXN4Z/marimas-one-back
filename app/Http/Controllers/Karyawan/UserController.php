@@ -54,14 +54,15 @@ class UserController extends Controller
             // lihat migration simplify_roles_table), jadi form gak perlu lagi
             // fetch daftar role dari API -- cukup kirim NAMA-nya langsung,
             // di-resolve ke role_id lewat User::setRoleAttribute().
-            'role' => 'required|string|in:admin,user,cabang',
+            'role_id' => 'required|integer|exists:roles,id',
             'nik' => 'nullable|string|unique:users,nik',
             'departemen_id' => 'nullable|exists:departemen,id',
             'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
             'tanggal_masuk' => 'nullable|date',
         ]);
 
-        $isCabang = $validated['role'] === 'cabang';
+        $role = \App\Models\MasterData\Role::findOrFail($validated['role_id']);
+        $isCabang = $role->nama === 'cabang';
 
         // Cabang: gak pakai NIK, gak milih Departemen -- tapi WAJIB milih
         // Lokasi Kantor (nunjuk cabang itu ngarah ke lokasi mana). Role lain
@@ -92,12 +93,12 @@ class UserController extends Controller
 
         $plainPassword = User::generatePasswordFromName($validated['name']);
 
-        $user = User::create([
+       $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'] ?? null,
             'phone' => $validated['phone'] ?? null,
             'password' => Hash::make($validated['password']),
-            'role' => $validated['role'], // REVISI: ganti balik ke nama role (mutator resolve ke role_id)
+            'role_id' => $validated['role_id'], // GANTI: langsung, bukan lewat mutator 'role'
             'lokasi_kantor_id' => $isCabang ? $validated['lokasi_kantor_id'] : null,
             'nik' => $isCabang ? null : $validated['nik'],
             'departemen_id' => $isCabang ? null : ($validated['departemen_id'] ?? null),
@@ -116,16 +117,15 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|unique:users,email,' . $user->id,
             'phone' => 'nullable|string|unique:users,phone,' . $user->id,
-            // REVISI: role sekarang cuma 3 pilihan tetap (admin/user/cabang),
-            // form kirim NAMA-nya langsung, sama seperti store().
-            'role' => 'required|string|in:admin,user,cabang',
+            'role_id' => 'required|integer|exists:roles,id', // GANTI
             'nik' => 'nullable|string|unique:users,nik,' . $user->id,
             'departemen_id' => 'nullable|exists:departemen,id',
             'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
             'tanggal_masuk' => 'nullable|date',
         ]);
 
-        $isCabang = $validated['role'] === 'cabang';
+        $role = \App\Models\MasterData\Role::findOrFail($validated['role_id']);
+        $isCabang = $role->nama === 'cabang';
 
         if (!$isCabang && empty($validated['nik'])) {
             return response()->json([
@@ -140,13 +140,11 @@ class UserController extends Controller
             ], 422);
         }
 
-        // Cabang: gak pakai NIK, gak milih Departemen -- tapi WAJIB punya
-        // Lokasi Kantor. Soal FIELD FORM doang, beda dari scoping akses.
         $user->update([
             'name' => $validated['name'],
             'email' => $validated['email'] ?? null,
             'phone' => $validated['phone'] ?? null,
-            'role' => $validated['role'], // REVISI: ganti balik ke nama role (mutator resolve ke role_id)
+            'role_id' => $validated['role_id'], // GANTI
             'lokasi_kantor_id' => $isCabang ? $validated['lokasi_kantor_id'] : null,
             'nik' => $isCabang ? null : $validated['nik'],
             'departemen_id' => $isCabang ? null : ($validated['departemen_id'] ?? null),

@@ -19,11 +19,13 @@ use App\Http\Controllers\Organisasi\CabangController;
 use App\Http\Controllers\Organisasi\PerusahaanController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\ImportController;
+use App\Http\Controllers\RoleController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
 Route::post('/resend-otp', [AuthController::class, 'resendOtp']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::get('/roles', [RoleController::class, 'index']);
 
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
 

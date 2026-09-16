@@ -44,4 +44,7 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
     ],
 
+    'cabang' => [
+        'default_password' => 'cabang@123',
+    ]
 ];
