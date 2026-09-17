@@ -198,10 +198,10 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                         return;
                     }
 
-                    $namaDepartemen = trim((string) ($row['departemen'] ?? ''));
+                    $namaDepartemen = $this->nilaiAtauNull($row['departemen'] ?? null);
                     $departemenId = null;
 
-                    if ($namaDepartemen !== '') {
+                    if ($namaDepartemen !== null) {
                         $departemenId = Departemen::firstOrCreate(['nama' => $namaDepartemen])->id;
                     }
 
@@ -217,10 +217,10 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                         'diketahui_hrd'  => $row['diketahui_hrd'] ?? null,
                     ];
 
-                    $namaSupplier = trim((string) ($row['supplier'] ?? ''));
+                    $namaSupplier = $this->nilaiAtauNull($row['supplier'] ?? null);
                     $supplierId = null;
 
-                    if ($namaSupplier !== '') {
+                    if ($namaSupplier !== null) {
                         $supplierId = Supplier::firstOrCreate(['nama' => $namaSupplier])->id;
                     }
 
@@ -428,10 +428,10 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                         return;
                     }
 
-                    $namaSupplier = trim((string) ($row['supplier'] ?? ''));
+                    $namaSupplier = $this->nilaiAtauNull($row['supplier'] ?? null);
                     $supplierId = null;
 
-                    if ($namaSupplier !== '') {
+                    if ($namaSupplier !== null) {
                         $supplierId = Supplier::firstOrCreate(['nama' => $namaSupplier])->id;
                     }
 
