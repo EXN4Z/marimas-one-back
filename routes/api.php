@@ -76,16 +76,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
 });
 
-// BARU: role 'cabang' butuh akses read-only ke kpd juga (dipakai DashboardCabang).
-Route::middleware(['auth:sanctum', 'role:cabang,karyawan,manajer,hr,admin'])->group(function () {
-    Route::get('/user', [AuthController::class, 'user']);
-
-    Route::prefix('dashboard')->group(function () {
-        Route::get('/kpd', [DashboardController::class, 'KaryawanPerDepart']);
-    });
-});
-
-
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/karyawan', [UserController::class, 'index']);
     Route::get('/karyawan/{user}', [UserController::class, 'edit']);
