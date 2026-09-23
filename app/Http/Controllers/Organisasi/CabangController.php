@@ -9,8 +9,6 @@ use App\Models\LokasiKantor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
-use Illuminate\Support\Facades\Hash;
-use App\Models\User;
 use Illuminate\Support\Facades\Log;
 
 class CabangController extends Controller
@@ -47,39 +45,19 @@ class CabangController extends Controller
             'alamat' => 'required|string|max:1000',
             'telepon' => 'required|string|max:30',
             'link' => 'required|string|max:255',
-            'email' => 'required|email|max:255|unique:users,email',
         ], [
             'nama.required' => 'Kolom nama wajib diisi.',
             'alamat.required' => 'Kolom alamat wajib diisi.',
             'telepon.required' => 'Kolom nomor telepon wajib diisi.',
             'link.required' => 'Kolom link wajib diisi.',
-            'email.required'   => 'Kolom email wajib diisi.',
-            'email.email'      => 'Format email tidak valid.',
-            'email.unique'     => 'Email ini sudah dipakai user lain.',
         ]);
 
         Log::info('VALIDASI LOLOS', $validated);
 
-        return DB::transaction(function () use ($validated) {
-        // pisahkan email dulu, karena kolom ini gak ada di tabel lokasi_kantor
-            $email = $validated['email'];
-            unset($validated['email']);
+        $cabang = LokasiKantor::create($validated);
+        $cabang->loadCount(['karyawan as pekerja_count']);
 
-            $cabang = LokasiKantor::create($validated);
-
-            User::create([
-                'name'                  => $cabang->nama,
-                'email'                 => $email,
-                'password'              => Hash::make(config('services.cabang.default_password')),
-                'role_id'               => 2,
-                'lokasi_kantor_id'      => $cabang->id,
-                'force_password_change' => true,
-            ]);
-
-            $cabang->loadCount(['karyawan as pekerja_count']);
-
-            return response()->json($cabang, 201);
-        });
+        return response()->json($cabang, 201);
     }
 
     // PUT /api/cabang/{id}
