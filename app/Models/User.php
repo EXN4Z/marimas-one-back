@@ -41,6 +41,7 @@ class User extends Authenticatable
         'nik',
         'departemen_id',
         'tanggal_masuk',
+        'perusahaan_id',
     ];
 
     protected $hidden = [
@@ -118,6 +119,11 @@ class User extends Authenticatable
     public function lokasiKantor()
     {
         return $this->belongsTo(LokasiKantor::class, 'lokasi_kantor_id');
+    }
+
+    public function Perusahaan() 
+    {
+        return $this->belongsTo(Perusahaan::class, 'perusahaan_id');
     }
 
     // BARU (eks-pekerja): departemen karyawan ini, langsung dari users.departemen_id.

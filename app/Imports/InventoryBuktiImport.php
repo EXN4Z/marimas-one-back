@@ -206,6 +206,7 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                     }
 
                     $infoBukti = [
+                        'kode_inventory' => $row['kode_inventory'] ?? null,
                         'no_bukti'       => $row['no_bukti'],
                         'tanggal'        => $this->parseTanggal($row['tanggal'] ?? null),
                         'perusahaan_id'  => $this->perusahaanIdDariSingkatan($row['perusahaan'] ?? null, $index + 1),
@@ -320,6 +321,7 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
                         $hasilParse = $this->parseKeterangan($keteranganAsli);
 
                         $inventory = Inventory::create(array_merge($infoBukti, [
+                            'kode_inventory'    => $row['kode_inventory'] ?? null,
                             'nama'              => $namaBarangTrim,
                             'kategori_id'       => $this->kategoriIdFallback(),
                             'parent_id'         => null,

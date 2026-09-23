@@ -59,6 +59,7 @@ class UserController extends Controller
             'departemen_id' => 'nullable|exists:departemen,id',
             'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
             'tanggal_masuk' => 'nullable|date',
+            'perusahaan_id' => 'nullable|exists:perusahaan,id',
         ]);
 
         $role = \App\Models\MasterData\Role::findOrFail($validated['role_id']);

@@ -12,6 +12,11 @@ use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Mail;
+Use Illuminate\Mail\Mailable;
+use App\Models\MasterData\Role;
+use App\Mail\BranchCredentials;
 
 class CabangController extends Controller
 {
@@ -23,9 +28,20 @@ class CabangController extends Controller
         // cabang gak ikut kehitung sebagai pegawainya sendiri. Alias tetap
         // 'pekerja_count' biar frontend (CabangPage.tsx) gak perlu diubah.
         $cabang = LokasiKantor::withCount(['karyawan as pekerja_count'])
-            ->orderBy('nama')
-            ->get();
-
+        ->with('akunCabang') // eager load biar gak N+1 query
+        ->get()
+        ->map(function ($item) {
+            return [
+                'id' => $item->id,
+                'nama' => $item->nama,
+                'alamat' => $item->alamat,
+                'telepon' => $item->telepon,
+                'link' => $item->link,
+                'pekerja_count' => $item->pekerja_count,
+                'email' => $item->akunCabang?->email, // ambil dari relasi user
+            ];
+        });
+        
         return response()->json($cabang);
     }
 
@@ -44,37 +60,24 @@ class CabangController extends Controller
 
         $validated = $request->validate([
             'nama' => 'required|string|max:150',
-            'alamat' => 'required|string|max:1000',
+            'alamat' => 'required|string|max:1000|unique:lokasi_kantor,alamat',
             'telepon' => 'required|string|max:30',
-            'link' => 'required|string|max:255',
-            'email' => 'required|email|max:255|unique:users,email',
+            'link' => 'required|string|max:255|unique:lokasi_kantor,link',
         ], [
             'nama.required' => 'Kolom nama wajib diisi.',
             'alamat.required' => 'Kolom alamat wajib diisi.',
             'telepon.required' => 'Kolom nomor telepon wajib diisi.',
             'link.required' => 'Kolom link wajib diisi.',
-            'email.required'   => 'Kolom email wajib diisi.',
-            'email.email'      => 'Format email tidak valid.',
-            'email.unique'     => 'Email ini sudah dipakai user lain.',
+            'alamat.unique' => 'Alamat ini sudah terdaftar di cabang lain.',
+            'link.unique'   => 'Link ini sudah digunakan oleh cabang lain.',
         ]);
 
         Log::info('VALIDASI LOLOS', $validated);
 
         return DB::transaction(function () use ($validated) {
         // pisahkan email dulu, karena kolom ini gak ada di tabel lokasi_kantor
-            $email = $validated['email'];
-            unset($validated['email']);
 
             $cabang = LokasiKantor::create($validated);
-
-            User::create([
-                'name'                  => $cabang->nama,
-                'email'                 => $email,
-                'password'              => Hash::make(config('services.cabang.default_password')),
-                'role_id'               => 2,
-                'lokasi_kantor_id'      => $cabang->id,
-                'force_password_change' => true,
-            ]);
 
             $cabang->loadCount(['karyawan as pekerja_count']);
 
@@ -116,7 +119,12 @@ class CabangController extends Controller
             ], 422);
         }
 
-        $cabang->delete();
+        DB::transaction(function () use ($cabang) {
+            // Hapus akun user (role cabang) yang terhubung ke lokasi ini dulu,
+            // baru hapus cabangnya -- biar gak ada akun "nyantol" tanpa cabang
+            $cabang->akunCabang?->delete();
+            $cabang->delete();
+        });
 
         return response()->json(['message' => 'Cabang berhasil dihapus.']);
     }
@@ -159,6 +167,40 @@ class CabangController extends Controller
                 'success' => false,
                 'message' => 'Gagal import: ' . $e->getMessage(),
             ], 422);
+        }
+    }
+
+    public function resendEmail(LokasiKantor $cabang)
+    {
+        $user = $cabang->akunCabang;
+
+        if (!$user) {
+            return response()->json([
+                'message' => 'Akun user untuk cabang ini tidak ditemukan.'
+            ], 404);
+        }
+
+        $newPassword = Str::random(10);
+
+        $user->update([
+            'password' => Hash::make($newPassword),
+            'must_change_password' => true,
+        ]);
+
+        try {
+            Mail::to($user->email)->send(new BranchCredentials($user, $newPassword));
+
+            $cabang->update(['last_credential_sent_at' => now()]); // opsional
+
+            return response()->json([
+                'message' => 'Email kredensial berhasil dikirim ulang ke ' . $user->email,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Gagal kirim ulang email cabang: ' . $e->getMessage());
+
+            return response()->json([
+                'message' => 'Gagal mengirim email. Silakan coba lagi atau hubungi admin.'
+            ], 500);
         }
     }
 }

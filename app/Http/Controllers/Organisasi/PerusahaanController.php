@@ -36,14 +36,16 @@ class PerusahaanController extends Controller
     {
         $validated = $request->validate([
             'nama' => 'required|string|max:150',
-            'alamat' => 'required|string|max:1000',
+            'alamat' => 'required|string|max:1000|unique:perusahaan,alamat',
             'telepon' => 'required|string|max:30',
-            'link' => 'required|string|max:255',
+            'link' => 'required|string|max:255|unique:perusahaan,link',
         ], [
             'nama.required' => 'Kolom nama wajib diisi.',
             'alamat.required' => 'Kolom alamat wajib diisi.',
             'telepon.required' => 'Kolom nomor telepon wajib diisi.',
             'link.required' => 'Kolom link wajib diisi.',
+            'alamat.unique' => 'Alamat ini sudah terdaftar di cabang lain.',
+            'link.unique'   => 'Link ini sudah digunakan oleh cabang lain.',
         ]);
 
         $perusahaan = Perusahaan::create($validated);

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class LokasiKantor extends Model
 {
@@ -31,5 +32,10 @@ class LokasiKantor extends Model
     public function users(): HasMany
     {
         return $this->hasMany(User::class, 'lokasi_kantor_id');
+    }
+    public function akunCabang(): HasOne
+    {
+        return $this->hasOne(User::class, 'lokasi_kantor_id')
+            ->whereHas('roleRef', fn ($q) => $q->where('nama', 'cabang'));
     }
 }

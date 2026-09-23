@@ -105,6 +105,8 @@ return [
         ),
     ],
 
+    'frontend_url' => 'https://marimas-one.my.id',
+
     /*
     |--------------------------------------------------------------------------
     | Maintenance Mode Driver
