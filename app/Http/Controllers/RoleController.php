@@ -9,7 +9,7 @@ class RoleController extends Controller
 {
     public function index() {
         return response()->json(
-            Role::orderBy('id')->get(['id', 'nama'])
+            Role::where('nama', '!=', 'cabang')->orderBy('id')->get(['id', 'nama'])
         );
     }
 }
