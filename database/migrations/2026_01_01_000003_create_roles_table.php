@@ -40,15 +40,7 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // REVISI (simplify_roles_table): dulu 6 role default (guest,
-        // karyawan, cabang, manajer, hr, admin), disederhanain jadi cuma 3
-        // -- 'karyawan'/'manajer'/'hr'/'guest' digabung jadi 'user' (gak
-        // pernah beda akses sama sekali, lihat catatan REVISI di atas).
-        // 'cabang' sengaja dibiarin, belum digarap (lihat migration
-        // 2026_09_15_000000_simplify_roles_table). Instance yang udah
-        // ke-migrate dengan 6 role lama otomatis ke-merge lewat migration
-        // itu, gak perlu backfill manual di sini.
-        $defaults = ['user', 'cabang', 'admin'];
+        $defaults = ['user', 'admin'];
 
         foreach ($defaults as $nama) {
             DB::table('roles')->insert([

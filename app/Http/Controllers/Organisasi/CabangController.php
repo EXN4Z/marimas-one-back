@@ -9,8 +9,6 @@ use App\Models\LokasiKantor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
-use Illuminate\Support\Facades\Hash;
-use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Mail;
@@ -74,15 +72,10 @@ class CabangController extends Controller
 
         Log::info('VALIDASI LOLOS', $validated);
 
-        return DB::transaction(function () use ($validated) {
-        // pisahkan email dulu, karena kolom ini gak ada di tabel lokasi_kantor
+        $cabang = LokasiKantor::create($validated);
+        $cabang->loadCount(['karyawan as pekerja_count']);
 
-            $cabang = LokasiKantor::create($validated);
-
-            $cabang->loadCount(['karyawan as pekerja_count']);
-
-            return response()->json($cabang, 201);
-        });
+        return response()->json($cabang, 201);
     }
 
     // PUT /api/cabang/{id}
@@ -167,40 +160,6 @@ class CabangController extends Controller
                 'success' => false,
                 'message' => 'Gagal import: ' . $e->getMessage(),
             ], 422);
-        }
-    }
-
-    public function resendEmail(LokasiKantor $cabang)
-    {
-        $user = $cabang->akunCabang;
-
-        if (!$user) {
-            return response()->json([
-                'message' => 'Akun user untuk cabang ini tidak ditemukan.'
-            ], 404);
-        }
-
-        $newPassword = Str::random(10);
-
-        $user->update([
-            'password' => Hash::make($newPassword),
-            'must_change_password' => true,
-        ]);
-
-        try {
-            Mail::to($user->email)->send(new BranchCredentials($user, $newPassword));
-
-            $cabang->update(['last_credential_sent_at' => now()]); // opsional
-
-            return response()->json([
-                'message' => 'Email kredensial berhasil dikirim ulang ke ' . $user->email,
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Gagal kirim ulang email cabang: ' . $e->getMessage());
-
-            return response()->json([
-                'message' => 'Gagal mengirim email. Silakan coba lagi atau hubungi admin.'
-            ], 500);
         }
     }
 }
