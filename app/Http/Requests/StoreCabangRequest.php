@@ -16,7 +16,7 @@ class StoreCabangRequest extends FormRequest
         return [
             'nama'    => 'required|string|max:255',
             'alamat'  => 'required|string',
-            'telepon' => 'required|string|max:20',
+            'telepon' => 'nullable|string|max:20',
             'link'    => 'required|string',
             'email'   => 'required|email|unique:users,email',
         ];
