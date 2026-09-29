@@ -411,9 +411,12 @@ class InventoryPemakaiController extends Controller
             'no_struk_penerimaan' => 'required|string',
             'tanggal_pengembalian' => 'required|date',
             'catatan_pengembalian' => 'nullable|string',
-            'foto_pengembalian' => 'required|array|min:1|max:3',
+            'foto_pengembalian' => 'required|array|min:3|max:3',
             'foto_pengembalian.*' => 'image|mimes:jpg,jpeg,png,webp|max:1024',
         ], [
+            'foto_pengembalian.required' => 'Foto bukti pengembalian wajib diisi (minimal 3 foto).',
+            'foto_pengembalian.min' => 'Foto bukti pengembalian minimal 3 foto.',
+            'foto_pengembalian.max' => 'Foto bukti pengembalian maksimal 3 foto.',
             'foto_pengembalian.*.max' => 'Maksimal size foto adalah 1MB',
         ]);
 
