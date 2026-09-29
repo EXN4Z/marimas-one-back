@@ -93,7 +93,7 @@ class UserController extends Controller
             'departemen_id' => $validated['departemen_id'] ?? null,
             'perusahaan_id' => $validated['perusahaan_id'] ?? null,
             'tanggal_masuk' => $validated['tanggal_masuk'] ?? null,
-            'status' => $validated['status'],
+            'status' => $validated['status'] ?? 'aktif',
         ]);
 
         return response()->json([
