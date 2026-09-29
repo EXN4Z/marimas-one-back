@@ -56,6 +56,7 @@ class UserController extends Controller
             'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
             'tanggal_masuk' => 'nullable|date',
             'perusahaan_id' => 'nullable|exists:perusahaan,id',
+            'status' => 'sometimes|in:aktif,nonaktif',
         ]);
 
         $role = \App\Models\MasterData\Role::findOrFail($validated['role_id']);
@@ -92,6 +93,7 @@ class UserController extends Controller
             'departemen_id' => $validated['departemen_id'] ?? null,
             'perusahaan_id' => $validated['perusahaan_id'] ?? null,
             'tanggal_masuk' => $validated['tanggal_masuk'] ?? null,
+            'status' => $validated['status'],
         ]);
 
         return response()->json([
@@ -112,6 +114,7 @@ class UserController extends Controller
             'perusahaan_id' => 'nullable|exists:perusahaan,id',
             'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
             'tanggal_masuk' => 'nullable|date',
+            'status' => 'sometimes|in:aktif,nonaktif',
         ]);
 
         $role = \App\Models\MasterData\Role::findOrFail($validated['role_id']);
@@ -139,6 +142,7 @@ class UserController extends Controller
             'departemen_id' => $validated['departemen_id'] ?? null,
             'perusahaan_id' => $validated['perusahaan_id'] ?? null,
             'tanggal_masuk' => $validated['tanggal_masuk'] ?? null,
+            'status' => $validated['status'],
         ]);
 
         return response()->json($user->load('departemen', 'lokasiKantor', 'roleRef'));
