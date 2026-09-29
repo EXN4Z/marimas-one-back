@@ -56,7 +56,7 @@ class UserController extends Controller
             'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
             'tanggal_masuk' => 'nullable|date',
             'perusahaan_id' => 'nullable|exists:perusahaan,id',
-            'status' => 'required|in:aktif,nonaktif',
+            'status' => 'sometimes|in:aktif,nonaktif',
         ]);
 
         $role = \App\Models\MasterData\Role::findOrFail($validated['role_id']);
@@ -114,7 +114,7 @@ class UserController extends Controller
             'perusahaan_id' => 'nullable|exists:perusahaan,id',
             'lokasi_kantor_id' => 'nullable|exists:lokasi_kantor,id',
             'tanggal_masuk' => 'nullable|date',
-            'status' => 'required|in:aktif,nonaktif',
+            'status' => 'sometimes|in:aktif,nonaktif',
         ]);
 
         $role = \App\Models\MasterData\Role::findOrFail($validated['role_id']);
