@@ -39,7 +39,7 @@ class InventoryPenangananController extends Controller
         $user = $request->user();
         $isAdmin = $user?->role === 'admin';
 
-        $query = InventoryPenanganan::with(['inventory', 'pemakai.user'])
+        $query = InventoryPenanganan::with(['inventory', 'pemakai.user', 'dilaporkanOleh:id,name'])
             ->orderByDesc('tanggal_lapor');
 
         if (!$isAdmin) {
@@ -57,7 +57,7 @@ class InventoryPenangananController extends Controller
     // array kayak foto_penerimaan/foto_pengembalian di InventoryPemakai).
     public function foto(Request $request)
     {
-        $query = InventoryPenanganan::with(['inventory', 'pemakai.user'])
+        $query = InventoryPenanganan::with(['inventory', 'pemakai.user', 'dilaporkanOleh:id,name'])
             ->whereNotNull('foto')
             ->orderByDesc('tanggal_lapor');
 
@@ -184,7 +184,7 @@ class InventoryPenangananController extends Controller
             Notification::send(
                 User::whereHas('roleRef', fn ($q) => $q->where('nama', 'admin'))
                     ->get(),
-                new AsetKerusakanDilaporkan($penanganan->load(['inventory', 'pemakai.user']), $user->name)
+                new AsetKerusakanDilaporkan($penanganan->load(['inventory', 'pemakai.user', 'dilaporkanOleh:id,name']), $user->name)
             );
         } catch (\Throwable $e) {
             Log::error('Gagal mengirim notifikasi laporan kerusakan inventory', [
@@ -194,7 +194,7 @@ class InventoryPenangananController extends Controller
             ]);
         }
 
-        return response()->json($penanganan->load(['inventory', 'pemakai.user']), 201);
+        return response()->json($penanganan->load(['inventory', 'pemakai.user', 'dilaporkanOleh:id,name']), 201);
     }
 
     // admin: terima & mulai tangani laporan -> item jadi "diperbaiki" (sedang diperbaiki)
@@ -213,7 +213,7 @@ class InventoryPenangananController extends Controller
             Inventory::whereKey($inventoryPenanganan->inventory_id)->update(['status' => 'diperbaiki']);
         });
 
-        return response()->json($inventoryPenanganan->fresh()->load(['inventory', 'pemakai.user']));
+        return response()->json($inventoryPenanganan->fresh()->load(['inventory', 'pemakai.user', 'dilaporkanOleh:id,name']));
     }
 
     // admin: tandai penanganan selesai + isi hasil/biaya, generate no_struk
@@ -334,7 +334,7 @@ class InventoryPenangananController extends Controller
 
                 if ($pelapor) {
                     $pelapor->notify(new AsetKerusakanSelesai(
-                        $inventoryPenanganan->load(['inventory', 'pemakai.user'])
+                        $inventoryPenanganan->load(['inventory', 'pemakai.user', 'dilaporkanOleh:id,name'])
                     ));
                 }
             } catch (\Throwable $e) {
@@ -346,7 +346,7 @@ class InventoryPenangananController extends Controller
             }
         }
 
-        return response()->json($inventoryPenanganan->fresh()->load(['inventory', 'pemakai.user']));
+        return response()->json($inventoryPenanganan->fresh()->load(['inventory', 'pemakai.user', 'dilaporkanOleh:id,name']));
     }
 
     public function destroy(InventoryPenanganan $inventoryPenanganan)
