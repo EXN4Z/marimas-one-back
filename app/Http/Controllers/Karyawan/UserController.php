@@ -199,11 +199,14 @@ class UserController extends Controller
 
         $detail = $daftar !== '' ? " ($daftar)" : '';
 
+        $pesan = "Karyawan masih punya {$pinjaman->count()} pinjaman inventory{$detail}. Selesaikan/kembalikan dulu sebelum {$aksi}.";
+
+        // 'message' diisi pesan asli (bukan "The given data was invalid.")
+        // karena toast hapus user di FE (KaryawanEdit & TabKaryawan) menampilkan
+        // data.message. 'errors.status' tetap ada buat field Status Akun.
         return response()->json([
-            'message' => 'The given data was invalid.',
-            'errors' => ['status' => [
-                "Karyawan masih punya {$pinjaman->count()} pinjaman inventory{$detail}. Selesaikan/kembalikan dulu sebelum {$aksi}.",
-            ]],
+            'message' => $pesan,
+            'errors' => ['status' => [$pesan]],
         ], 422);
     }
 }

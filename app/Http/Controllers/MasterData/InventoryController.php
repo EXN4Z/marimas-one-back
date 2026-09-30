@@ -246,20 +246,52 @@ class InventoryController extends Controller
 
     /**
      * DELETE /api/inventory/{inventory}
-     * ?force=1 lewatin guard riwayat — dipakai admin buat bersihin data
-     * lama/test yang gak bisa kehapus normal krn udah punya riwayat
-     * pemakai/penanganan/kelengkapan anak. Aman: inventory_pemakai &
-     * inventory_penanganan semua cascadeOnDelete di FK-nya, jadi riwayat
-     * ikut kehapus bersih, gak nyisa orphan row.
+     *
+     * Aturan (urutan cek):
+     * 1. SELALU (termasuk force=1): item ini atau kelengkapan yang menempel
+     *    padanya TIDAK boleh punya pinjaman aktif (disetujui/pending & belum
+     *    dikembalikan). Kalau dihapus saat masih dipinjam, baris pinjaman
+     *    nyangkut tanpa inventory & status kelengkapan salah. Kembalikan dulu.
+     * 2. Tanpa force: tolak kalau punya kelengkapan menempel, masih menempel
+     *    ke induk, punya riwayat penanganan, atau punya riwayat peminjaman.
+     * 3. force=1: lewatin guard riwayat (poin 2) -- dipakai admin buat
+     *    bersihin data lama/test. Kelengkapan anak dilepas dulu (berdiri
+     *    sendiri, bukan ikut kehapus).
+     *
+     * CATATAN FK: inventory_pemakai, inventory_penanganan & inventory_writeoff
+     * semuanya nullOnDelete (BUKAN cascade) -- jadi kalau item dihapus,
+     * riwayatnya TETAP ada, cuma kolom inventory_id-nya jadi null.
      */
     public function destroy(Request $request, Inventory $inventory)
     {
         $force = $request->boolean('force');
 
+        // (1) Guard pinjaman aktif -- berlaku juga buat force=1.
+        $idTerkait = $inventory->children()->pluck('id')->push($inventory->id);
+
+        $pinjamanAktif = InventoryPemakai::whereIn('inventory_id', $idTerkait)
+            ->whereIn('status', ['disetujui', 'pending'])
+            ->whereNull('tanggal_pengembalian')
+            ->exists();
+
+        if ($pinjamanAktif) {
+            return response()->json([
+                'message' => 'Item ini (atau kelengkapan yang menempel padanya) masih dalam pinjaman. Kembalikan dulu sebelum menghapus.',
+            ], 422);
+        }
+
         if (!$force) {
+            // (2) Guard struktur & riwayat.
             if ($inventory->children()->exists()) {
                 return response()->json([
                     'message' => 'Item ini masih punya kelengkapan yang menempel. Lepas dulu kelengkapannya sebelum menghapus.',
+                    'force_available' => true,
+                ], 422);
+            }
+
+            if ($inventory->parent_id) {
+                return response()->json([
+                    'message' => 'Item ini masih menempel ke induk. Lepas dulu dari induknya sebelum menghapus.',
                     'force_available' => true,
                 ], 422);
             }
@@ -278,15 +310,13 @@ class InventoryController extends Controller
                 ], 422);
             }
         } else {
-            // force=1 lepas dulu kelengkapan anak (jadi berdiri sendiri, bukan
-            // ikut kehapus) sebelum baris induknya dihapus -- biar gak ada FK
-            // yang mental atau anak yang ikut lenyap padahal masih valid.
+            // (3) force=1 lepas dulu kelengkapan anak (jadi berdiri sendiri,
+            // bukan ikut kehapus). Aman menyetel 'tersedia' di sini karena
+            // guard (1) sudah memastikan gak ada anak yang masih dipinjam.
             //
-            // BARU: query builder di sini gak lewat validasi()/update() model
-            // Eloquent, jadi selaraskanStatusByParent() gak ikut kepanggil
-            // otomatis -- status HARUS disamakan manual di sini juga, biar
-            // invariant "parent_id null => status tersedia" tetap konsisten
-            // walau parent-nya dihapus paksa lewat force=1.
+            // Query builder gak lewat selaraskanStatusByParent(), jadi status
+            // disamakan manual biar invariant "parent_id null => status
+            // tersedia" tetap konsisten.
             $inventory->children()->update(['parent_id' => null, 'status' => 'tersedia']);
         }
 
@@ -320,7 +350,7 @@ class InventoryController extends Controller
 
         if ($inventory->status !== 'rusak_berat' && $inventory->status !== 'tersedia') {
             return response()->json([
-                'message' => 'Item hanya bisa dijual jika statusnya Rusak Berat.',
+                'message' => 'Item hanya bisa dijual jika statusnya Tersedia atau Rusak Berat.',
             ], 422);
         }
 
