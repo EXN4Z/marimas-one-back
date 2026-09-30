@@ -122,7 +122,8 @@ class InventoryController extends Controller
             'pemakaiSaatIni.user.departemen',
             'pemakaiPending.user.departemen',
             'pemakai.user.departemen',
-            'penanganan',
+            'penanganan.pemakai.user:id,name',
+            'penanganan.dilaporkanOleh:id,name',
             'penangananAktif',
             'writeoff.penyetuju:id,name',
         ]);
