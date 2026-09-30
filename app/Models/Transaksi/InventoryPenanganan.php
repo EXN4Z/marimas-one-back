@@ -20,7 +20,7 @@ class InventoryPenanganan extends Model
 
     // *_at (datetime lengkap) dipakai buat riwayat aktivitas yang butuh
     // waktu akurat — tanggal_* (cuma tanggal) tetap dipertahankan buat
-    // tampilan & perhitungan durasi_hari.
+    // tampilan.
     protected $casts = [
         'tanggal_lapor' => 'date',
         'tanggal_diterima' => 'date',
@@ -63,31 +63,38 @@ class InventoryPenanganan extends Model
         return (float) $this->harga_jasa + (float) $this->biaya_komponen;
     }
 
+    // Selisih hari kalender lapor -> selesai. Pakai kolom *_at (waktu kejadian
+    // sebenarnya), fallback ke tanggal_* buat data lama yang *_at-nya kosong.
     public function getDurasiHariAttribute(): ?int
     {
-        if (!$this->tanggal_selesai) {
+        if (!$this->tanggal_selesai || !$this->tanggal_lapor) {
             return null;
         }
-        return $this->tanggal_lapor->diffInDays($this->tanggal_selesai);
+
+        $mulai   = ($this->lapor_at ?? $this->tanggal_lapor)->copy()->startOfDay();
+        $selesai = ($this->selesai_at ?? $this->tanggal_selesai)->copy()->startOfDay();
+
+        return max(0, (int) $mulai->diffInDays($selesai, false));
     }
 
-    // Durasi penanganan dalam DETIK, dari lapor -> selesai.
-    // Pakai kolom *_at (datetime lengkap) biar akurat sampai jam; kalau
-    // *_at kosong (data lama) atau tanggalnya gak cocok sama tanggal_*
-    // (mis. admin backdate tanggal_selesai di form), fallback ke tanggal_*
-    // (jam 00:00). Format tampilan ("1d 2h", "5m 10s") dilakukan di frontend.
+    // Durasi PENGERJAAN dalam DETIK: dari teknisi menerima -> selesai.
+    // (waktu tunggu sebelum diterima gak dihitung). Kalau belum ada
+    // diterima_at, fallback ke lapor_at, lalu ke kolom tanggal_* (jam 00:00).
+    // Sengaja TIDAK lagi ngecek isSameDay: tanggal_selesai bisa diisi manual
+    // lewat form dan gak selalu sama harinya dengan selesai_at, dan itu yang
+    // bikin durasi ngaco (mis. 13 jam padahal cuma 2 jam).
+    // Format tampilan ("1d 2h", "5m 10s") dilakukan di frontend.
     public function getDurasiDetikAttribute(): ?int
     {
         if (!$this->tanggal_selesai || !$this->tanggal_lapor) {
             return null;
         }
 
-        $mulai = $this->lapor_at && $this->lapor_at->isSameDay($this->tanggal_lapor)
-            ? $this->lapor_at
-            : $this->tanggal_lapor;
-        $selesai = $this->selesai_at && $this->selesai_at->isSameDay($this->tanggal_selesai)
-            ? $this->selesai_at
-            : $this->tanggal_selesai;
+        $mulai = $this->diterima_at
+            ?? $this->lapor_at
+            ?? $this->tanggal_diterima
+            ?? $this->tanggal_lapor;
+        $selesai = $this->selesai_at ?? $this->tanggal_selesai;
 
         return max(0, (int) $mulai->diffInSeconds($selesai, false));
     }
