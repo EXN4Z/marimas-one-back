@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Karyawan;
 
 use App\Http\Controllers\Controller;
 
+use App\Models\Transaksi\InventoryPemakai;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -132,6 +133,15 @@ class UserController extends Controller
             ], 422);
         }
 
+        // Nonaktifkan akun cuma boleh kalau user gak lagi punya pinjaman
+        // inventory yang aktif (disetujui/pending & belum dikembalikan).
+        $mauNonaktif = ($validated['status'] ?? $user->status) === 'nonaktif'
+            && $user->status !== 'nonaktif';
+
+        if ($mauNonaktif && ($blok = $this->pinjamanAktifResponse($user, 'menonaktifkan'))) {
+            return $blok;
+        }
+
         $user->update([
             'name' => $validated['name'],
             'email' => $validated['email'] ?? null,
@@ -145,13 +155,55 @@ class UserController extends Controller
             'status' => $validated['status'] ?? $user->status,
         ]);
 
+        // Akun baru saja dinonaktifkan -- cabut semua sesi login-nya.
+        if ($mauNonaktif) {
+            $user->tokens()->delete();
+        }
+
         return response()->json($user->load('departemen', 'lokasiKantor', 'roleRef'));
     }
 
     public function destroy(User $user)
     {
+        if ($blok = $this->pinjamanAktifResponse($user, 'menghapus akun')) {
+            return $blok;
+        }
+
         $user->delete();
 
         return response()->json(['message' => 'User deleted successfully']);
+    }
+
+    /**
+     * Balikin response 422 kalau user masih punya pinjaman inventory aktif
+     * (status disetujui/pending dan belum ada tanggal_pengembalian),
+     * atau null kalau aman. Format error pakai key `status` biar langsung
+     * muncul di field "Status Akun" di KaryawanEdit.tsx.
+     */
+    private function pinjamanAktifResponse(User $user, string $aksi)
+    {
+        $pinjaman = InventoryPemakai::with('inventory:id,kode_inventory')
+            ->where('user_id', $user->id)
+            ->whereIn('status', ['disetujui', 'pending'])
+            ->whereNull('tanggal_pengembalian')
+            ->get();
+
+        if ($pinjaman->isEmpty()) {
+            return null;
+        }
+
+        $daftar = $pinjaman->map(fn ($p) => $p->inventory?->kode_inventory)
+            ->filter()
+            ->unique()
+            ->implode(', ');
+
+        $detail = $daftar !== '' ? " ($daftar)" : '';
+
+        return response()->json([
+            'message' => 'The given data was invalid.',
+            'errors' => ['status' => [
+                "Karyawan masih punya {$pinjaman->count()} pinjaman inventory{$detail}. Selesaikan/kembalikan dulu sebelum {$aksi}.",
+            ]],
+        ], 422);
     }
 }
