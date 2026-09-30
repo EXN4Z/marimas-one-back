@@ -34,7 +34,7 @@ class InventoryPenanganan extends Model
 
     // frontend butuh dua ini ikut kekirim di JSON, bukan cuma keitung pas
     // dipanggil manual
-    protected $appends = ['total_biaya', 'durasi_hari'];
+    protected $appends = ['total_biaya', 'durasi_hari', 'durasi_jam'];
 
     public function inventory()
     {
@@ -69,5 +69,26 @@ class InventoryPenanganan extends Model
             return null;
         }
         return $this->tanggal_lapor->diffInDays($this->tanggal_selesai);
+    }
+
+    // Durasi penanganan dalam JAM (bulat ke bawah), dari lapor -> selesai.
+    // Pakai kolom *_at (datetime lengkap) biar akurat sampai jam; kalau
+    // *_at kosong (data lama) atau tanggalnya gak cocok sama tanggal_*
+    // (mis. admin backdate tanggal_selesai di form), fallback ke tanggal_*
+    // (jam 00:00). Format tampilan ("1d 2h") dilakukan di frontend.
+    public function getDurasiJamAttribute(): ?int
+    {
+        if (!$this->tanggal_selesai || !$this->tanggal_lapor) {
+            return null;
+        }
+
+        $mulai = $this->lapor_at && $this->lapor_at->isSameDay($this->tanggal_lapor)
+            ? $this->lapor_at
+            : $this->tanggal_lapor;
+        $selesai = $this->selesai_at && $this->selesai_at->isSameDay($this->tanggal_selesai)
+            ? $this->selesai_at
+            : $this->tanggal_selesai;
+
+        return max(0, (int) $mulai->diffInHours($selesai, false));
     }
 }
