@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Imports\InventoryBuktiImport;
-use App\Imports\InventoryPenangananImport;
-use App\Imports\KaryawanImport;
+use App\Imports\MasterData\InventoryBuktiImport;
+use App\Imports\Transaksi\InventoryPenangananImport;
+use App\Imports\MasterData\KaryawanImport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;

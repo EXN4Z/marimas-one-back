@@ -1,10 +1,11 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\AuditLog;
 
 use App\Models\AuditLog;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
+use App\Http\Controllers\Controller;
 
 class AuditLogController extends Controller
 {

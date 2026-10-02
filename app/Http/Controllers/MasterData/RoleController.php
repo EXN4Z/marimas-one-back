@@ -1,9 +1,10 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\MasterData;
 
 use Illuminate\Http\Request;
 use App\Models\MasterData\Role;
+use App\Http\Controllers\Controller;
 
 class RoleController extends Controller
 {

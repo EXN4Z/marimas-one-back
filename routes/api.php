@@ -2,24 +2,24 @@
 
 use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Karyawan\UserController;
-use App\Http\Controllers\Organisasi\DepartemenController;
-use App\Http\Controllers\AuditLogController;
+use App\Http\Controllers\MasterData\UserController;
+use App\Http\Controllers\MasterData\DepartemenController;
+use App\Http\Controllers\AuditLog\AuditLogController;
 use App\Http\Controllers\Dashboard\DashboardController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
-use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\Karyawan\AdminUserController;
+use App\Http\Controllers\Notifikasi\NotificationController;
+use App\Http\Controllers\MasterData\AdminUserController;
 use App\Http\Controllers\MasterData\SupplierController;
 use App\Http\Controllers\MasterData\InventoryController;
 use App\Http\Controllers\MasterData\KategoriController;
 use App\Http\Controllers\Transaksi\InventoryPemakaiController;
 use App\Http\Controllers\Transaksi\InventoryPenangananController;
-use App\Http\Controllers\Organisasi\CabangController;
-use App\Http\Controllers\Organisasi\PerusahaanController;
-use App\Http\Controllers\PushSubscriptionController;
+use App\Http\Controllers\MasterData\CabangController;
+use App\Http\Controllers\MasterData\PerusahaanController;
+use App\Http\Controllers\Notifikasi\PushSubscriptionController;
 use App\Http\Controllers\ImportController;
-use App\Http\Controllers\RoleController;
+use App\Http\Controllers\MasterData\RoleController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);

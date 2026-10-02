@@ -5,7 +5,6 @@ namespace App\Models\MasterData;
 use App\Models\Transaksi\InventoryPemakai;
 use App\Models\Transaksi\InventoryPenanganan;
 use App\Models\Transaksi\InventoryWriteoff;
-use App\Models\Perusahaan;
 use Illuminate\Database\Eloquent\Model;
 
 class Inventory extends Model

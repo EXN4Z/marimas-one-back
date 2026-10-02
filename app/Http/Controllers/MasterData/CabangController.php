@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Http\Controllers\Organisasi;
+namespace App\Http\Controllers\MasterData;
 
 use App\Http\Controllers\Controller;
 
-use App\Imports\CabangImport;
-use App\Models\LokasiKantor;
+use App\Imports\MasterData\CabangImport;
+use App\Models\MasterData\LokasiKantor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;

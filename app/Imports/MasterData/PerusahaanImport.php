@@ -1,25 +1,26 @@
 <?php
 
-namespace App\Imports;
+namespace App\Imports\MasterData;
 
-use App\Models\MasterData\Supplier;
+use App\Models\MasterData\Perusahaan;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
 
 /**
- * Import Excel data referensi Supplier (Master Data).
+ * Import Excel data referensi Perusahaan (Master Data).
  *
  * Format kolom yang diharapkan (baris pertama = header, nama kolom bebas
  * huruf besar/kecil & spasi, dinormalisasi otomatis ke snake_case):
- *   Nama | Alamat | Telepon
+ *   Nama | Alamat | Telepon | Link
  *
- * Setiap baris dicocokkan ke `nama` (unique). Kalau supplier dengan nama
- * itu SUDAH ada, datanya di-UPDATE (alamat/telepon ikut nilai terbaru di
- * file -- kolom yang dikosongkan di Excel TIDAK menimpa data lama, biar
+ * Setiap baris dicocokkan ke `nama` (unique). Kalau perusahaan dengan nama
+ * itu SUDAH ada, datanya di-UPDATE (alamat/telepon/link ikut nilai terbaru
+ * di file -- kolom yang dikosongkan di Excel TIDAK menimpa data lama, biar
  * import ulang buat nambah data lain gak nge-null-in isian yang sudah
- * ada). Kalau belum ada, dibuatkan baris baru.
+ * ada). Kalau belum ada, dibuatkan baris baru. Mirror SupplierImport,
+ * ditambah kolom `link`.
  */
-class SupplierImport implements ToCollection
+class PerusahaanImport implements ToCollection
 {
     private const KOLOM_PENANDA_HEADER = 'nama';
     private const MAX_BARIS_DISCAN = 10;
@@ -64,21 +65,24 @@ class SupplierImport implements ToCollection
 
             $alamat = trim((string) ($row['alamat'] ?? ''));
             $telepon = trim((string) ($row['telepon'] ?? ''));
+            $link = trim((string) ($row['link'] ?? ''));
 
             try {
-                $supplier = Supplier::where('nama', $nama)->first();
+                $perusahaan = Perusahaan::where('nama', $nama)->first();
 
-                if ($supplier) {
-                    $supplier->update([
-                        'alamat'  => $alamat !== '' ? $alamat : $supplier->alamat,
-                        'telepon' => $telepon !== '' ? $telepon : $supplier->telepon,
+                if ($perusahaan) {
+                    $perusahaan->update([
+                        'alamat'  => $alamat !== '' ? $alamat : $perusahaan->alamat,
+                        'telepon' => $telepon !== '' ? $telepon : $perusahaan->telepon,
+                        'link'    => $link !== '' ? $link : $perusahaan->link,
                     ]);
                     $this->updatedCount++;
                 } else {
-                    Supplier::create([
+                    Perusahaan::create([
                         'nama'    => $nama,
                         'alamat'  => $alamat !== '' ? $alamat : null,
                         'telepon' => $telepon !== '' ? $telepon : null,
+                        'link'    => $link !== '' ? $link : null,
                     ]);
                     $this->createdCount++;
                 }
@@ -93,7 +97,7 @@ class SupplierImport implements ToCollection
      * Excel ("Dokumen digenerate otomatis oleh Marimas One ..."). Kalau file
      * hasil export diimpor balik tanpa diedit, baris ini ikut kebaca sebagai
      * baris data (nyangkut di kolom pertama karena aslinya merged cell) dan
-     * bikin entri palsu -- makanya harus disaring.
+     * bikin entri "perusahaan"/"supplier" palsu -- makanya harus disaring.
      */
     private function adalahBarisFooter(array $rowArray): bool
     {

@@ -1,35 +1,31 @@
 <?php
 
-namespace App\Imports;
+namespace App\Imports\MasterData;
 
-use App\Models\MasterData\Departemen;
+use App\Models\MasterData\Supplier;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
 
 /**
- * Import Excel data referensi Departemen (Master Data).
+ * Import Excel data referensi Supplier (Master Data).
  *
  * Format kolom yang diharapkan (baris pertama = header, nama kolom bebas
  * huruf besar/kecil & spasi, dinormalisasi otomatis ke snake_case):
- *   Nama  (atau "Nama Departemen" -- header yang dipakai fitur Export
- *   Excel Departemen sendiri, supaya file hasil export bisa diimport balik)
+ *   Nama | Alamat | Telepon
  *
- * Setiap baris dicocokkan ke `nama` (unique) -- kalau departemen dengan
- * nama itu sudah ada, baris dilewati (dihitung sebagai "dilewati", BUKAN
- * error) supaya import ulang file yang sama aman/idempotent. Kalau belum
- * ada, dibuatkan baris baru.
+ * Setiap baris dicocokkan ke `nama` (unique). Kalau supplier dengan nama
+ * itu SUDAH ada, datanya di-UPDATE (alamat/telepon ikut nilai terbaru di
+ * file -- kolom yang dikosongkan di Excel TIDAK menimpa data lama, biar
+ * import ulang buat nambah data lain gak nge-null-in isian yang sudah
+ * ada). Kalau belum ada, dibuatkan baris baru.
  */
-class DepartemenImport implements ToCollection
+class SupplierImport implements ToCollection
 {
     private const KOLOM_PENANDA_HEADER = 'nama';
-    // Alias yang juga dianggap sebagai kolom "Nama" departemen -- termasuk
-    // "Nama Departemen" karena itu header yang dipakai fitur Export Excel
-    // sendiri, supaya file hasil export bisa diimport balik (idempotent).
-    private const ALIAS_KOLOM_NAMA = ['nama', 'nama_departemen'];
     private const MAX_BARIS_DISCAN = 10;
 
     protected int $createdCount = 0;
-    protected int $skippedCount = 0;
+    protected int $updatedCount = 0;
     protected array $errors = [];
 
     public function collection(Collection $rows)
@@ -43,7 +39,6 @@ class DepartemenImport implements ToCollection
 
         $headers = $rows[$indexHeader]
             ->map(fn ($h) => $this->normalisasiHeader((string) $h))
-            ->map(fn ($h) => in_array($h, self::ALIAS_KOLOM_NAMA, true) ? self::KOLOM_PENANDA_HEADER : $h)
             ->toArray();
 
         $dataRows = $rows->slice($indexHeader + 1);
@@ -60,21 +55,33 @@ class DepartemenImport implements ToCollection
             }
 
             $row = array_combine($headers, array_pad($rowArray, count($headers), null));
-            $nama = trim((string) ($row['nama'] ?? $row['nama_departemen'] ?? $row['namadepartemen'] ?? ''));
+            $nama = trim((string) ($row['nama'] ?? ''));
 
             if ($nama === '') {
                 $this->errors[] = 'Baris data ke-' . ($index + 1) . ': kolom Nama kosong, dilewati.';
                 continue;
             }
 
-            if (Departemen::where('nama', $nama)->exists()) {
-                $this->skippedCount++;
-                continue;
-            }
+            $alamat = trim((string) ($row['alamat'] ?? ''));
+            $telepon = trim((string) ($row['telepon'] ?? ''));
 
             try {
-                Departemen::create(['nama' => $nama]);
-                $this->createdCount++;
+                $supplier = Supplier::where('nama', $nama)->first();
+
+                if ($supplier) {
+                    $supplier->update([
+                        'alamat'  => $alamat !== '' ? $alamat : $supplier->alamat,
+                        'telepon' => $telepon !== '' ? $telepon : $supplier->telepon,
+                    ]);
+                    $this->updatedCount++;
+                } else {
+                    Supplier::create([
+                        'nama'    => $nama,
+                        'alamat'  => $alamat !== '' ? $alamat : null,
+                        'telepon' => $telepon !== '' ? $telepon : null,
+                    ]);
+                    $this->createdCount++;
+                }
             } catch (\Exception $e) {
                 $this->errors[] = 'Baris data ke-' . ($index + 1) . ' ("' . $nama . '"): ' . $e->getMessage();
             }
@@ -102,7 +109,7 @@ class DepartemenImport implements ToCollection
         for ($i = 0; $i < $batas; $i++) {
             $selDinormalisasi = $rows[$i]->map(fn ($v) => $this->normalisasiHeader((string) $v));
 
-            if ($selDinormalisasi->intersect(self::ALIAS_KOLOM_NAMA)->isNotEmpty()) {
+            if ($selDinormalisasi->contains(self::KOLOM_PENANDA_HEADER)) {
                 return $i;
             }
         }
@@ -130,9 +137,9 @@ class DepartemenImport implements ToCollection
         return $this->createdCount;
     }
 
-    public function getSkippedCount(): int
+    public function getUpdatedCount(): int
     {
-        return $this->skippedCount;
+        return $this->updatedCount;
     }
 
     public function getErrors(): array

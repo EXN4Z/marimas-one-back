@@ -10,6 +10,8 @@ use Laravel\Sanctum\HasApiTokens;
 use NotificationChannels\WebPush\HasPushSubscriptions;
 use App\Models\MasterData\Departemen;
 use App\Models\MasterData\Role;
+use App\Models\MasterData\LokasiKantor;
+use App\Models\MasterData\Perusahaan;
 
 class User extends Authenticatable
 {

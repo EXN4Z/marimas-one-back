@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Imports;
+namespace App\Imports\Transaksi;
 
 use App\Http\Controllers\Concerns\GeneratesStrukNumber;
 use App\Models\MasterData\Inventory;

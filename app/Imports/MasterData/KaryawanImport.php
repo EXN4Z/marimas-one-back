@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Imports;
+namespace App\Imports\MasterData;
 
 use App\Models\MasterData\Departemen;
 use App\Models\User;

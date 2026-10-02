@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Karyawan;
+namespace App\Http\Controllers\MasterData;
 
 use App\Http\Controllers\Controller;
 

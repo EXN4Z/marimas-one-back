@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Http\Controllers\Organisasi;
+namespace App\Http\Controllers\MasterData;
 
 use App\Http\Controllers\Controller;
 
-use App\Imports\PerusahaanImport;
-use App\Models\Perusahaan;
+use App\Imports\MasterData\PerusahaanImport;
+use App\Models\MasterData\Perusahaan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;

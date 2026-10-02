@@ -27,7 +27,7 @@ use Illuminate\Support\Facades\Schema;
  *   diketahui_hrd TIDAK ikut dibuat lagi (dulu ada, langsung di-drop lagi
  *   tak lama setelahnya -- gak pernah kepakai di final state, data
  *   sejenis itu buat form import Excel cuma numpang lewat variable
- *   sementara, lihat App\Imports\InventoryBuktiImport).
+ *   sementara, lihat App\Imports\MasterData\InventoryBuktiImport).
  * - Kolom `perusahaan` (string bebas) diganti langsung jadi `perusahaan_id`
  *   (foreign key ke tabel perusahaan) -- dulu nambah kolom teks dulu,
  *   belakangan baru diganti relasi FK lewat 2 migration terpisah.

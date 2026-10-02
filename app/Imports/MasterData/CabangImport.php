@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Imports;
+namespace App\Imports\MasterData;
 
-use App\Models\LokasiKantor;
+use App\Models\MasterData\LokasiKantor;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
 

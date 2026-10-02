@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Imports;
+namespace App\Imports\MasterData;
 
 use App\Http\Controllers\Concerns\GeneratesStrukNumber;
 use App\Models\MasterData\Inventory;
@@ -577,7 +577,7 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
         // sebelum dianggap "tidak dikenali" -- biar hasil export flat bisa
         // diimport balik tanpa perusahaan_id kosong.
         if ($namaLengkap === null) {
-            $id = \App\Models\Perusahaan::whereRaw('LOWER(nama) = ?', [strtolower($nilaiAsli)])->first()?->id;
+            $id = \App\Models\MasterData\Perusahaan::whereRaw('LOWER(nama) = ?', [strtolower($nilaiAsli)])->first()?->id;
 
             if ($id !== null) {
                 return $this->perusahaanIdCache[$singkatanTrim] = $id;
@@ -587,7 +587,7 @@ class InventoryBuktiImport implements ToCollection, WithCalculatedFormulas
             return $this->perusahaanIdCache[$singkatanTrim] = null;
         }
 
-        $id = \App\Models\Perusahaan::where('nama', $namaLengkap)->first()?->id;
+        $id = \App\Models\MasterData\Perusahaan::where('nama', $namaLengkap)->first()?->id;
 
         if ($id === null) {
             $this->errors[] = 'Baris data ke-' . $nomorBaris . ': perusahaan "' . $namaLengkap . '" (dari singkatan "' . $singkatan . '") belum ada di tabel perusahaan.';

@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Models;
+namespace App\Models\MasterData;
 
 use Illuminate\Database\Eloquent\Model;
-use App\Models\MasterData\Inventory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\User;
 
 // Menu "Perusahaan" di Master Data -- struktur field sama persis kaya
 // LokasiKantor (menu "Cabang"), tapi sengaja belum dikasih relasi ke

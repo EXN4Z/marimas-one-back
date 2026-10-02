@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Http\Controllers\Organisasi;
+namespace App\Http\Controllers\MasterData;
 
 use App\Http\Controllers\Controller;
 
-use App\Imports\DepartemenImport;
+use App\Imports\MasterData\DepartemenImport;
 use App\Models\MasterData\Departemen;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;

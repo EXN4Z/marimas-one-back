@@ -1,9 +1,10 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Notifikasi;
 
 use Illuminate\Http\Request;
 use NotificationChannels\WebPush\PushSubscription;
+use App\Http\Controllers\Controller;
 
 class PushSubscriptionController extends Controller
 {

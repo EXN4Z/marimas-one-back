@@ -1,32 +1,35 @@
 <?php
 
-namespace App\Imports;
+namespace App\Imports\MasterData;
 
-use App\Models\Perusahaan;
+use App\Models\MasterData\Departemen;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
 
 /**
- * Import Excel data referensi Perusahaan (Master Data).
+ * Import Excel data referensi Departemen (Master Data).
  *
  * Format kolom yang diharapkan (baris pertama = header, nama kolom bebas
  * huruf besar/kecil & spasi, dinormalisasi otomatis ke snake_case):
- *   Nama | Alamat | Telepon | Link
+ *   Nama  (atau "Nama Departemen" -- header yang dipakai fitur Export
+ *   Excel Departemen sendiri, supaya file hasil export bisa diimport balik)
  *
- * Setiap baris dicocokkan ke `nama` (unique). Kalau perusahaan dengan nama
- * itu SUDAH ada, datanya di-UPDATE (alamat/telepon/link ikut nilai terbaru
- * di file -- kolom yang dikosongkan di Excel TIDAK menimpa data lama, biar
- * import ulang buat nambah data lain gak nge-null-in isian yang sudah
- * ada). Kalau belum ada, dibuatkan baris baru. Mirror SupplierImport,
- * ditambah kolom `link`.
+ * Setiap baris dicocokkan ke `nama` (unique) -- kalau departemen dengan
+ * nama itu sudah ada, baris dilewati (dihitung sebagai "dilewati", BUKAN
+ * error) supaya import ulang file yang sama aman/idempotent. Kalau belum
+ * ada, dibuatkan baris baru.
  */
-class PerusahaanImport implements ToCollection
+class DepartemenImport implements ToCollection
 {
     private const KOLOM_PENANDA_HEADER = 'nama';
+    // Alias yang juga dianggap sebagai kolom "Nama" departemen -- termasuk
+    // "Nama Departemen" karena itu header yang dipakai fitur Export Excel
+    // sendiri, supaya file hasil export bisa diimport balik (idempotent).
+    private const ALIAS_KOLOM_NAMA = ['nama', 'nama_departemen'];
     private const MAX_BARIS_DISCAN = 10;
 
     protected int $createdCount = 0;
-    protected int $updatedCount = 0;
+    protected int $skippedCount = 0;
     protected array $errors = [];
 
     public function collection(Collection $rows)
@@ -40,6 +43,7 @@ class PerusahaanImport implements ToCollection
 
         $headers = $rows[$indexHeader]
             ->map(fn ($h) => $this->normalisasiHeader((string) $h))
+            ->map(fn ($h) => in_array($h, self::ALIAS_KOLOM_NAMA, true) ? self::KOLOM_PENANDA_HEADER : $h)
             ->toArray();
 
         $dataRows = $rows->slice($indexHeader + 1);
@@ -56,36 +60,21 @@ class PerusahaanImport implements ToCollection
             }
 
             $row = array_combine($headers, array_pad($rowArray, count($headers), null));
-            $nama = trim((string) ($row['nama'] ?? ''));
+            $nama = trim((string) ($row['nama'] ?? $row['nama_departemen'] ?? $row['namadepartemen'] ?? ''));
 
             if ($nama === '') {
                 $this->errors[] = 'Baris data ke-' . ($index + 1) . ': kolom Nama kosong, dilewati.';
                 continue;
             }
 
-            $alamat = trim((string) ($row['alamat'] ?? ''));
-            $telepon = trim((string) ($row['telepon'] ?? ''));
-            $link = trim((string) ($row['link'] ?? ''));
+            if (Departemen::where('nama', $nama)->exists()) {
+                $this->skippedCount++;
+                continue;
+            }
 
             try {
-                $perusahaan = Perusahaan::where('nama', $nama)->first();
-
-                if ($perusahaan) {
-                    $perusahaan->update([
-                        'alamat'  => $alamat !== '' ? $alamat : $perusahaan->alamat,
-                        'telepon' => $telepon !== '' ? $telepon : $perusahaan->telepon,
-                        'link'    => $link !== '' ? $link : $perusahaan->link,
-                    ]);
-                    $this->updatedCount++;
-                } else {
-                    Perusahaan::create([
-                        'nama'    => $nama,
-                        'alamat'  => $alamat !== '' ? $alamat : null,
-                        'telepon' => $telepon !== '' ? $telepon : null,
-                        'link'    => $link !== '' ? $link : null,
-                    ]);
-                    $this->createdCount++;
-                }
+                Departemen::create(['nama' => $nama]);
+                $this->createdCount++;
             } catch (\Exception $e) {
                 $this->errors[] = 'Baris data ke-' . ($index + 1) . ' ("' . $nama . '"): ' . $e->getMessage();
             }
@@ -97,7 +86,7 @@ class PerusahaanImport implements ToCollection
      * Excel ("Dokumen digenerate otomatis oleh Marimas One ..."). Kalau file
      * hasil export diimpor balik tanpa diedit, baris ini ikut kebaca sebagai
      * baris data (nyangkut di kolom pertama karena aslinya merged cell) dan
-     * bikin entri "perusahaan"/"supplier" palsu -- makanya harus disaring.
+     * bikin entri palsu -- makanya harus disaring.
      */
     private function adalahBarisFooter(array $rowArray): bool
     {
@@ -113,7 +102,7 @@ class PerusahaanImport implements ToCollection
         for ($i = 0; $i < $batas; $i++) {
             $selDinormalisasi = $rows[$i]->map(fn ($v) => $this->normalisasiHeader((string) $v));
 
-            if ($selDinormalisasi->contains(self::KOLOM_PENANDA_HEADER)) {
+            if ($selDinormalisasi->intersect(self::ALIAS_KOLOM_NAMA)->isNotEmpty()) {
                 return $i;
             }
         }
@@ -141,9 +130,9 @@ class PerusahaanImport implements ToCollection
         return $this->createdCount;
     }
 
-    public function getUpdatedCount(): int
+    public function getSkippedCount(): int
     {
-        return $this->updatedCount;
+        return $this->skippedCount;
     }
 
     public function getErrors(): array
